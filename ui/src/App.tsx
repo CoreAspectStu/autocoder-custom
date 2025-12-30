@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useProjects, useFeatures } from './hooks/useProjects'
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
+import { useCelebration } from './hooks/useCelebration'
 
 const STORAGE_KEY = 'autonomous-coder-selected-project'
 import { ProjectSelector } from './components/ProjectSelector'
@@ -36,6 +37,9 @@ function App() {
 
   // Play sounds when features move between columns
   useFeatureSound(features)
+
+  // Celebrate when all features are complete
+  useCelebration(features, selectedProject)
 
   // Persist selected project to localStorage
   const handleSelectProject = useCallback((project: string | null) => {
