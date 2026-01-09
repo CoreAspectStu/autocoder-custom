@@ -201,20 +201,19 @@ async def run_autonomous_agent(
             delay_seconds = AUTO_CONTINUE_DELAY_SECONDS
             target_time_str = None
 
-            if response.lower().strip().startswith("limit reached"):
+            if "limit reached" in response.lower():
                 print("Claude Agent SDK indicated limit reached.")
 
                 # Try to parse reset time from response
                 match = re.search(
-                    r"resets (\d+)(?::(\d+))?(am|pm) \(([^)]+)\)",
+                    r"(?i)\bresets(?:\s+at)?\s+(\d+)(?::(\d+))?\s*(am|pm)\s*\(([^)]+)\)",
                     response,
-                    re.IGNORECASE,
                 )
                 if match:
                     hour = int(match.group(1))
                     minute = int(match.group(2)) if match.group(2) else 0
                     period = match.group(3).lower()
-                    tz_name = match.group(4)
+                    tz_name = match.group(4).strip()
 
                     # Convert to 24-hour format
                     if period == "pm" and hour != 12:
@@ -234,7 +233,9 @@ async def run_autonomous_agent(
                             target += timedelta(days=1)
 
                         delta = target - now
-                        delay_seconds = delta.total_seconds()
+                        delay_seconds = min(
+                            delta.total_seconds(), 24 * 60 * 60
+                        )  # Clamp to 24 hours max
                         target_time_str = target.strftime("%B %d, %Y at %I:%M %p %Z")
 
                     except Exception as e:
