@@ -15,6 +15,7 @@ Tools:
 - feature_mark_in_progress: Mark a feature as in-progress
 - feature_clear_in_progress: Clear in-progress status
 - feature_create_bulk: Create multiple features at once
+- feature_create: Create a single feature
 """
 
 import json
@@ -406,6 +407,57 @@ def feature_create_bulk(
         session.commit()
 
         return json.dumps({"created": created_count}, indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": str(e)})
+    finally:
+        session.close()
+
+
+@mcp.tool()
+def feature_create(
+    category: Annotated[str, Field(description="Feature category (e.g., 'Authentication', 'API', 'UI')")],
+    name: Annotated[str, Field(description="Feature name")],
+    description: Annotated[str, Field(description="Detailed description of the feature")],
+    steps: Annotated[list[str], Field(description="List of implementation/verification steps")]
+) -> str:
+    """Create a single feature in the project backlog.
+
+    Use this when the user asks to add a new feature, capability, or test case.
+    The feature will be added with the next available priority number.
+
+    Args:
+        category: Feature category for grouping (e.g., 'Authentication', 'API', 'UI')
+        name: Descriptive name for the feature
+        description: Detailed description of what this feature should do
+        steps: List of steps to implement or verify the feature
+
+    Returns:
+        JSON with the created feature details including its ID
+    """
+    session = get_session()
+    try:
+        # Get the next priority
+        max_priority_result = session.query(Feature.priority).order_by(Feature.priority.desc()).first()
+        next_priority = (max_priority_result[0] + 1) if max_priority_result else 1
+
+        db_feature = Feature(
+            priority=next_priority,
+            category=category,
+            name=name,
+            description=description,
+            steps=steps,
+            passes=False,
+        )
+        session.add(db_feature)
+        session.commit()
+        session.refresh(db_feature)
+
+        return json.dumps({
+            "success": True,
+            "message": f"Created feature: {name}",
+            "feature": db_feature.to_dict()
+        }, indent=2)
     except Exception as e:
         session.rollback()
         return json.dumps({"error": str(e)})
