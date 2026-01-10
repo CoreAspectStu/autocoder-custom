@@ -43,6 +43,7 @@ export function useAssistantChat({
   const maxReconnectAttempts = 3;
   const pingIntervalRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const checkAndSendTimeoutRef = useRef<number | null>(null);
 
   // Clean up on unmount
   useEffect(() => {
@@ -53,9 +54,13 @@ export function useAssistantChat({
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      if (checkAndSendTimeoutRef.current) {
+        clearTimeout(checkAndSendTimeoutRef.current);
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }
+      currentAssistantMessageRef.current = null;
     };
   }, []);
 
@@ -203,6 +208,7 @@ export function useAssistantChat({
 
           case "response_done": {
             setIsLoading(false);
+            currentAssistantMessageRef.current = null;
 
             // Mark current message as done streaming
             setMessages((prev) => {
@@ -251,11 +257,18 @@ export function useAssistantChat({
 
   const start = useCallback(
     (existingConversationId?: number | null) => {
+      // Clear any pending check timeout from previous call
+      if (checkAndSendTimeoutRef.current) {
+        clearTimeout(checkAndSendTimeoutRef.current);
+        checkAndSendTimeoutRef.current = null;
+      }
+
       connect();
 
       // Wait for connection then send start message
       const checkAndSend = () => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+          checkAndSendTimeoutRef.current = null;
           setIsLoading(true);
           const payload: { type: string; conversation_id?: number } = {
             type: "start",
@@ -266,11 +279,13 @@ export function useAssistantChat({
           }
           wsRef.current.send(JSON.stringify(payload));
         } else if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-          setTimeout(checkAndSend, 100);
+          checkAndSendTimeoutRef.current = window.setTimeout(checkAndSend, 100);
+        } else {
+          checkAndSendTimeoutRef.current = null;
         }
       };
 
-      setTimeout(checkAndSend, 100);
+      checkAndSendTimeoutRef.current = window.setTimeout(checkAndSend, 100);
     },
     [connect],
   );

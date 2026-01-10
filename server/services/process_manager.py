@@ -18,6 +18,11 @@ from typing import Awaitable, Callable, Literal, Set
 
 import psutil
 
+# Add parent directory to path for shared module imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from auth import AUTH_ERROR_HELP_SERVER as AUTH_ERROR_HELP  # noqa: E402
+from auth import is_auth_error
+
 logger = logging.getLogger(__name__)
 
 # Patterns for sensitive data that should be redacted from output
@@ -35,47 +40,6 @@ SENSITIVE_PATTERNS = [
     r'aws[_-]?access[_-]?key[=:][^\s]+',  # AWS keys
     r'aws[_-]?secret[=:][^\s]+',
 ]
-
-# Patterns that indicate Claude CLI authentication errors
-AUTH_ERROR_PATTERNS = [
-    r"not\s+logged\s+in",
-    r"not\s+authenticated",
-    r"authentication\s+(failed|required|error)",
-    r"login\s+required",
-    r"please\s+(run\s+)?['\"]?claude\s+login",
-    r"unauthorized",
-    r"invalid\s+(token|credential|api.?key)",
-    r"expired\s+(token|session|credential)",
-    r"could\s+not\s+authenticate",
-    r"sign\s+in\s+(to|required)",
-]
-
-
-def is_auth_error(text: str) -> bool:
-    """Check if text contains Claude CLI authentication error messages."""
-    if not text:
-        return False
-    text_lower = text.lower()
-    for pattern in AUTH_ERROR_PATTERNS:
-        if re.search(pattern, text_lower):
-            return True
-    return False
-
-
-AUTH_ERROR_HELP = """
-================================================================================
-  AUTHENTICATION ERROR DETECTED
-================================================================================
-
-Claude CLI requires authentication to work.
-
-To fix this, run:
-  claude login
-
-This will open a browser window to sign in.
-After logging in, try starting the agent again.
-================================================================================
-"""
 
 
 def sanitize_output(line: str) -> str:

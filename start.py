@@ -9,11 +9,11 @@ Supports two paths for new projects:
 """
 
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 
+from auth import is_auth_error, print_auth_error_help
 from prompts import (
     get_project_prompts_dir,
     has_project_prompts,
@@ -24,53 +24,6 @@ from registry import (
     list_registered_projects,
     register_project,
 )
-
-# Patterns that indicate Claude CLI authentication errors
-AUTH_ERROR_PATTERNS = [
-    r"not\s+logged\s+in",
-    r"not\s+authenticated",
-    r"authentication\s+(failed|required|error)",
-    r"login\s+required",
-    r"please\s+(run\s+)?['\"]?claude\s+login",
-    r"unauthorized",
-    r"invalid\s+(token|credential|api.?key)",
-    r"expired\s+(token|session|credential)",
-    r"could\s+not\s+authenticate",
-    r"sign\s+in\s+(to|required)",
-]
-
-
-def is_auth_error(output: str) -> bool:
-    """
-    Check if output contains Claude CLI authentication error messages.
-
-    Args:
-        output: Combined stdout/stderr from subprocess
-
-    Returns:
-        True if authentication error detected, False otherwise
-    """
-    if not output:
-        return False
-
-    output_lower = output.lower()
-    for pattern in AUTH_ERROR_PATTERNS:
-        if re.search(pattern, output_lower):
-            return True
-    return False
-
-
-def print_auth_error_help() -> None:
-    """Print helpful message when authentication error is detected."""
-    print("\n" + "=" * 50)
-    print("  Authentication Error Detected")
-    print("=" * 50)
-    print("\nClaude CLI requires authentication to work.")
-    print("\nTo fix this, run:")
-    print("  claude login")
-    print("\nThis will open a browser window to sign in.")
-    print("After logging in, try running this command again.")
-    print("=" * 50 + "\n")
 
 
 def check_spec_exists(project_dir: Path) -> bool:

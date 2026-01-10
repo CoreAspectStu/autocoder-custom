@@ -92,7 +92,7 @@ def create_client(project_dir: Path, model: str, yolo_mode: bool = False):
        (see security.py for ALLOWED_COMMANDS)
 
     Note: Authentication is handled by start.bat/start.sh before this runs.
-    The Claude SDK auto-detects credentials from ~/.claude/.credentials.json
+    The Claude SDK auto-detects credentials from the Claude CLI configuration
     """
     # Build allowed tools list based on mode
     # In YOLO mode, exclude Playwright tools for faster prototyping
