@@ -19,7 +19,7 @@ import { AssistantFAB } from './components/AssistantFAB'
 import { AssistantPanel } from './components/AssistantPanel'
 import { ExpandProjectModal } from './components/ExpandProjectModal'
 import { SettingsModal } from './components/SettingsModal'
-import { Plus, Loader2, Sparkles, Settings } from 'lucide-react'
+import { Loader2, Settings } from 'lucide-react'
 import type { Feature } from './lib/types'
 
 function App() {
@@ -171,31 +171,6 @@ function App() {
 
               {selectedProject && (
                 <>
-                  <button
-                    onClick={() => setShowAddFeature(true)}
-                    className="neo-btn neo-btn-primary text-sm"
-                    title="Add new feature"
-                  >
-                    <Plus size={18} />
-                    <kbd className="ml-1.5 px-1.5 py-0.5 text-xs bg-black/20 rounded font-mono">
-                      N
-                    </kbd>
-                  </button>
-
-                  {/* Expand Project - only show if project has features */}
-                  {features && (features.pending.length + features.in_progress.length + features.done.length) > 0 && (
-                    <button
-                      onClick={() => setShowExpandProject(true)}
-                      className="neo-btn bg-[var(--color-neo-progress)] text-black text-sm"
-                      title="Expand project with AI"
-                    >
-                      <Sparkles size={18} />
-                      <kbd className="ml-1.5 px-1.5 py-0.5 text-xs bg-black/20 rounded font-mono">
-                        E
-                      </kbd>
-                    </button>
-                  )}
-
                   <AgentControl
                     projectName={selectedProject}
                     status={wsState.agentStatus}
@@ -267,6 +242,8 @@ function App() {
             <KanbanBoard
               features={features}
               onFeatureClick={setSelectedFeature}
+              onAddFeature={() => setShowAddFeature(true)}
+              onExpandProject={() => setShowExpandProject(true)}
             />
           </div>
         )}
