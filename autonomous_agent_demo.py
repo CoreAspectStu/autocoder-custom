@@ -32,11 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agent import run_autonomous_agent
-from registry import get_project_path
-
-# Configuration
-# DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
-DEFAULT_MODEL = "claude-opus-4-5-20251101"
+from registry import DEFAULT_MODEL, get_project_path
 
 
 def parse_args() -> argparse.Namespace:

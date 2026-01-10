@@ -21,14 +21,39 @@ else
     PYTHON_CMD="python3"
 fi
 
-# Check if venv exists, create if not
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
+# Check if venv exists with correct structure for this platform
+# Windows venvs have Scripts/, Linux/macOS have bin/
+if [ ! -f "venv/bin/activate" ]; then
+    if [ -d "venv" ]; then
+        echo "[INFO] Detected incompatible virtual environment (possibly created on Windows)"
+        echo "[INFO] Recreating virtual environment for this platform..."
+        rm -rf venv
+        if [ -d "venv" ]; then
+            echo "[ERROR] Failed to remove existing virtual environment"
+            echo "Please manually delete the 'venv' directory and try again:"
+            echo "  rm -rf venv"
+            exit 1
+        fi
+    else
+        echo "Creating virtual environment..."
+    fi
     $PYTHON_CMD -m venv venv
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Failed to create virtual environment"
+        echo "Please ensure the venv module is installed:"
+        echo "  Ubuntu/Debian: sudo apt install python3-venv"
+        echo "  Or try: $PYTHON_CMD -m ensurepip"
+        exit 1
+    fi
 fi
 
 # Activate the virtual environment
 source venv/bin/activate
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to activate virtual environment"
+    echo "The venv may be corrupted. Try: rm -rf venv && ./start_ui.sh"
+    exit 1
+fi
 
 # Install dependencies
 echo "Installing dependencies..."

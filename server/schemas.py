@@ -6,10 +6,19 @@ Request/Response models for the API endpoints.
 """
 
 import base64
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+# Import model constants from registry (single source of truth)
+_root = Path(__file__).parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from registry import DEFAULT_MODEL, VALID_MODELS
 
 # ============================================================================
 # Project Schemas
@@ -114,7 +123,16 @@ class FeatureBulkCreateResponse(BaseModel):
 
 class AgentStartRequest(BaseModel):
     """Request schema for starting the agent."""
-    yolo_mode: bool = False
+    yolo_mode: bool | None = None  # None means use global settings
+    model: str | None = None  # None means use global settings
+
+    @field_validator('model')
+    @classmethod
+    def validate_model(cls, v: str | None) -> str | None:
+        """Validate model is in the allowed list."""
+        if v is not None and v not in VALID_MODELS:
+            raise ValueError(f"Invalid model. Must be one of: {VALID_MODELS}")
+        return v
 
 
 class AgentStatus(BaseModel):
@@ -123,6 +141,7 @@ class AgentStatus(BaseModel):
     pid: int | None = None
     started_at: datetime | None = None
     yolo_mode: bool = False
+    model: str | None = None  # Model being used by running agent
 
 
 class AgentActionResponse(BaseModel):
@@ -251,3 +270,41 @@ class CreateDirectoryRequest(BaseModel):
     """Request to create a new directory."""
     parent_path: str
     name: str = Field(..., min_length=1, max_length=255)
+
+
+# ============================================================================
+# Settings Schemas
+# ============================================================================
+
+# Note: VALID_MODELS and DEFAULT_MODEL are imported from registry at the top of this file
+
+
+class ModelInfo(BaseModel):
+    """Information about an available model."""
+    id: str
+    name: str
+
+
+class SettingsResponse(BaseModel):
+    """Response schema for global settings."""
+    yolo_mode: bool = False
+    model: str = DEFAULT_MODEL
+
+
+class ModelsResponse(BaseModel):
+    """Response schema for available models list."""
+    models: list[ModelInfo]
+    default: str
+
+
+class SettingsUpdate(BaseModel):
+    """Request schema for updating global settings."""
+    yolo_mode: bool | None = None
+    model: str | None = None
+
+    @field_validator('model')
+    @classmethod
+    def validate_model(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_MODELS:
+            raise ValueError(f"Invalid model. Must be one of: {VALID_MODELS}")
+        return v

@@ -18,6 +18,9 @@ import type {
   PathValidationResponse,
   AssistantConversation,
   AssistantConversationDetail,
+  Settings,
+  SettingsUpdate,
+  ModelsResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -278,4 +281,23 @@ export async function deleteAssistantConversation(
     `/assistant/conversations/${encodeURIComponent(projectName)}/${conversationId}`,
     { method: 'DELETE' }
   )
+}
+
+// ============================================================================
+// Settings API
+// ============================================================================
+
+export async function getAvailableModels(): Promise<ModelsResponse> {
+  return fetchJSON('/settings/models')
+}
+
+export async function getSettings(): Promise<Settings> {
+  return fetchJSON('/settings')
+}
+
+export async function updateSettings(settings: SettingsUpdate): Promise<Settings> {
+  return fetchJSON('/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  })
 }

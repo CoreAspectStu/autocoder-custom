@@ -18,7 +18,8 @@ import { AgentThought } from './components/AgentThought'
 import { AssistantFAB } from './components/AssistantFAB'
 import { AssistantPanel } from './components/AssistantPanel'
 import { ExpandProjectModal } from './components/ExpandProjectModal'
-import { Plus, Loader2, Sparkles } from 'lucide-react'
+import { SettingsModal } from './components/SettingsModal'
+import { Plus, Loader2, Sparkles, Settings } from 'lucide-react'
 import type { Feature } from './lib/types'
 
 function App() {
@@ -37,11 +38,12 @@ function App() {
   const [debugOpen, setDebugOpen] = useState(false)
   const [debugPanelHeight, setDebugPanelHeight] = useState(288) // Default height
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
   const { data: features } = useFeatures(selectedProject)
-  const { data: agentStatusData } = useAgentStatus(selectedProject)
+  useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
 
   // Play sounds when features move between columns
@@ -104,10 +106,18 @@ function App() {
         setAssistantOpen(prev => !prev)
       }
 
+      // , : Open settings
+      if (e.key === ',') {
+        e.preventDefault()
+        setShowSettings(true)
+      }
+
       // Escape : Close modals
       if (e.key === 'Escape') {
         if (showExpandProject) {
           setShowExpandProject(false)
+        if (showSettings) {
+          setShowSettings(false)
         } else if (assistantOpen) {
           setAssistantOpen(false)
         } else if (showAddFeature) {
@@ -122,7 +132,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, assistantOpen, features])
+  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, assistantOpen, features, showSettings])
 
   // Combine WebSocket progress with feature data
   const progress = wsState.progress.total > 0 ? wsState.progress : {
@@ -191,8 +201,16 @@ function App() {
                   <AgentControl
                     projectName={selectedProject}
                     status={wsState.agentStatus}
-                    yoloMode={agentStatusData?.yolo_mode ?? false}
                   />
+
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="neo-btn text-sm py-2 px-3"
+                    title="Settings (,)"
+                    aria-label="Open Settings"
+                  >
+                    <Settings size={18} />
+                  </button>
                 </>
               )}
             </div>
@@ -310,6 +328,11 @@ function App() {
             onClose={() => setAssistantOpen(false)}
           />
         </>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} />
       )}
     </div>
   )

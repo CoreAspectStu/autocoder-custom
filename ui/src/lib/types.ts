@@ -90,6 +90,7 @@ export interface AgentStatusResponse {
   pid: number | null
   started_at: string | null
   yolo_mode: boolean
+  model: string | null  // Model being used by running agent
 }
 
 export interface AgentActionResponse {
@@ -328,4 +329,25 @@ export interface FeatureBulkCreate {
 export interface FeatureBulkCreateResponse {
   created: number
   features: Feature[]
+// Settings Types
+// ============================================================================
+
+export interface ModelInfo {
+  id: string
+  name: string
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[]
+  default: string
+}
+
+export interface Settings {
+  yolo_mode: boolean
+  model: string
+}
+
+export interface SettingsUpdate {
+  yolo_mode?: boolean
+  model?: string
 }
