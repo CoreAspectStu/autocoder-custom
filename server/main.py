@@ -127,9 +127,11 @@ async def setup_status():
     # Check for Claude CLI
     claude_cli = shutil.which("claude") is not None
 
-    # Check for credentials file
-    credentials_path = Path.home() / ".claude" / ".credentials.json"
-    credentials = credentials_path.exists()
+    # Check for Claude CLI configuration directory
+    # Note: Claude CLI no longer stores credentials in ~/.claude/.credentials.json
+    # The existence of ~/.claude indicates the CLI has been configured
+    claude_dir = Path.home() / ".claude"
+    credentials = claude_dir.exists() and claude_dir.is_dir()
 
     # Check for Node.js and npm
     node = shutil.which("node") is not None

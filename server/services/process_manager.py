@@ -36,6 +36,47 @@ SENSITIVE_PATTERNS = [
     r'aws[_-]?secret[=:][^\s]+',
 ]
 
+# Patterns that indicate Claude CLI authentication errors
+AUTH_ERROR_PATTERNS = [
+    r"not\s+logged\s+in",
+    r"not\s+authenticated",
+    r"authentication\s+(failed|required|error)",
+    r"login\s+required",
+    r"please\s+(run\s+)?['\"]?claude\s+login",
+    r"unauthorized",
+    r"invalid\s+(token|credential|api.?key)",
+    r"expired\s+(token|session|credential)",
+    r"could\s+not\s+authenticate",
+    r"sign\s+in\s+(to|required)",
+]
+
+
+def is_auth_error(text: str) -> bool:
+    """Check if text contains Claude CLI authentication error messages."""
+    if not text:
+        return False
+    text_lower = text.lower()
+    for pattern in AUTH_ERROR_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
+
+AUTH_ERROR_HELP = """
+================================================================================
+  AUTHENTICATION ERROR DETECTED
+================================================================================
+
+Claude CLI requires authentication to work.
+
+To fix this, run:
+  claude login
+
+This will open a browser window to sign in.
+After logging in, try starting the agent again.
+================================================================================
+"""
+
 
 def sanitize_output(line: str) -> str:
     """Remove sensitive information from output lines."""
@@ -186,6 +227,9 @@ class AgentProcessManager:
         if not self.process or not self.process.stdout:
             return
 
+        auth_error_detected = False
+        output_buffer = []  # Buffer recent lines for auth error detection
+
         try:
             loop = asyncio.get_running_loop()
             while True:
@@ -199,6 +243,18 @@ class AgentProcessManager:
                 decoded = line.decode("utf-8", errors="replace").rstrip()
                 sanitized = sanitize_output(decoded)
 
+                # Buffer recent output for auth error detection
+                output_buffer.append(decoded)
+                if len(output_buffer) > 20:
+                    output_buffer.pop(0)
+
+                # Check for auth errors
+                if not auth_error_detected and is_auth_error(decoded):
+                    auth_error_detected = True
+                    # Broadcast auth error help message
+                    for help_line in AUTH_ERROR_HELP.strip().split('\n'):
+                        await self._broadcast_output(help_line)
+
                 await self._broadcast_output(sanitized)
 
         except asyncio.CancelledError:
@@ -210,6 +266,12 @@ class AgentProcessManager:
             if self.process and self.process.poll() is not None:
                 exit_code = self.process.returncode
                 if exit_code != 0 and self.status == "running":
+                    # Check buffered output for auth errors if we haven't detected one yet
+                    if not auth_error_detected:
+                        combined_output = '\n'.join(output_buffer)
+                        if is_auth_error(combined_output):
+                            for help_line in AUTH_ERROR_HELP.strip().split('\n'):
+                                await self._broadcast_output(help_line)
                     self.status = "crashed"
                 elif self.status == "running":
                     self.status = "stopped"

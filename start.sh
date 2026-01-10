@@ -20,40 +20,18 @@ fi
 
 echo "[OK] Claude CLI found"
 
-# Check if user has credentials
-CLAUDE_CREDS="$HOME/.claude/.credentials.json"
-if [ -f "$CLAUDE_CREDS" ]; then
-    echo "[OK] Claude credentials found"
+# Note: Claude CLI no longer stores credentials in ~/.claude/.credentials.json
+# We can't reliably check auth status without making an API call, so we just
+# verify the CLI is installed and remind the user to login if needed
+if [ -d "$HOME/.claude" ]; then
+    echo "[OK] Claude CLI directory found"
+    echo "     (If you're not logged in, run: claude login)"
 else
-    echo "[!] Not authenticated with Claude"
+    echo "[!] Claude CLI not configured"
     echo ""
-    echo "You need to run 'claude login' to authenticate."
-    echo "This will open a browser window to sign in."
+    echo "Please run 'claude login' to authenticate before continuing."
     echo ""
-    read -p "Would you like to run 'claude login' now? (y/n): " LOGIN_CHOICE
-
-    if [[ "$LOGIN_CHOICE" =~ ^[Yy]$ ]]; then
-        echo ""
-        echo "Running 'claude login'..."
-        echo "Complete the login in your browser, then return here."
-        echo ""
-        claude login
-
-        # Check if login succeeded
-        if [ -f "$CLAUDE_CREDS" ]; then
-            echo ""
-            echo "[OK] Login successful!"
-        else
-            echo ""
-            echo "[ERROR] Login failed or was cancelled."
-            echo "Please try again."
-            exit 1
-        fi
-    else
-        echo ""
-        echo "Please run 'claude login' manually, then try again."
-        exit 1
-    fi
+    read -p "Press Enter to continue anyway, or Ctrl+C to exit..."
 fi
 
 echo ""
