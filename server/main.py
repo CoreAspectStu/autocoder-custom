@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from .routers import (
     agent_router,
     assistant_chat_router,
+    expand_project_router,
     features_router,
     filesystem_router,
     projects_router,
@@ -26,6 +27,7 @@ from .routers import (
 )
 from .schemas import SetupStatus
 from .services.assistant_chat_session import cleanup_all_sessions as cleanup_assistant_sessions
+from .services.expand_chat_session import cleanup_all_expand_sessions
 from .services.process_manager import cleanup_all_managers, cleanup_orphaned_locks
 from .websocket import project_websocket
 
@@ -40,9 +42,10 @@ async def lifespan(app: FastAPI):
     # Startup - clean up orphaned lock files from previous runs
     cleanup_orphaned_locks()
     yield
-    # Shutdown - cleanup all running agents and assistant sessions
+    # Shutdown - cleanup all running agents and sessions
     await cleanup_all_managers()
     await cleanup_assistant_sessions()
+    await cleanup_all_expand_sessions()
 
 
 # Create FastAPI app
@@ -92,6 +95,7 @@ app.include_router(projects_router)
 app.include_router(features_router)
 app.include_router(agent_router)
 app.include_router(spec_creation_router)
+app.include_router(expand_project_router)
 app.include_router(filesystem_router)
 app.include_router(assistant_chat_router)
 app.include_router(settings_router)
