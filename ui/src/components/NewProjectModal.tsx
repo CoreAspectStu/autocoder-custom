@@ -75,9 +75,7 @@ export function NewProjectModal({
   }
 
   const handleFolderSelect = (path: string) => {
-    // Append project name to the selected path
-    const fullPath = path.endsWith('/') ? `${path}${projectName.trim()}` : `${path}/${projectName.trim()}`
-    setProjectPath(fullPath)
+    setProjectPath(path)  // Use selected path directly - no subfolder creation
     changeStep('method')
   }
 
@@ -218,7 +216,7 @@ export function NewProjectModal({
                   Select Project Location
                 </h2>
                 <p className="text-sm text-[#4a4a4a]">
-                  A folder named <span className="font-bold font-mono">{projectName}</span> will be created inside the selected directory
+                  Select the folder to use for project <span className="font-bold font-mono">{projectName}</span>. Create a new folder or choose an existing one.
                 </p>
               </div>
             </div>
