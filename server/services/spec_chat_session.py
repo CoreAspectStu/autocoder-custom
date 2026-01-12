@@ -154,6 +154,13 @@ class SpecChatSession:
         project_path = str(self.project_dir.resolve())
         system_prompt = skill_content.replace("$ARGUMENTS", project_path)
 
+        # Write system prompt to CLAUDE.md file to avoid Windows command line length limit
+        # The SDK will read this via setting_sources=["project"]
+        claude_md_path = self.project_dir / "CLAUDE.md"
+        with open(claude_md_path, "w", encoding="utf-8") as f:
+            f.write(system_prompt)
+        logger.info(f"Wrote system prompt to {claude_md_path}")
+
         # Create Claude SDK client with limited tools for spec creation
         # Use Opus for best quality spec generation
         # Use system Claude CLI to avoid bundled Bun runtime crash (exit code 3) on Windows
@@ -167,7 +174,9 @@ class SpecChatSession:
                 options=ClaudeAgentOptions(
                     model="claude-opus-4-5-20251101",
                     cli_path=system_cli,
-                    system_prompt=system_prompt,
+                    # System prompt loaded from CLAUDE.md via setting_sources
+                    # This avoids Windows command line length limit (~8191 chars)
+                    setting_sources=["project"],
                     allowed_tools=[
                         "Read",
                         "Write",

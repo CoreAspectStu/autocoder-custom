@@ -242,6 +242,13 @@ class AssistantChatSession:
         # Get system prompt with project context
         system_prompt = get_system_prompt(self.project_name, self.project_dir)
 
+        # Write system prompt to CLAUDE.md file to avoid Windows command line length limit
+        # The SDK will read this via setting_sources=["project"]
+        claude_md_path = self.project_dir / "CLAUDE.md"
+        with open(claude_md_path, "w", encoding="utf-8") as f:
+            f.write(system_prompt)
+        logger.info(f"Wrote assistant system prompt to {claude_md_path}")
+
         # Use system Claude CLI
         system_cli = shutil.which("claude")
 
@@ -253,7 +260,9 @@ class AssistantChatSession:
                 options=ClaudeAgentOptions(
                     model="claude-opus-4-5-20251101",
                     cli_path=system_cli,
-                    system_prompt=system_prompt,
+                    # System prompt loaded from CLAUDE.md via setting_sources
+                    # This avoids Windows command line length limit (~8191 chars)
+                    setting_sources=["project"],
                     allowed_tools=[*READONLY_BUILTIN_TOOLS, *ASSISTANT_FEATURE_TOOLS],
                     mcp_servers=mcp_servers,
                     permission_mode="bypassPermissions",
