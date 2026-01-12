@@ -231,7 +231,8 @@ class AssistantChatSession:
                 "command": sys.executable,
                 "args": ["-m", "mcp_server.feature_mcp"],
                 "env": {
-                    **os.environ,
+                    # Only specify variables the MCP server needs
+                    # (subprocess inherits parent environment automatically)
                     "PROJECT_DIR": str(self.project_dir.resolve()),
                     "PYTHONPATH": str(ROOT_DIR.resolve()),
                 },
