@@ -8,7 +8,6 @@ Uses the create-spec.md skill to guide users through app spec creation.
 
 import json
 import logging
-import os
 import shutil
 import threading
 from datetime import datetime
@@ -22,16 +21,6 @@ from ..schemas import ImageAttachment
 
 # Load environment variables from .env file if present
 load_dotenv()
-
-
-def get_cli_command() -> str:
-    """
-    Get the CLI command to use for the agent.
-
-    Reads from CLI_COMMAND environment variable, defaults to 'claude'.
-    This allows users to use alternative CLIs like 'glm'.
-    """
-    return os.getenv("CLI_COMMAND", "claude")
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +145,8 @@ class SpecChatSession:
 
         # Create Claude SDK client with limited tools for spec creation
         # Use Opus for best quality spec generation
-        # Use system CLI to avoid bundled Bun runtime crash (exit code 3) on Windows
-        # CLI command is configurable via CLI_COMMAND environment variable
-        cli_command = get_cli_command()
-        system_cli = shutil.which(cli_command)
+        # Use system Claude CLI to avoid bundled Bun runtime crash (exit code 3) on Windows
+        system_cli = shutil.which("claude")
         try:
             self.client = ClaudeSDKClient(
                 options=ClaudeAgentOptions(

@@ -9,6 +9,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, Trash2, Terminal as TerminalIcon, GripHorizontal, Cpu, Server } from 'lucide-react'
 import { Terminal } from './Terminal'
+import { TerminalTabs } from './TerminalTabs'
+import { listTerminals, createTerminal, renameTerminal, deleteTerminal } from '@/lib/api'
+import type { TerminalInfo } from '@/lib/types'
 
 const MIN_HEIGHT = 150
 const MAX_HEIGHT = 600
@@ -61,6 +64,11 @@ export function DebugLogViewer({
     return (saved as TabType) || 'agent'
   })
 
+  // Terminal management state
+  const [terminals, setTerminals] = useState<TerminalInfo[]>([])
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
+  const [isLoadingTerminals, setIsLoadingTerminals] = useState(false)
+
   // Use controlled tab if provided, otherwise use internal state
   const activeTab = controlledActiveTab ?? internalActiveTab
   const setActiveTab = (tab: TabType) => {
@@ -68,6 +76,91 @@ export function DebugLogViewer({
     localStorage.setItem(TAB_STORAGE_KEY, tab)
     onTabChange?.(tab)
   }
+
+  // Fetch terminals for the project
+  const fetchTerminals = useCallback(async () => {
+    if (!projectName) return
+
+    setIsLoadingTerminals(true)
+    try {
+      const terminalList = await listTerminals(projectName)
+      setTerminals(terminalList)
+
+      // Set active terminal to first one if not set or current one doesn't exist
+      if (terminalList.length > 0) {
+        if (!activeTerminalId || !terminalList.find((t) => t.id === activeTerminalId)) {
+          setActiveTerminalId(terminalList[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch terminals:', err)
+    } finally {
+      setIsLoadingTerminals(false)
+    }
+  }, [projectName, activeTerminalId])
+
+  // Handle creating a new terminal
+  const handleCreateTerminal = useCallback(async () => {
+    if (!projectName) return
+
+    try {
+      const newTerminal = await createTerminal(projectName)
+      setTerminals((prev) => [...prev, newTerminal])
+      setActiveTerminalId(newTerminal.id)
+    } catch (err) {
+      console.error('Failed to create terminal:', err)
+    }
+  }, [projectName])
+
+  // Handle renaming a terminal
+  const handleRenameTerminal = useCallback(
+    async (terminalId: string, newName: string) => {
+      if (!projectName) return
+
+      try {
+        const updated = await renameTerminal(projectName, terminalId, newName)
+        setTerminals((prev) =>
+          prev.map((t) => (t.id === terminalId ? updated : t))
+        )
+      } catch (err) {
+        console.error('Failed to rename terminal:', err)
+      }
+    },
+    [projectName]
+  )
+
+  // Handle closing a terminal
+  const handleCloseTerminal = useCallback(
+    async (terminalId: string) => {
+      if (!projectName || terminals.length <= 1) return
+
+      try {
+        await deleteTerminal(projectName, terminalId)
+        setTerminals((prev) => prev.filter((t) => t.id !== terminalId))
+
+        // If we closed the active terminal, switch to another one
+        if (activeTerminalId === terminalId) {
+          const remaining = terminals.filter((t) => t.id !== terminalId)
+          if (remaining.length > 0) {
+            setActiveTerminalId(remaining[0].id)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to close terminal:', err)
+      }
+    },
+    [projectName, terminals, activeTerminalId]
+  )
+
+  // Fetch terminals when project changes
+  useEffect(() => {
+    if (projectName) {
+      fetchTerminals()
+    } else {
+      setTerminals([])
+      setActiveTerminalId(null)
+    }
+  }, [projectName]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll to bottom when new agent logs arrive (if user hasn't scrolled up)
   useEffect(() => {
@@ -429,10 +522,61 @@ export function DebugLogViewer({
 
           {/* Terminal Tab */}
           {activeTab === 'terminal' && (
-            <Terminal
-              projectName={projectName}
-              isActive={activeTab === 'terminal'}
-            />
+            <div className="h-full flex flex-col">
+              {/* Terminal tabs bar */}
+              {terminals.length > 0 && (
+                <TerminalTabs
+                  terminals={terminals}
+                  activeTerminalId={activeTerminalId}
+                  onSelect={setActiveTerminalId}
+                  onCreate={handleCreateTerminal}
+                  onRename={handleRenameTerminal}
+                  onClose={handleCloseTerminal}
+                />
+              )}
+
+              {/* Terminal content - render all terminals and show/hide to preserve buffers */}
+              <div className="flex-1 min-h-0 relative">
+                {isLoadingTerminals ? (
+                  <div className="h-full flex items-center justify-center text-gray-500 font-mono text-sm">
+                    Loading terminals...
+                  </div>
+                ) : terminals.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-gray-500 font-mono text-sm">
+                    No terminal available
+                  </div>
+                ) : (
+                  /* Render all terminals stacked on top of each other.
+                   * Active terminal is visible and receives input.
+                   * Inactive terminals are moved off-screen with transform to:
+                   * 1. Trigger IntersectionObserver (xterm.js pauses rendering)
+                   * 2. Preserve terminal buffer content
+                   * 3. Allow proper dimension calculation when becoming visible
+                   * Using transform instead of opacity/display:none for best xterm.js compatibility.
+                   */
+                  terminals.map((terminal) => {
+                    const isActiveTerminal = terminal.id === activeTerminalId
+                    return (
+                      <div
+                        key={terminal.id}
+                        className="absolute inset-0"
+                        style={{
+                          zIndex: isActiveTerminal ? 10 : 1,
+                          transform: isActiveTerminal ? 'none' : 'translateX(-200%)',
+                          pointerEvents: isActiveTerminal ? 'auto' : 'none',
+                        }}
+                      >
+                        <Terminal
+                          projectName={projectName}
+                          terminalId={terminal.id}
+                          isActive={activeTab === 'terminal' && isActiveTerminal}
+                        />
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

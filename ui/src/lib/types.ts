@@ -125,6 +125,13 @@ export interface DevServerConfig {
   effective_command: string | null
 }
 
+// Terminal types
+export interface TerminalInfo {
+  id: string
+  name: string
+  created_at: string
+}
+
 // WebSocket message types
 export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status'
 

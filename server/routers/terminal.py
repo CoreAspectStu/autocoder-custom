@@ -2,8 +2,9 @@
 Terminal Router
 ===============
 
-WebSocket endpoint for interactive terminal I/O with PTY support.
+REST and WebSocket endpoints for interactive terminal I/O with PTY support.
 Provides real-time bidirectional communication with terminal sessions.
+Supports multiple terminals per project with create, list, rename, delete operations.
 """
 
 import asyncio
@@ -14,9 +15,18 @@ import re
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
-from ..services.terminal_manager import get_terminal_session
+from ..services.terminal_manager import (
+    create_terminal,
+    delete_terminal,
+    get_terminal_info,
+    get_terminal_session,
+    list_terminals,
+    rename_terminal,
+    stop_terminal_session,
+)
 
 # Add project root to path for registry import
 _root = Path(__file__).parent.parent.parent
@@ -59,8 +69,170 @@ def validate_project_name(name: str) -> bool:
     return bool(re.match(r"^[a-zA-Z0-9_-]{1,50}$", name))
 
 
-@router.websocket("/ws/{project_name}")
-async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
+def validate_terminal_id(terminal_id: str) -> bool:
+    """
+    Validate terminal ID format.
+
+    Args:
+        terminal_id: The terminal ID to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    return bool(re.match(r"^[a-zA-Z0-9]{1,16}$", terminal_id))
+
+
+# Pydantic models for request/response bodies
+class CreateTerminalRequest(BaseModel):
+    """Request body for creating a terminal."""
+
+    name: str | None = None
+
+
+class RenameTerminalRequest(BaseModel):
+    """Request body for renaming a terminal."""
+
+    name: str
+
+
+class TerminalInfoResponse(BaseModel):
+    """Response model for terminal info."""
+
+    id: str
+    name: str
+    created_at: str
+
+
+# REST Endpoints
+
+
+@router.get("/{project_name}")
+async def list_project_terminals(project_name: str) -> list[TerminalInfoResponse]:
+    """
+    List all terminals for a project.
+
+    Args:
+        project_name: Name of the project
+
+    Returns:
+        List of terminal info objects
+    """
+    if not validate_project_name(project_name):
+        raise HTTPException(status_code=400, detail="Invalid project name")
+
+    project_dir = _get_project_path(project_name)
+    if not project_dir:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    terminals = list_terminals(project_name)
+
+    # If no terminals exist, create a default one
+    if not terminals:
+        info = create_terminal(project_name)
+        terminals = [info]
+
+    return [
+        TerminalInfoResponse(id=t.id, name=t.name, created_at=t.created_at) for t in terminals
+    ]
+
+
+@router.post("/{project_name}")
+async def create_project_terminal(
+    project_name: str, request: CreateTerminalRequest
+) -> TerminalInfoResponse:
+    """
+    Create a new terminal for a project.
+
+    Args:
+        project_name: Name of the project
+        request: Request body with optional terminal name
+
+    Returns:
+        The created terminal info
+    """
+    if not validate_project_name(project_name):
+        raise HTTPException(status_code=400, detail="Invalid project name")
+
+    project_dir = _get_project_path(project_name)
+    if not project_dir:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    info = create_terminal(project_name, request.name)
+    return TerminalInfoResponse(id=info.id, name=info.name, created_at=info.created_at)
+
+
+@router.patch("/{project_name}/{terminal_id}")
+async def rename_project_terminal(
+    project_name: str, terminal_id: str, request: RenameTerminalRequest
+) -> TerminalInfoResponse:
+    """
+    Rename a terminal.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal to rename
+        request: Request body with new name
+
+    Returns:
+        The updated terminal info
+    """
+    if not validate_project_name(project_name):
+        raise HTTPException(status_code=400, detail="Invalid project name")
+
+    if not validate_terminal_id(terminal_id):
+        raise HTTPException(status_code=400, detail="Invalid terminal ID")
+
+    project_dir = _get_project_path(project_name)
+    if not project_dir:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not rename_terminal(project_name, terminal_id, request.name):
+        raise HTTPException(status_code=404, detail="Terminal not found")
+
+    info = get_terminal_info(project_name, terminal_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Terminal not found")
+
+    return TerminalInfoResponse(id=info.id, name=info.name, created_at=info.created_at)
+
+
+@router.delete("/{project_name}/{terminal_id}")
+async def delete_project_terminal(project_name: str, terminal_id: str) -> dict:
+    """
+    Delete a terminal and stop its session.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal to delete
+
+    Returns:
+        Success message
+    """
+    if not validate_project_name(project_name):
+        raise HTTPException(status_code=400, detail="Invalid project name")
+
+    if not validate_terminal_id(terminal_id):
+        raise HTTPException(status_code=400, detail="Invalid terminal ID")
+
+    project_dir = _get_project_path(project_name)
+    if not project_dir:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Stop the session if it's running
+    await stop_terminal_session(project_name, terminal_id)
+
+    # Delete the terminal metadata
+    if not delete_terminal(project_name, terminal_id):
+        raise HTTPException(status_code=404, detail="Terminal not found")
+
+    return {"message": "Terminal deleted"}
+
+
+# WebSocket Endpoint
+
+
+@router.websocket("/ws/{project_name}/{terminal_id}")
+async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_id: str) -> None:
     """
     WebSocket endpoint for interactive terminal I/O.
 
@@ -84,6 +256,13 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
         )
         return
 
+    # Validate terminal ID
+    if not validate_terminal_id(terminal_id):
+        await websocket.close(
+            code=TerminalCloseCode.INVALID_PROJECT_NAME, reason="Invalid terminal ID"
+        )
+        return
+
     # Look up project directory from registry
     project_dir = _get_project_path(project_name)
     if not project_dir:
@@ -100,10 +279,19 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
         )
         return
 
+    # Verify terminal exists in metadata
+    terminal_info = get_terminal_info(project_name, terminal_id)
+    if not terminal_info:
+        await websocket.close(
+            code=TerminalCloseCode.PROJECT_NOT_FOUND,
+            reason="Terminal not found",
+        )
+        return
+
     await websocket.accept()
 
-    # Get or create terminal session for this project
-    session = get_terminal_session(project_name, project_dir)
+    # Get or create terminal session for this project/terminal
+    session = get_terminal_session(project_name, project_dir, terminal_id)
 
     # Queue for output data to send to client
     output_queue: asyncio.Queue[bytes] = asyncio.Queue()
@@ -119,21 +307,9 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
     # Register the output callback
     session.add_output_callback(on_output)
 
-    # Start the terminal session if not already active
-    if not session.is_active:
-        started = await session.start()
-        if not started:
-            session.remove_output_callback(on_output)
-            try:
-                await websocket.send_json(
-                    {"type": "error", "message": "Failed to start terminal session"}
-                )
-            except Exception:
-                pass
-            await websocket.close(
-                code=TerminalCloseCode.FAILED_TO_START, reason="Failed to start terminal"
-            )
-            return
+    # Track if we need to wait for initial resize before starting
+    # This ensures the PTY is created with correct dimensions from the start
+    needs_initial_resize = not session.is_active
 
     # Task to send queued output to WebSocket
     async def send_output_task() -> None:
@@ -159,6 +335,11 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
     async def monitor_exit_task() -> None:
         """Monitor the terminal session and notify client on exit."""
         try:
+            # Wait for session to become active first (deferred start)
+            while not session.is_active:
+                await asyncio.sleep(0.1)
+
+            # Now monitor until it becomes inactive
             while session.is_active:
                 await asyncio.sleep(0.5)
 
@@ -189,6 +370,13 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
                     await websocket.send_json({"type": "pong"})
 
                 elif msg_type == "input":
+                    # Only allow input after terminal is started
+                    if not session.is_active:
+                        await websocket.send_json(
+                            {"type": "error", "message": "Terminal not ready - send resize first"}
+                        )
+                        continue
+
                     # Decode base64 input and write to PTY
                     encoded_data = message.get("data", "")
                     # Add size limit to prevent DoS
@@ -222,7 +410,27 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
                     if isinstance(cols, int) and isinstance(rows, int):
                         cols = max(10, min(500, cols))
                         rows = max(5, min(200, rows))
-                        session.resize(cols, rows)
+
+                        # If this is the first resize and session not started, start with these dimensions
+                        # This ensures the PTY is created with correct size from the beginning
+                        if needs_initial_resize and not session.is_active:
+                            started = await session.start(cols=cols, rows=rows)
+                            if not started:
+                                session.remove_output_callback(on_output)
+                                try:
+                                    await websocket.send_json(
+                                        {"type": "error", "message": "Failed to start terminal session"}
+                                    )
+                                except Exception:
+                                    pass
+                                await websocket.close(
+                                    code=TerminalCloseCode.FAILED_TO_START, reason="Failed to start terminal"
+                                )
+                                return
+                            # Mark that we no longer need initial resize
+                            needs_initial_resize = False
+                        else:
+                            session.resize(cols, rows)
                     else:
                         await websocket.send_json({"type": "error", "message": "Invalid resize dimensions"})
 
@@ -233,10 +441,10 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
 
     except WebSocketDisconnect:
-        logger.info(f"Terminal WebSocket disconnected for {project_name}")
+        logger.info(f"Terminal WebSocket disconnected for {project_name}/{terminal_id}")
 
     except Exception as e:
-        logger.exception(f"Terminal WebSocket error for {project_name}")
+        logger.exception(f"Terminal WebSocket error for {project_name}/{terminal_id}")
         try:
             await websocket.send_json({"type": "error", "message": f"Server error: {str(e)}"})
         except Exception:
@@ -266,8 +474,8 @@ async def terminal_websocket(websocket: WebSocket, project_name: str) -> None:
 
         if remaining_callbacks == 0:
             await session.stop()
-            logger.info(f"Terminal session stopped for {project_name} (last client disconnected)")
+            logger.info(f"Terminal session stopped for {project_name}/{terminal_id} (last client disconnected)")
         else:
             logger.info(
-                f"Client disconnected from {project_name}, {remaining_callbacks} clients remaining"
+                f"Client disconnected from {project_name}/{terminal_id}, {remaining_callbacks} clients remaining"
             )

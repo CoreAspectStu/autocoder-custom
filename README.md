@@ -288,6 +288,23 @@ When test progress increases, the agent sends:
 }
 ```
 
+### Using GLM Models (Alternative to Claude)
+
+To use Zhipu AI's GLM models instead of Claude, create a settings file at `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "your-zhipu-api-key"
+  }
+}
+```
+
+This routes Claude Code requests through Zhipu's Claude-compatible API, allowing you to use GLM-4.7 and other models while keeping all Claude Code features (MCP servers, hooks, permissions).
+
+Get an API key at: https://z.ai/subscribe
+
 ---
 
 ## Customization

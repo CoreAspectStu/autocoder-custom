@@ -23,6 +23,7 @@ import type {
   ModelsResponse,
   DevServerStatusResponse,
   DevServerConfig,
+  TerminalInfo,
 } from './types'
 
 const API_BASE = '/api'
@@ -332,4 +333,42 @@ export async function stopDevServer(
 
 export async function getDevServerConfig(projectName: string): Promise<DevServerConfig> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/devserver/config`)
+}
+
+// ============================================================================
+// Terminal API
+// ============================================================================
+
+export async function listTerminals(projectName: string): Promise<TerminalInfo[]> {
+  return fetchJSON(`/terminal/${encodeURIComponent(projectName)}`)
+}
+
+export async function createTerminal(
+  projectName: string,
+  name?: string
+): Promise<TerminalInfo> {
+  return fetchJSON(`/terminal/${encodeURIComponent(projectName)}`, {
+    method: 'POST',
+    body: JSON.stringify({ name: name ?? null }),
+  })
+}
+
+export async function renameTerminal(
+  projectName: string,
+  terminalId: string,
+  name: string
+): Promise<TerminalInfo> {
+  return fetchJSON(`/terminal/${encodeURIComponent(projectName)}/${terminalId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteTerminal(
+  projectName: string,
+  terminalId: string
+): Promise<void> {
+  await fetchJSON(`/terminal/${encodeURIComponent(projectName)}/${terminalId}`, {
+    method: 'DELETE',
+  })
 }

@@ -28,17 +28,6 @@ from .assistant_database import (
 # Load environment variables from .env file if present
 load_dotenv()
 
-
-def get_cli_command() -> str:
-    """
-    Get the CLI command to use for the agent.
-
-    Reads from CLI_COMMAND environment variable, defaults to 'claude'.
-    This allows users to use alternative CLIs like 'glm'.
-    """
-    return os.getenv("CLI_COMMAND", "claude")
-
-
 logger = logging.getLogger(__name__)
 
 # Root directory of the project
@@ -242,9 +231,8 @@ class AssistantChatSession:
         # Get system prompt with project context
         system_prompt = get_system_prompt(self.project_name, self.project_dir)
 
-        # Use system CLI (configurable via CLI_COMMAND environment variable)
-        cli_command = get_cli_command()
-        system_cli = shutil.which(cli_command)
+        # Use system Claude CLI
+        system_cli = shutil.which("claude")
 
         try:
             self.client = ClaudeSDKClient(

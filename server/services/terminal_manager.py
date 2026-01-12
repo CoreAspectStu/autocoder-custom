@@ -12,10 +12,23 @@ import os
 import platform
 import shutil
 import threading
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Set
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TerminalInfo:
+    """Metadata for a terminal instance."""
+
+    id: str
+    name: str
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"
@@ -506,39 +519,214 @@ class TerminalSession:
 
 
 # Global registry of terminal sessions per project with thread safety
-_sessions: dict[str, TerminalSession] = {}
+# Structure: Dict[project_name, Dict[terminal_id, TerminalSession]]
+_sessions: dict[str, dict[str, TerminalSession]] = {}
 _sessions_lock = threading.Lock()
 
+# Terminal metadata registry (in-memory, resets on server restart)
+# Structure: Dict[project_name, List[TerminalInfo]]
+_terminal_metadata: dict[str, list[TerminalInfo]] = {}
+_metadata_lock = threading.Lock()
 
-def get_terminal_session(project_name: str, project_dir: Path) -> TerminalSession:
+
+def create_terminal(project_name: str, name: str | None = None) -> TerminalInfo:
+    """
+    Create a new terminal entry for a project.
+
+    Args:
+        project_name: Name of the project
+        name: Optional terminal name (auto-generated if not provided)
+
+    Returns:
+        TerminalInfo for the new terminal
+    """
+    with _metadata_lock:
+        if project_name not in _terminal_metadata:
+            _terminal_metadata[project_name] = []
+
+        terminals = _terminal_metadata[project_name]
+
+        # Auto-generate name if not provided
+        if name is None:
+            existing_nums = []
+            for t in terminals:
+                if t.name.startswith("Terminal "):
+                    try:
+                        num = int(t.name.replace("Terminal ", ""))
+                        existing_nums.append(num)
+                    except ValueError:
+                        pass
+            next_num = max(existing_nums, default=0) + 1
+            name = f"Terminal {next_num}"
+
+        terminal_id = str(uuid.uuid4())[:8]
+        info = TerminalInfo(id=terminal_id, name=name)
+        terminals.append(info)
+
+        logger.info(f"Created terminal '{name}' (ID: {terminal_id}) for project {project_name}")
+        return info
+
+
+def list_terminals(project_name: str) -> list[TerminalInfo]:
+    """
+    List all terminals for a project.
+
+    Args:
+        project_name: Name of the project
+
+    Returns:
+        List of TerminalInfo for the project
+    """
+    with _metadata_lock:
+        return list(_terminal_metadata.get(project_name, []))
+
+
+def rename_terminal(project_name: str, terminal_id: str, new_name: str) -> bool:
+    """
+    Rename a terminal.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal to rename
+        new_name: New name for the terminal
+
+    Returns:
+        True if renamed successfully, False if terminal not found
+    """
+    with _metadata_lock:
+        terminals = _terminal_metadata.get(project_name, [])
+        for terminal in terminals:
+            if terminal.id == terminal_id:
+                old_name = terminal.name
+                terminal.name = new_name
+                logger.info(
+                    f"Renamed terminal '{old_name}' to '{new_name}' "
+                    f"(ID: {terminal_id}) for project {project_name}"
+                )
+                return True
+        return False
+
+
+def delete_terminal(project_name: str, terminal_id: str) -> bool:
+    """
+    Delete a terminal and stop its session if active.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal to delete
+
+    Returns:
+        True if deleted, False if not found
+    """
+    # Remove from metadata
+    with _metadata_lock:
+        terminals = _terminal_metadata.get(project_name, [])
+        for i, terminal in enumerate(terminals):
+            if terminal.id == terminal_id:
+                terminals.pop(i)
+                logger.info(
+                    f"Deleted terminal '{terminal.name}' (ID: {terminal_id}) "
+                    f"for project {project_name}"
+                )
+                break
+        else:
+            return False
+
+    # Remove session if exists (will be stopped async by caller)
+    with _sessions_lock:
+        project_sessions = _sessions.get(project_name, {})
+        if terminal_id in project_sessions:
+            del project_sessions[terminal_id]
+
+    return True
+
+
+def get_terminal_session(
+    project_name: str, project_dir: Path, terminal_id: str | None = None
+) -> TerminalSession:
     """
     Get or create a terminal session for a project (thread-safe).
 
     Args:
         project_name: Name of the project
         project_dir: Absolute path to the project directory
+        terminal_id: ID of the terminal (creates default if not provided)
 
     Returns:
-        TerminalSession instance for the project
+        TerminalSession instance for the project/terminal
     """
+    # Ensure terminal metadata exists
+    if terminal_id is None:
+        # Create default terminal if none exists
+        terminals = list_terminals(project_name)
+        if not terminals:
+            info = create_terminal(project_name)
+            terminal_id = info.id
+        else:
+            terminal_id = terminals[0].id
+
     with _sessions_lock:
         if project_name not in _sessions:
-            _sessions[project_name] = TerminalSession(project_name, project_dir)
-        return _sessions[project_name]
+            _sessions[project_name] = {}
+
+        project_sessions = _sessions[project_name]
+        if terminal_id not in project_sessions:
+            project_sessions[terminal_id] = TerminalSession(project_name, project_dir)
+
+        return project_sessions[terminal_id]
 
 
-def remove_terminal_session(project_name: str) -> TerminalSession | None:
+def remove_terminal_session(project_name: str, terminal_id: str) -> TerminalSession | None:
     """
     Remove a terminal session from the registry.
 
     Args:
         project_name: Name of the project
+        terminal_id: ID of the terminal
 
     Returns:
         The removed session, or None if not found
     """
     with _sessions_lock:
-        return _sessions.pop(project_name, None)
+        project_sessions = _sessions.get(project_name, {})
+        return project_sessions.pop(terminal_id, None)
+
+
+def get_terminal_info(project_name: str, terminal_id: str) -> TerminalInfo | None:
+    """
+    Get terminal info by ID.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal
+
+    Returns:
+        TerminalInfo if found, None otherwise
+    """
+    with _metadata_lock:
+        terminals = _terminal_metadata.get(project_name, [])
+        for terminal in terminals:
+            if terminal.id == terminal_id:
+                return terminal
+        return None
+
+
+async def stop_terminal_session(project_name: str, terminal_id: str) -> bool:
+    """
+    Stop a specific terminal session.
+
+    Args:
+        project_name: Name of the project
+        terminal_id: ID of the terminal
+
+    Returns:
+        True if stopped, False if not found
+    """
+    session = remove_terminal_session(project_name, terminal_id)
+    if session and session.is_active:
+        await session.stop()
+        return True
+    return False
 
 
 async def cleanup_all_terminals() -> None:
@@ -548,9 +736,11 @@ async def cleanup_all_terminals() -> None:
     Called on server shutdown to ensure all PTY processes are terminated.
     """
     with _sessions_lock:
-        sessions = list(_sessions.values())
+        all_sessions = []
+        for project_sessions in _sessions.values():
+            all_sessions.extend(project_sessions.values())
 
-    for session in sessions:
+    for session in all_sessions:
         try:
             if session.is_active:
                 await session.stop()
@@ -559,5 +749,8 @@ async def cleanup_all_terminals() -> None:
 
     with _sessions_lock:
         _sessions.clear()
+
+    with _metadata_lock:
+        _terminal_metadata.clear()
 
     logger.info("All terminal sessions cleaned up")

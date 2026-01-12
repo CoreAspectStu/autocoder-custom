@@ -12,6 +12,7 @@ import '@xterm/xterm/css/xterm.css'
 
 interface TerminalProps {
   projectName: string
+  terminalId: string
   isActive: boolean
 }
 
@@ -69,7 +70,7 @@ const TERMINAL_THEME = {
 const RECONNECT_DELAY_BASE = 1000
 const RECONNECT_DELAY_MAX = 30000
 
-export function Terminal({ projectName, isActive }: TerminalProps) {
+export function Terminal({ projectName, terminalId, isActive }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -83,8 +84,11 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
   const isManualCloseRef = useRef(false)
   // Store connect function in ref to avoid useEffect dependency issues
   const connectRef = useRef<(() => void) | null>(null)
-  // Track last project to avoid duplicate connect on initial activation
+  // Track last project/terminal to avoid duplicate connect on initial activation
   const lastProjectRef = useRef<string | null>(null)
+  const lastTerminalIdRef = useRef<string | null>(null)
+  // Track isActive in a ref to avoid stale closure issues in connect()
+  const isActiveRef = useRef(isActive)
 
   const [isConnected, setIsConnected] = useState(false)
   const [hasExited, setHasExited] = useState(false)
@@ -94,6 +98,11 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
   useEffect(() => {
     hasExitedRef.current = hasExited
   }, [hasExited])
+
+  // Keep isActiveRef in sync with isActive prop to avoid stale closures
+  useEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
 
   /**
    * Encode string to base64
@@ -160,9 +169,27 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
   const fitTerminal = useCallback(() => {
     if (fitAddonRef.current && terminalRef.current) {
       try {
-        fitAddonRef.current.fit()
+        // Try to get proposed dimensions first
+        const dimensions = fitAddonRef.current.proposeDimensions()
+        const hasValidDimensions = dimensions &&
+          dimensions.cols &&
+          dimensions.rows &&
+          !isNaN(dimensions.cols) &&
+          !isNaN(dimensions.rows) &&
+          dimensions.cols >= 1 &&
+          dimensions.rows >= 1
+
+        if (hasValidDimensions) {
+          // Valid dimensions - fit the terminal
+          fitAddonRef.current.fit()
+        }
+
+        // Always send resize with current terminal dimensions
+        // This ensures the server has the correct size even if fit() was skipped
         const { cols, rows } = terminalRef.current
-        sendResize(cols, rows)
+        if (cols > 0 && rows > 0) {
+          sendResize(cols, rows)
+        }
       } catch {
         // Container may not be visible yet, ignore
       }
@@ -173,7 +200,9 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
    * Connect to the terminal WebSocket
    */
   const connect = useCallback(() => {
-    if (!projectName || !isActive) return
+    // Use isActiveRef.current instead of isActive to avoid stale closure issues
+    // when connect is called from setTimeout callbacks
+    if (!projectName || !terminalId || !isActiveRef.current) return
 
     // Prevent multiple simultaneous connection attempts
     if (
@@ -192,10 +221,10 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
       reconnectTimeoutRef.current = null
     }
 
-    // Build WebSocket URL
+    // Build WebSocket URL with terminal ID
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const wsUrl = `${protocol}//${host}/api/terminal/ws/${encodeURIComponent(projectName)}`
+    const wsUrl = `${protocol}//${host}/api/terminal/ws/${encodeURIComponent(projectName)}/${encodeURIComponent(terminalId)}`
 
     try {
       const ws = new WebSocket(wsUrl)
@@ -253,8 +282,8 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
         wsRef.current = null
 
         // Only reconnect if still active, not intentionally exited, and not manually closed
-        // Use refs to avoid re-creating this callback when state changes
-        const shouldReconnect = isActive && !hasExitedRef.current && !isManualCloseRef.current
+        // Use isActiveRef.current to get the current value, avoiding stale closure
+        const shouldReconnect = isActiveRef.current && !hasExitedRef.current && !isManualCloseRef.current
         // Reset manual close flag after checking (so subsequent disconnects can auto-reconnect)
         isManualCloseRef.current = false
 
@@ -289,7 +318,7 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
         connect()
       }, delay)
     }
-  }, [projectName, isActive, sendResize, decodeBase64])
+  }, [projectName, terminalId, sendResize, decodeBase64])
 
   // Keep connect ref up to date
   useEffect(() => {
@@ -325,10 +354,9 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
     fitAddonRef.current = fitAddon
     isInitializedRef.current = true
 
-    // Initial fit
-    setTimeout(() => {
-      fitTerminal()
-    }, 0)
+    // NOTE: Don't call fitTerminal() here - let the activation effect handle it
+    // after layout is fully calculated. This avoids dimension calculation issues
+    // when the container is first rendered.
 
     // Handle keyboard input
     terminal.onData((data) => {
@@ -353,7 +381,7 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
     terminal.onResize(({ cols, rows }) => {
       sendResize(cols, rows)
     })
-  }, [fitTerminal, encodeBase64, sendMessage, sendResize])
+  }, [encodeBase64, sendMessage, sendResize])
 
   /**
    * Handle window resize
@@ -376,43 +404,83 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
    */
   useEffect(() => {
     if (!isActive) {
-      // Clean up when becoming inactive
+      // When becoming inactive, just clear reconnect timeout but keep WebSocket alive
+      // This preserves the terminal buffer and connection for when we switch back
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
       }
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
+      // DO NOT close WebSocket here - keep it alive to preserve buffer
       return
     }
 
     // Initialize terminal if not already done
     if (!isInitializedRef.current) {
       initializeTerminal()
-    } else {
-      // Re-fit when becoming active again
-      setTimeout(() => {
-        fitTerminal()
-      }, 0)
     }
 
-    // Connect WebSocket using ref to avoid dependency on connect callback
-    connectRef.current?.()
-  }, [isActive, initializeTerminal, fitTerminal])
+    // Connect WebSocket if not already connected
+    // Use double rAF + timeout to ensure terminal is rendered with correct dimensions
+    // before connecting (the fit/refresh effect handles the actual fitting)
+    let rafId1: number
+    let rafId2: number
+
+    const connectIfNeeded = () => {
+      rafId1 = requestAnimationFrame(() => {
+        rafId2 = requestAnimationFrame(() => {
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            connectRef.current?.()
+          }
+        })
+      })
+    }
+
+    // Delay connection to ensure terminal dimensions are calculated first
+    const timeoutId = window.setTimeout(connectIfNeeded, 50)
+
+    return () => {
+      clearTimeout(timeoutId)
+      cancelAnimationFrame(rafId1)
+      cancelAnimationFrame(rafId2)
+    }
+  }, [isActive, initializeTerminal])
 
   /**
-   * Fit terminal when isActive becomes true
+   * Fit and refresh terminal when isActive becomes true
    */
   useEffect(() => {
     if (isActive && terminalRef.current) {
-      // Small delay to ensure container is visible
-      const timeoutId = setTimeout(() => {
-        fitTerminal()
-        terminalRef.current?.focus()
-      }, 100)
-      return () => clearTimeout(timeoutId)
+      // Use double requestAnimationFrame to ensure:
+      // 1. First rAF: style changes are committed
+      // 2. Second rAF: layout is recalculated
+      // This is more reliable than setTimeout for visibility changes
+      let rafId1: number
+      let rafId2: number
+
+      const handleActivation = () => {
+        rafId1 = requestAnimationFrame(() => {
+          rafId2 = requestAnimationFrame(() => {
+            if (terminalRef.current && fitAddonRef.current) {
+              // Fit terminal to get correct dimensions
+              fitTerminal()
+              // Refresh the terminal to redraw content after becoming visible
+              // This fixes rendering issues when switching between terminals
+              terminalRef.current.refresh(0, terminalRef.current.rows - 1)
+              // Focus the terminal to receive keyboard input
+              terminalRef.current.focus()
+            }
+          })
+        })
+      }
+
+      // Small initial delay to ensure React has committed the style changes
+      const timeoutId = window.setTimeout(handleActivation, 16)
+
+      return () => {
+        clearTimeout(timeoutId)
+        cancelAnimationFrame(rafId1)
+        cancelAnimationFrame(rafId2)
+      }
     }
   }, [isActive, fitTerminal])
 
@@ -435,25 +503,27 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
   }, [])
 
   /**
-   * Reconnect when project changes
+   * Reconnect when project or terminal changes
    */
   useEffect(() => {
     if (isActive && isInitializedRef.current) {
-      // Only reconnect if project actually changed, not on initial activation
-      // This prevents duplicate connect calls when both isActive and projectName effects run
-      if (lastProjectRef.current === null) {
-        // Initial activation - just track the project, don't reconnect (the isActive effect handles initial connect)
+      // Only reconnect if project or terminal actually changed, not on initial activation
+      // This prevents duplicate connect calls when both isActive and projectName/terminalId effects run
+      if (lastProjectRef.current === null && lastTerminalIdRef.current === null) {
+        // Initial activation - just track the project/terminal, don't reconnect (the isActive effect handles initial connect)
         lastProjectRef.current = projectName
+        lastTerminalIdRef.current = terminalId
         return
       }
 
-      if (lastProjectRef.current === projectName) {
-        // Project didn't change, skip
+      if (lastProjectRef.current === projectName && lastTerminalIdRef.current === terminalId) {
+        // Nothing changed, skip
         return
       }
 
-      // Project changed - update tracking
+      // Project or terminal changed - update tracking
       lastProjectRef.current = projectName
+      lastTerminalIdRef.current = terminalId
 
       // Clear terminal and reset cursor position
       if (terminalRef.current) {
@@ -476,10 +546,10 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
       setExitCode(null)
       reconnectAttempts.current = 0
 
-      // Connect to new project using ref to avoid dependency on connect callback
+      // Connect to new project/terminal using ref to avoid dependency on connect callback
       connectRef.current?.()
     }
-  }, [projectName, isActive])
+  }, [projectName, terminalId, isActive])
 
   return (
     <div className="relative h-full w-full bg-[#1a1a1a]">
@@ -506,6 +576,10 @@ export function Terminal({ projectName, isActive }: TerminalProps) {
         ref={containerRef}
         className="h-full w-full p-2"
         style={{ minHeight: '100px' }}
+        onClick={() => {
+          // Ensure terminal gets focus when container is clicked
+          terminalRef.current?.focus()
+        }}
       />
     </div>
   )

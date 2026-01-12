@@ -20,24 +20,10 @@ from security import bash_security_hook
 # Load environment variables from .env file if present
 load_dotenv()
 
-# Default CLI command - can be overridden via CLI_COMMAND environment variable
-# Common values: "claude" (default), "glm"
-DEFAULT_CLI_COMMAND = "claude"
-
 # Default Playwright headless mode - can be overridden via PLAYWRIGHT_HEADLESS env var
 # When True, browser runs invisibly in background
 # When False, browser window is visible (default - useful for monitoring agent progress)
 DEFAULT_PLAYWRIGHT_HEADLESS = False
-
-
-def get_cli_command() -> str:
-    """
-    Get the CLI command to use for the agent.
-
-    Reads from CLI_COMMAND environment variable, defaults to 'claude'.
-    This allows users to use alternative CLIs like 'glm'.
-    """
-    return os.getenv("CLI_COMMAND", DEFAULT_CLI_COMMAND)
 
 
 def get_playwright_headless() -> bool:
@@ -187,14 +173,12 @@ def create_client(project_dir: Path, model: str, yolo_mode: bool = False):
     print("   - Project settings enabled (skills, commands, CLAUDE.md)")
     print()
 
-    # Use system CLI instead of bundled one (avoids Bun runtime crash on Windows)
-    # CLI command is configurable via CLI_COMMAND environment variable
-    cli_command = get_cli_command()
-    system_cli = shutil.which(cli_command)
+    # Use system Claude CLI instead of bundled one (avoids Bun runtime crash on Windows)
+    system_cli = shutil.which("claude")
     if system_cli:
         print(f"   - Using system CLI: {system_cli}")
     else:
-        print(f"   - Warning: System CLI '{cli_command}' not found, using bundled CLI")
+        print("   - Warning: System 'claude' CLI not found, using bundled CLI")
 
     # Build MCP servers config - features is always included, playwright only in standard mode
     mcp_servers = {
