@@ -9,6 +9,7 @@ Uses the expand-project.md skill to help users add features to existing projects
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 import threading
@@ -26,6 +27,16 @@ from ..schemas import ImageAttachment
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Environment variables to pass through to Claude CLI for API configuration
+API_ENV_VARS = [
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "API_TIMEOUT_MS",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+]
 
 
 async def _make_multimodal_message(content_blocks: list[dict]) -> AsyncGenerator[dict, None]:
@@ -153,6 +164,9 @@ class ExpandChatSession:
         project_path = str(self.project_dir.resolve())
         system_prompt = skill_content.replace("$ARGUMENTS", project_path)
 
+        # Build environment overrides for API configuration
+        sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
+
         # Create Claude SDK client
         try:
             self.client = ClaudeSDKClient(
@@ -168,6 +182,7 @@ class ExpandChatSession:
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
                     settings=str(settings_file.resolve()),
+                    env=sdk_env,
                 )
             )
             await self.client.__aenter__()

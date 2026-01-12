@@ -290,18 +290,18 @@ When test progress increases, the agent sends:
 
 ### Using GLM Models (Alternative to Claude)
 
-To use Zhipu AI's GLM models instead of Claude, create a settings file at `~/.claude/settings.json`:
+To use Zhipu AI's GLM models instead of Claude, add these variables to your `.env` file in the AutoCoder directory:
 
-```json
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "your-zhipu-api-key"
-  }
-}
+```bash
+ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
+ANTHROPIC_AUTH_TOKEN=your-zhipu-api-key
+API_TIMEOUT_MS=3000000
+ANTHROPIC_DEFAULT_SONNET_MODEL=glm-4.7
+ANTHROPIC_DEFAULT_OPUS_MODEL=glm-4.7
+ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-4.5-air
 ```
 
-This routes Claude Code requests through Zhipu's Claude-compatible API, allowing you to use GLM-4.7 and other models while keeping all Claude Code features (MCP servers, hooks, permissions).
+This routes AutoCoder's API requests through Zhipu's Claude-compatible API, allowing you to use GLM-4.7 and other models. **This only affects AutoCoder** - your global Claude Code settings remain unchanged.
 
 Get an API key at: https://z.ai/subscribe
 

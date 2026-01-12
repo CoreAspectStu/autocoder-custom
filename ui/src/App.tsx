@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useProjects, useFeatures, useAgentStatus } from './hooks/useProjects'
+import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/useProjects'
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
@@ -46,6 +46,7 @@ function App() {
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
   const { data: features } = useFeatures(selectedProject)
+  const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
 
@@ -210,6 +211,16 @@ function App() {
                   >
                     <Settings size={18} />
                   </button>
+
+                  {/* GLM Mode Badge */}
+                  {settings?.glm_mode && (
+                    <span
+                      className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded border-2 border-black shadow-neo-sm"
+                      title="Using GLM API (configured via .env)"
+                    >
+                      GLM
+                    </span>
+                  )}
                 </>
               )}
             </div>

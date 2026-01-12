@@ -6,6 +6,7 @@ Main entry point for the Autonomous Coding UI server.
 Provides REST API, WebSocket, and static file serving.
 """
 
+import os
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -148,7 +149,11 @@ async def setup_status():
     # Note: CLI no longer stores credentials in ~/.claude/.credentials.json
     # The existence of ~/.claude indicates the CLI has been configured
     claude_dir = Path.home() / ".claude"
-    credentials = claude_dir.exists() and claude_dir.is_dir()
+    has_claude_config = claude_dir.exists() and claude_dir.is_dir()
+
+    # If GLM mode is configured via .env, we have alternative credentials
+    glm_configured = bool(os.getenv("ANTHROPIC_BASE_URL") and os.getenv("ANTHROPIC_AUTH_TOKEN"))
+    credentials = has_claude_config or glm_configured
 
     # Check for Node.js and npm
     node = shutil.which("node") is not None

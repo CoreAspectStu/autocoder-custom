@@ -387,6 +387,7 @@ export interface ModelsResponse {
 export interface Settings {
   yolo_mode: boolean
   model: string
+  glm_mode: boolean
 }
 
 export interface SettingsUpdate {

@@ -33,6 +33,16 @@ logger = logging.getLogger(__name__)
 # Root directory of the project
 ROOT_DIR = Path(__file__).parent.parent.parent
 
+# Environment variables to pass through to Claude CLI for API configuration
+API_ENV_VARS = [
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "API_TIMEOUT_MS",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+]
+
 # Read-only feature MCP tools
 READONLY_FEATURE_MCP_TOOLS = [
     "mcp__features__feature_get_stats",
@@ -234,6 +244,9 @@ class AssistantChatSession:
         # Use system Claude CLI
         system_cli = shutil.which("claude")
 
+        # Build environment overrides for API configuration
+        sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
+
         try:
             self.client = ClaudeSDKClient(
                 options=ClaudeAgentOptions(
@@ -246,6 +259,7 @@ class AssistantChatSession:
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
                     settings=str(settings_file.resolve()),
+                    env=sdk_env,
                 )
             )
             await self.client.__aenter__()

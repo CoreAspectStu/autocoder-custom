@@ -289,6 +289,7 @@ class SettingsResponse(BaseModel):
     """Response schema for global settings."""
     yolo_mode: bool = False
     model: str = DEFAULT_MODEL
+    glm_mode: bool = False  # True if GLM API is configured via .env
 
 
 class ModelsResponse(BaseModel):
