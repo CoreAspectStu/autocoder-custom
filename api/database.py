@@ -27,8 +27,8 @@ class Feature(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     steps = Column(JSON, nullable=False)  # Stored as JSON array
-    passes = Column(Boolean, default=False, index=True)
-    in_progress = Column(Boolean, default=False, index=True)
+    passes = Column(Boolean, nullable=False, default=False, index=True)
+    in_progress = Column(Boolean, nullable=False, default=False, index=True)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -39,8 +39,9 @@ class Feature(Base):
             "name": self.name,
             "description": self.description,
             "steps": self.steps,
-            "passes": self.passes,
-            "in_progress": self.in_progress,
+            # Handle legacy NULL values gracefully - treat as False
+            "passes": self.passes if self.passes is not None else False,
+            "in_progress": self.in_progress if self.in_progress is not None else False,
         }
 
 
@@ -73,6 +74,18 @@ def _migrate_add_in_progress_column(engine) -> None:
             conn.commit()
 
 
+def _migrate_fix_null_boolean_fields(engine) -> None:
+    """Fix NULL values in passes and in_progress columns."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        # Fix NULL passes values
+        conn.execute(text("UPDATE features SET passes = 0 WHERE passes IS NULL"))
+        # Fix NULL in_progress values
+        conn.execute(text("UPDATE features SET in_progress = 0 WHERE in_progress IS NULL"))
+        conn.commit()
+
+
 def create_database(project_dir: Path) -> tuple:
     """
     Create database and return engine + session maker.
@@ -87,8 +100,9 @@ def create_database(project_dir: Path) -> tuple:
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
 
-    # Migrate existing databases to add in_progress column
+    # Migrate existing databases
     _migrate_add_in_progress_column(engine)
+    _migrate_fix_null_boolean_fields(engine)
 
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return engine, SessionLocal

@@ -72,7 +72,10 @@ def get_db_session(project_dir: Path):
 
 
 def feature_to_response(f) -> FeatureResponse:
-    """Convert a Feature model to a FeatureResponse."""
+    """Convert a Feature model to a FeatureResponse.
+
+    Handles legacy NULL values in boolean fields by treating them as False.
+    """
     return FeatureResponse(
         id=f.id,
         priority=f.priority,
@@ -80,8 +83,9 @@ def feature_to_response(f) -> FeatureResponse:
         name=f.name,
         description=f.description,
         steps=f.steps if isinstance(f.steps, list) else [],
-        passes=f.passes,
-        in_progress=f.in_progress,
+        # Handle legacy NULL values gracefully - treat as False
+        passes=f.passes if f.passes is not None else False,
+        in_progress=f.in_progress if f.in_progress is not None else False,
     )
 
 
