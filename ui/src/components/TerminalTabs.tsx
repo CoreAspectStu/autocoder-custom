@@ -165,7 +165,7 @@ export function TerminalTabs({
             ${
               activeTerminalId === terminal.id
                 ? 'bg-neo-progress text-black'
-                : 'bg-[#3a3a3a] text-white hover:bg-[#4a4a4a]'
+                : 'bg-[#3a3a3a] text-white hover:bg-neo-text-secondary'
             }
           `}
           onClick={() => onSelect(terminal.id)}
@@ -180,7 +180,7 @@ export function TerminalTabs({
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={submitEdit}
               onKeyDown={handleKeyDown}
-              className="bg-white text-black px-1 py-0 text-sm font-mono border-2 border-black w-24 outline-none"
+              className="bg-neo-card text-neo-text px-1 py-0 text-sm font-mono border-2 border-black w-24 outline-none"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
@@ -212,7 +212,7 @@ export function TerminalTabs({
       {/* Add new terminal button */}
       <button
         onClick={onCreate}
-        className="flex items-center justify-center w-8 h-8 border-2 border-black bg-[#3a3a3a] text-white hover:bg-[#4a4a4a] transition-colors"
+        className="flex items-center justify-center w-8 h-8 border-2 border-black bg-[#3a3a3a] text-white hover:bg-neo-text-secondary transition-colors"
         title="New terminal"
       >
         <Plus className="w-4 h-4" />
@@ -222,8 +222,8 @@ export function TerminalTabs({
       {contextMenu.visible && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] py-1 min-w-[120px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-50 bg-neo-card border-2 border-[var(--color-neo-border)] py-1 min-w-[120px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, boxShadow: 'var(--shadow-neo-md)' }}
         >
           <button
             onClick={handleContextMenuRename}

@@ -92,7 +92,7 @@ export function DevServerControl({ projectName, status, url }: DevServerControlP
           className="neo-btn text-sm py-2 px-3"
           style={isCrashed ? {
             backgroundColor: 'var(--color-neo-danger)',
-            color: '#ffffff',
+            color: 'var(--color-neo-text-on-bright)',
           } : undefined}
           title={isCrashed ? "Dev Server Crashed - Click to Restart" : "Start Dev Server"}
           aria-label={isCrashed ? "Restart Dev Server (crashed)" : "Start Dev Server"}
@@ -112,7 +112,7 @@ export function DevServerControl({ projectName, status, url }: DevServerControlP
           className="neo-btn text-sm py-2 px-3"
           style={{
             backgroundColor: 'var(--color-neo-progress)',
-            color: '#ffffff',
+            color: 'var(--color-neo-text-on-bright)',
           }}
           title="Stop Dev Server"
           aria-label="Stop Dev Server"
@@ -134,7 +134,7 @@ export function DevServerControl({ projectName, status, url }: DevServerControlP
           className="neo-btn text-sm py-2 px-3 gap-1"
           style={{
             backgroundColor: 'var(--color-neo-progress)',
-            color: '#ffffff',
+            color: 'var(--color-neo-text-on-bright)',
             textDecoration: 'none',
           }}
           title={`Open ${url} in new tab`}
