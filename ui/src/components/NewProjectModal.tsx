@@ -317,8 +317,6 @@ export function NewProjectModal({
                   disabled={createProject.isPending}
                   className="
                     w-full text-left p-4
-                    border-3 border-[var(--color-neo-border)]
-                    bg-[var(--color-neo-card)]
                     hover:translate-x-[-2px] hover:translate-y-[-2px]
                     transition-all duration-150
                     disabled:opacity-50 disabled:cursor-not-allowed
@@ -352,8 +350,6 @@ export function NewProjectModal({
                   disabled={createProject.isPending}
                   className="
                     w-full text-left p-4
-                    border-3 border-[var(--color-neo-border)]
-                    bg-[var(--color-neo-card)]
                     hover:translate-x-[-2px] hover:translate-y-[-2px]
                     transition-all duration-150
                     disabled:opacity-50 disabled:cursor-not-allowed

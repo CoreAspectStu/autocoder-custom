@@ -165,7 +165,7 @@ export function TerminalTabs({
             ${
               activeTerminalId === terminal.id
                 ? 'bg-neo-progress text-black'
-                : 'bg-[#3a3a3a] text-white hover:bg-neo-text-secondary'
+                : 'bg-[#3a3a3a] text-white hover:bg-[var(--color-neo-hover-subtle)]'
             }
           `}
           onClick={() => onSelect(terminal.id)}
@@ -212,7 +212,7 @@ export function TerminalTabs({
       {/* Add new terminal button */}
       <button
         onClick={onCreate}
-        className="flex items-center justify-center w-8 h-8 border-2 border-black bg-[#3a3a3a] text-white hover:bg-neo-text-secondary transition-colors"
+        className="flex items-center justify-center w-8 h-8 border-2 border-black bg-[#3a3a3a] text-white hover:bg-[var(--color-neo-hover-subtle)] transition-colors"
         title="New terminal"
       >
         <Plus className="w-4 h-4" />

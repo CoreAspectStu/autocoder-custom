@@ -160,7 +160,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                       onClick={() => window.open(attachment.previewUrl, '_blank')}
                       title={`${attachment.filename} (click to enlarge)`}
                     />
-                    <span className="text-xs text-neo-text-secondary block mt-1 text-center">
+                    <span className="text-xs text-[var(--color-neo-text-secondary)] block mt-1 text-center">
                       {attachment.filename}
                     </span>
                   </div>
@@ -170,7 +170,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
             {/* Streaming indicator */}
             {isStreaming && (
-              <span className="inline-block w-2 h-4 bg-neo-accent ml-1 animate-pulse" />
+              <span className="inline-block w-2 h-4 bg-[var(--color-neo-accent)] ml-1 animate-pulse" />
             )}
           </div>
 

@@ -320,7 +320,7 @@
     margin: auto;
     width: 1.25rem;
     height: 1.25rem;
-    border: 2px solid currentColor;
+    border: 2px solid var(--color-neo-border);
     border-right-color: transparent;
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
@@ -362,6 +362,7 @@
   /* YOLO Mode Button - Animated fire effect for when YOLO mode is enabled */
   .neo-btn-yolo {
     position: relative;
+    will-change: transform, filter;
     background:
       radial-gradient(ellipse at 20% 80%, rgba(255, 200, 0, 0.4) 0%, transparent 50%),
       radial-gradient(ellipse at 80% 80%, rgba(255, 150, 0, 0.3) 0%, transparent 50%),
@@ -548,7 +549,7 @@
   }
 
   /* Progress Bar Shimmer Effect */
-  .neo-progress-bar::after {
+  .neo-progress-fill::after {
     content: '';
     position: absolute;
     top: 0;

@@ -284,7 +284,7 @@ export function DebugLogViewer({
         return 'text-[var(--color-neo-log-debug)]'
       case 'info':
       default:
-        return 'text-[var(--color-neo-log-success)]'
+        return 'text-[var(--color-neo-log-info)]'
     }
   }
 

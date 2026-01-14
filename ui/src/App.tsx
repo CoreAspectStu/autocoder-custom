@@ -4,9 +4,6 @@ import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/u
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
-
-const STORAGE_KEY = 'autocoder-selected-project'
-const DARK_MODE_KEY = 'autocoder-dark-mode'
 import { ProjectSelector } from './components/ProjectSelector'
 import { KanbanBoard } from './components/KanbanBoard'
 import { AgentControl } from './components/AgentControl'
@@ -23,6 +20,9 @@ import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
 import { Loader2, Settings, Moon, Sun } from 'lucide-react'
 import type { Feature } from './lib/types'
+
+const STORAGE_KEY = 'autocoder-selected-project'
+const DARK_MODE_KEY = 'autocoder-dark-mode'
 
 function App() {
   // Initialize selected project from localStorage
