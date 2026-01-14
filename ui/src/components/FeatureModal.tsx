@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { X, CheckCircle2, Circle, SkipForward, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { X, CheckCircle2, Circle, SkipForward, Trash2, Loader2, AlertCircle, Pencil } from 'lucide-react'
 import { useSkipFeature, useDeleteFeature } from '../hooks/useProjects'
+import { EditFeatureForm } from './EditFeatureForm'
 import type { Feature } from '../lib/types'
 
 interface FeatureModalProps {
@@ -12,6 +13,7 @@ interface FeatureModalProps {
 export function FeatureModal({ feature, projectName, onClose }: FeatureModalProps) {
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   const skipFeature = useSkipFeature(projectName)
   const deleteFeature = useDeleteFeature(projectName)
@@ -34,6 +36,18 @@ export function FeatureModal({ feature, projectName, onClose }: FeatureModalProp
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete feature')
     }
+  }
+
+  // Show edit form when in edit mode
+  if (showEdit) {
+    return (
+      <EditFeatureForm
+        feature={feature}
+        projectName={projectName}
+        onClose={() => setShowEdit(false)}
+        onSaved={onClose}
+      />
+    )
   }
 
   return (
@@ -160,6 +174,14 @@ export function FeatureModal({ feature, projectName, onClose }: FeatureModalProp
             ) : (
               <div className="flex gap-3">
                 <button
+                  onClick={() => setShowEdit(true)}
+                  disabled={skipFeature.isPending}
+                  className="neo-btn neo-btn-primary flex-1"
+                >
+                  <Pencil size={18} />
+                  Edit
+                </button>
+                <button
                   onClick={handleSkip}
                   disabled={skipFeature.isPending}
                   className="neo-btn neo-btn-warning flex-1"
@@ -169,7 +191,7 @@ export function FeatureModal({ feature, projectName, onClose }: FeatureModalProp
                   ) : (
                     <>
                       <SkipForward size={18} />
-                      Skip (Move to End)
+                      Skip
                     </>
                   )}
                 </button>

@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../lib/api'
-import type { FeatureCreate, ModelsResponse, Settings, SettingsUpdate } from '../lib/types'
+import type { FeatureCreate, FeatureUpdate, ModelsResponse, Settings, SettingsUpdate } from '../lib/types'
 
 // ============================================================================
 // Projects
@@ -88,6 +88,18 @@ export function useSkipFeature(projectName: string) {
 
   return useMutation({
     mutationFn: (featureId: number) => api.skipFeature(projectName, featureId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['features', projectName] })
+    },
+  })
+}
+
+export function useUpdateFeature(projectName: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ featureId, update }: { featureId: number; update: FeatureUpdate }) =>
+      api.updateFeature(projectName, featureId, update),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['features', projectName] })
     },

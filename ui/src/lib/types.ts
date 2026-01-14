@@ -82,6 +82,14 @@ export interface FeatureCreate {
   priority?: number
 }
 
+export interface FeatureUpdate {
+  category?: string
+  name?: string
+  description?: string
+  steps?: string[]
+  priority?: number
+}
+
 // Agent types
 export type AgentStatus = 'stopped' | 'running' | 'paused' | 'crashed'
 

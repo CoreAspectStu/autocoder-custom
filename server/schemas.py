@@ -87,6 +87,15 @@ class FeatureCreate(FeatureBase):
     priority: int | None = None
 
 
+class FeatureUpdate(BaseModel):
+    """Request schema for updating a feature (partial updates allowed)."""
+    category: str | None = None
+    name: str | None = None
+    description: str | None = None
+    steps: list[str] | None = None
+    priority: int | None = None
+
+
 class FeatureResponse(FeatureBase):
     """Response schema for a feature."""
     id: int
