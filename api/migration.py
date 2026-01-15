@@ -82,6 +82,7 @@ def migrate_json_to_sqlite(
                 description=feature_dict.get("description", ""),
                 steps=feature_dict.get("steps", []),
                 passes=feature_dict.get("passes", False),
+                in_progress=feature_dict.get("in_progress", False),
             )
             session.add(feature)
             imported_count += 1

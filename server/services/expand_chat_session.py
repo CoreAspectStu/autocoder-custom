@@ -403,6 +403,7 @@ class ExpandChatSession:
                     description=f.get("description", ""),
                     steps=f.get("steps", []),
                     passes=False,
+                    in_progress=False,
                 )
                 session.add(db_feature)
                 created_rows.append(db_feature)

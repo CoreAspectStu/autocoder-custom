@@ -175,6 +175,7 @@ async def create_feature(project_name: str, feature: FeatureCreate):
                 description=feature.description,
                 steps=feature.steps,
                 passes=False,
+                in_progress=False,
             )
 
             session.add(db_feature)
@@ -411,6 +412,7 @@ async def create_features_bulk(project_name: str, bulk: FeatureBulkCreate):
                     description=feature_data.description,
                     steps=feature_data.steps,
                     passes=False,
+                    in_progress=False,
                 )
                 session.add(db_feature)
                 session.flush()  # Flush to get the ID immediately
