@@ -273,18 +273,18 @@ export function DebugLogViewer({
     return 'info'
   }
 
-  // Get color class for log level
+  // Get color class for log level using theme CSS variables
   const getLogColor = (level: LogLevel): string => {
     switch (level) {
       case 'error':
-        return 'text-red-400'
+        return 'text-[var(--color-neo-log-error)]'
       case 'warn':
-        return 'text-yellow-400'
+        return 'text-[var(--color-neo-log-warning)]'
       case 'debug':
-        return 'text-gray-400'
+        return 'text-[var(--color-neo-log-debug)]'
       case 'info':
       default:
-        return 'text-green-400'
+        return 'text-[var(--color-neo-log-info)]'
     }
   }
 
@@ -316,27 +316,27 @@ export function DebugLogViewer({
           className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize group flex items-center justify-center -translate-y-1/2 z-50"
           onMouseDown={handleResizeStart}
         >
-          <div className="w-16 h-1.5 bg-[#333] rounded-full group-hover:bg-[#555] transition-colors flex items-center justify-center">
-            <GripHorizontal size={12} className="text-gray-500 group-hover:text-gray-400" />
+          <div className="w-16 h-1.5 bg-[var(--color-neo-border)] rounded-full group-hover:bg-[var(--color-neo-text-secondary)] transition-colors flex items-center justify-center">
+            <GripHorizontal size={12} className="text-[var(--color-neo-text-muted)] group-hover:text-[var(--color-neo-text-secondary)]" />
           </div>
         </div>
       )}
 
       {/* Header bar */}
       <div
-        className="flex items-center justify-between h-10 px-4 bg-[#1a1a1a] border-t-3 border-black"
+        className="flex items-center justify-between h-10 px-4 bg-[var(--color-neo-border)] border-t-3 border-[var(--color-neo-text)]"
       >
         <div className="flex items-center gap-2">
           {/* Collapse/expand toggle */}
           <button
             onClick={onToggle}
-            className="flex items-center gap-2 hover:bg-[#333] px-2 py-1 rounded transition-colors cursor-pointer"
+            className="flex items-center gap-2 hover:bg-[var(--color-neo-hover-subtle)] px-2 py-1 rounded transition-colors cursor-pointer"
           >
-            <TerminalIcon size={16} className="text-green-400" />
-            <span className="font-mono text-sm text-white font-bold">
+            <TerminalIcon size={16} className="text-[var(--color-neo-done)]" />
+            <span className="font-mono text-sm text-[var(--color-neo-bg)] font-bold">
               Debug
             </span>
-            <span className="px-1.5 py-0.5 text-xs font-mono bg-[#333] text-gray-500 rounded" title="Toggle debug panel">
+            <span className="px-1.5 py-0.5 text-xs font-mono bg-[var(--color-neo-card)] text-[var(--color-neo-text-muted)] rounded" title="Toggle debug panel">
               D
             </span>
           </button>
@@ -351,14 +351,14 @@ export function DebugLogViewer({
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded transition-colors ${
                   activeTab === 'agent'
-                    ? 'bg-[#333] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-[#2a2a2a]'
+                    ? 'bg-[var(--color-neo-card)] text-[var(--color-neo-text)]'
+                    : 'text-[var(--color-neo-text-muted)] hover:text-[var(--color-neo-text)] hover:bg-[var(--color-neo-hover-subtle)]'
                 }`}
               >
                 <Cpu size={12} />
                 Agent
                 {logs.length > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] bg-[#444] rounded">
+                  <span className="px-1.5 py-0.5 text-[10px] bg-[var(--color-neo-text-secondary)] text-[var(--color-neo-bg)] rounded">
                     {logs.length}
                   </span>
                 )}
@@ -370,14 +370,14 @@ export function DebugLogViewer({
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded transition-colors ${
                   activeTab === 'devserver'
-                    ? 'bg-[#333] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-[#2a2a2a]'
+                    ? 'bg-[var(--color-neo-card)] text-[var(--color-neo-text)]'
+                    : 'text-[var(--color-neo-text-muted)] hover:text-[var(--color-neo-text)] hover:bg-[var(--color-neo-hover-subtle)]'
                 }`}
               >
                 <Server size={12} />
                 Dev Server
                 {devLogs.length > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] bg-[#444] rounded">
+                  <span className="px-1.5 py-0.5 text-[10px] bg-[var(--color-neo-text-secondary)] text-[var(--color-neo-bg)] rounded">
                     {devLogs.length}
                   </span>
                 )}
@@ -389,13 +389,13 @@ export function DebugLogViewer({
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded transition-colors ${
                   activeTab === 'terminal'
-                    ? 'bg-[#333] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-[#2a2a2a]'
+                    ? 'bg-[var(--color-neo-card)] text-[var(--color-neo-text)]'
+                    : 'text-[var(--color-neo-text-muted)] hover:text-[var(--color-neo-text)] hover:bg-[var(--color-neo-hover-subtle)]'
                 }`}
               >
                 <TerminalIcon size={12} />
                 Terminal
-                <span className="px-1.5 py-0.5 text-[10px] bg-[#444] text-gray-500 rounded" title="Toggle terminal">
+                <span className="px-1.5 py-0.5 text-[10px] bg-[var(--color-neo-text-secondary)] text-[var(--color-neo-text-muted)] rounded" title="Toggle terminal">
                   T
                 </span>
               </button>
@@ -406,12 +406,12 @@ export function DebugLogViewer({
           {isOpen && activeTab !== 'terminal' && (
             <>
               {getCurrentLogCount() > 0 && (
-                <span className="px-2 py-0.5 text-xs font-mono bg-[#333] text-gray-300 rounded ml-2">
+                <span className="px-2 py-0.5 text-xs font-mono bg-[var(--color-neo-card)] text-[var(--color-neo-text-secondary)] rounded ml-2">
                   {getCurrentLogCount()}
                 </span>
               )}
               {isAutoScrollPaused() && (
-                <span className="px-2 py-0.5 text-xs font-mono bg-yellow-600 text-white rounded">
+                <span className="px-2 py-0.5 text-xs font-mono bg-[var(--color-neo-pending)] text-[var(--color-neo-text-on-bright)] rounded">
                   Paused
                 </span>
               )}
@@ -427,17 +427,17 @@ export function DebugLogViewer({
                 e.stopPropagation()
                 handleClear()
               }}
-              className="p-1.5 hover:bg-[#333] rounded transition-colors"
+              className="p-1.5 hover:bg-[var(--color-neo-hover-subtle)] rounded transition-colors"
               title="Clear logs"
             >
-              <Trash2 size={14} className="text-gray-400" />
+              <Trash2 size={14} className="text-[var(--color-neo-text-muted)]" />
             </button>
           )}
           <div className="p-1">
             {isOpen ? (
-              <ChevronDown size={16} className="text-gray-400" />
+              <ChevronDown size={16} className="text-[var(--color-neo-text-muted)]" />
             ) : (
-              <ChevronUp size={16} className="text-gray-400" />
+              <ChevronUp size={16} className="text-[var(--color-neo-text-muted)]" />
             )}
           </div>
         </div>
@@ -445,7 +445,7 @@ export function DebugLogViewer({
 
       {/* Content area */}
       {isOpen && (
-        <div className="h-[calc(100%-2.5rem)] bg-[#1a1a1a]">
+        <div className="h-[calc(100%-2.5rem)] bg-[var(--color-neo-border)]">
           {/* Agent Logs Tab */}
           {activeTab === 'agent' && (
             <div
@@ -454,7 +454,7 @@ export function DebugLogViewer({
               className="h-full overflow-y-auto p-2 font-mono text-sm"
             >
               {logs.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="flex items-center justify-center h-full text-[var(--color-neo-text-muted)]">
                   No logs yet. Start the agent to see output.
                 </div>
               ) : (
@@ -467,9 +467,9 @@ export function DebugLogViewer({
                     return (
                       <div
                         key={`${log.timestamp}-${index}`}
-                        className="flex gap-2 hover:bg-[#2a2a2a] px-1 py-0.5 rounded"
+                        className="flex gap-2 hover:bg-[var(--color-neo-hover-subtle)] px-1 py-0.5 rounded"
                       >
-                        <span className="text-gray-500 select-none shrink-0">
+                        <span className="text-[var(--color-neo-text-muted)] select-none shrink-0">
                           {timestamp}
                         </span>
                         <span className={`${colorClass} whitespace-pre-wrap break-all`}>
@@ -491,7 +491,7 @@ export function DebugLogViewer({
               className="h-full overflow-y-auto p-2 font-mono text-sm"
             >
               {devLogs.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="flex items-center justify-center h-full text-[var(--color-neo-text-muted)]">
                   No dev server logs yet.
                 </div>
               ) : (
@@ -504,9 +504,9 @@ export function DebugLogViewer({
                     return (
                       <div
                         key={`${log.timestamp}-${index}`}
-                        className="flex gap-2 hover:bg-[#2a2a2a] px-1 py-0.5 rounded"
+                        className="flex gap-2 hover:bg-[var(--color-neo-hover-subtle)] px-1 py-0.5 rounded"
                       >
-                        <span className="text-gray-500 select-none shrink-0">
+                        <span className="text-[var(--color-neo-text-muted)] select-none shrink-0">
                           {timestamp}
                         </span>
                         <span className={`${colorClass} whitespace-pre-wrap break-all`}>
@@ -538,11 +538,11 @@ export function DebugLogViewer({
               {/* Terminal content - render all terminals and show/hide to preserve buffers */}
               <div className="flex-1 min-h-0 relative">
                 {isLoadingTerminals ? (
-                  <div className="h-full flex items-center justify-center text-gray-500 font-mono text-sm">
+                  <div className="h-full flex items-center justify-center text-[var(--color-neo-text-muted)] font-mono text-sm">
                     Loading terminals...
                   </div>
                 ) : terminals.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-gray-500 font-mono text-sm">
+                  <div className="h-full flex items-center justify-center text-[var(--color-neo-text-muted)] font-mono text-sm">
                     No terminal available
                   </div>
                 ) : (

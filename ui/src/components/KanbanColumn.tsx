@@ -40,9 +40,9 @@ export function KanbanColumn({
         style={{ backgroundColor: colorMap[color] }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold uppercase flex items-center gap-2 text-[var(--color-neo-text)]">
+          <h2 className="font-display text-lg font-bold uppercase flex items-center gap-2 text-[var(--color-neo-text-on-bright)]">
             {title}
-            <span className="neo-badge bg-white text-[var(--color-neo-text)]">{count}</span>
+            <span className="neo-badge bg-[var(--color-neo-card)] text-[var(--color-neo-text)]">{count}</span>
           </h2>
           {(onAddFeature || onExpandProject) && (
             <div className="flex items-center gap-2">
@@ -58,7 +58,7 @@ export function KanbanColumn({
               {onExpandProject && showExpandButton && (
                 <button
                   onClick={onExpandProject}
-                  className="neo-btn bg-[var(--color-neo-progress)] text-black text-sm py-1.5 px-2"
+                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-2"
                   title="Expand project with AI (E)"
                 >
                   <Sparkles size={16} />

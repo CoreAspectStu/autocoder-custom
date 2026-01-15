@@ -129,6 +129,11 @@ poetry.lock
 Pipfile.lock
 
 # ===================
+# TypeScript
+# ===================
+*.tsbuildinfo
+
+# ===================
 # Misc
 # ===================
 *.bak

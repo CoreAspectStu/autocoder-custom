@@ -4,8 +4,6 @@ import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/u
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
-
-const STORAGE_KEY = 'autocoder-selected-project'
 import { ProjectSelector } from './components/ProjectSelector'
 import { KanbanBoard } from './components/KanbanBoard'
 import { AgentControl } from './components/AgentControl'
@@ -20,8 +18,11 @@ import { AssistantPanel } from './components/AssistantPanel'
 import { ExpandProjectModal } from './components/ExpandProjectModal'
 import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
-import { Loader2, Settings } from 'lucide-react'
+import { Loader2, Settings, Moon, Sun } from 'lucide-react'
 import type { Feature } from './lib/types'
+
+const STORAGE_KEY = 'autocoder-selected-project'
+const DARK_MODE_KEY = 'autocoder-dark-mode'
 
 function App() {
   // Initialize selected project from localStorage
@@ -42,6 +43,13 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [isSpecCreating, setIsSpecCreating] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem(DARK_MODE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
 
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
@@ -49,6 +57,20 @@ function App() {
   const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
+
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    try {
+      localStorage.setItem(DARK_MODE_KEY, String(darkMode))
+    } catch {
+      // localStorage not available
+    }
+  }, [darkMode])
 
   // Play sounds when features move between columns
   useFeatureSound(features)
@@ -170,9 +192,9 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-neo-bg)]">
+    <div className="min-h-screen bg-neo-bg">
       {/* Header */}
-      <header className="bg-[var(--color-neo-text)] text-white border-b-4 border-[var(--color-neo-border)]">
+      <header className="bg-neo-card text-neo-text border-b-4 border-neo-border">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
@@ -215,7 +237,7 @@ function App() {
                   {/* GLM Mode Badge */}
                   {settings?.glm_mode && (
                     <span
-                      className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded border-2 border-black shadow-neo-sm"
+                      className="px-2 py-1 text-xs font-bold bg-[var(--color-neo-glm)] text-white rounded border-2 border-neo-border shadow-neo-sm"
                       title="Using GLM API (configured via .env)"
                     >
                       GLM
@@ -223,6 +245,16 @@ function App() {
                   )}
                 </>
               )}
+
+              {/* Dark mode toggle - always visible */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="neo-btn text-sm py-2 px-3"
+                title="Toggle dark mode"
+                aria-label="Toggle dark mode"
+              >
+                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
             </div>
           </div>
         </div>
@@ -238,7 +270,7 @@ function App() {
             <h2 className="font-display text-2xl font-bold mb-2">
               Welcome to AutoCoder
             </h2>
-            <p className="text-[var(--color-neo-text-secondary)] mb-4">
+            <p className="text-neo-text-secondary mb-4">
               Select a project from the dropdown above or create a new one to get started.
             </p>
           </div>
@@ -265,11 +297,11 @@ function App() {
              features.done.length === 0 &&
              wsState.agentStatus === 'running' && (
               <div className="neo-card p-8 text-center">
-                <Loader2 size={32} className="animate-spin mx-auto mb-4 text-[var(--color-neo-progress)]" />
+                <Loader2 size={32} className="animate-spin mx-auto mb-4 text-neo-progress" />
                 <h3 className="font-display font-bold text-xl mb-2">
                   Initializing Features...
                 </h3>
-                <p className="text-[var(--color-neo-text-secondary)]">
+                <p className="text-neo-text-secondary">
                   The agent is reading your spec and creating features. This may take a moment.
                 </p>
               </div>
