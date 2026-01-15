@@ -255,10 +255,14 @@ class AssistantChatSession:
         # Build environment overrides for API configuration
         sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
 
+        # Determine model from environment or use default
+        # This allows using alternative APIs (e.g., GLM via z.ai) that may not support Claude model names
+        model = os.getenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "claude-opus-4-5-20251101")
+
         try:
             self.client = ClaudeSDKClient(
                 options=ClaudeAgentOptions(
-                    model="claude-opus-4-5-20251101",
+                    model=model,
                     cli_path=system_cli,
                     # System prompt loaded from CLAUDE.md via setting_sources
                     # This avoids Windows command line length limit (~8191 chars)
