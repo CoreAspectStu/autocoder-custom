@@ -269,18 +269,23 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
                 elif msg_type == "start":
                     # Get optional conversation_id to resume
                     conversation_id = message.get("conversation_id")
+                    logger.info(f"Processing start message with conversation_id={conversation_id}")
 
                     try:
                         # Create a new session
+                        logger.info(f"Creating session for {project_name}")
                         session = await create_session(
                             project_name,
                             project_dir,
                             conversation_id=conversation_id,
                         )
+                        logger.info(f"Session created, starting...")
 
                         # Stream the initial greeting
                         async for chunk in session.start():
+                            logger.info(f"Sending chunk: {chunk.get('type')}")
                             await websocket.send_json(chunk)
+                        logger.info("Session start complete")
                     except Exception as e:
                         logger.exception(f"Error starting assistant session for {project_name}")
                         await websocket.send_json({

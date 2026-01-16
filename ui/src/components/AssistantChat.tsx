@@ -3,22 +3,41 @@
  *
  * Main chat interface for the project assistant.
  * Displays messages and handles user input.
+ * Supports conversation history with resume functionality.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Loader2, Wifi, WifiOff } from 'lucide-react'
+import { Send, Loader2, Wifi, WifiOff, Plus, History } from 'lucide-react'
 import { useAssistantChat } from '../hooks/useAssistantChat'
-import { ChatMessage } from './ChatMessage'
+import { ChatMessage as ChatMessageComponent } from './ChatMessage'
+import { ConversationHistory } from './ConversationHistory'
+import type { ChatMessage } from '../lib/types'
 
 interface AssistantChatProps {
   projectName: string
+  conversationId?: number | null
+  initialMessages?: ChatMessage[]
+  isLoadingConversation?: boolean
+  onNewChat?: () => void
+  onSelectConversation?: (id: number) => void
+  onConversationCreated?: (id: number) => void
 }
 
-export function AssistantChat({ projectName }: AssistantChatProps) {
+export function AssistantChat({
+  projectName,
+  conversationId,
+  initialMessages,
+  isLoadingConversation,
+  onNewChat,
+  onSelectConversation,
+  onConversationCreated,
+}: AssistantChatProps) {
   const [inputValue, setInputValue] = useState('')
+  const [showHistory, setShowHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const hasStartedRef = useRef(false)
+  const lastConversationIdRef = useRef<number | null | undefined>(undefined)
 
   // Memoize the error handler to prevent infinite re-renders
   const handleError = useCallback((error: string) => {
@@ -29,25 +48,94 @@ export function AssistantChat({ projectName }: AssistantChatProps) {
     messages,
     isLoading,
     connectionStatus,
+    conversationId: activeConversationId,
     start,
     sendMessage,
+    clearMessages,
   } = useAssistantChat({
     projectName,
     onError: handleError,
   })
+
+  // Notify parent when a NEW conversation is created (not when switching to existing)
+  // This should only fire when conversationId was null/undefined and a new one was created
+  const previousConversationIdRef = useRef<number | null | undefined>(conversationId)
+  useEffect(() => {
+    // Only notify if we had NO conversation (null/undefined) and now we have one
+    // This prevents the bug where switching conversations would trigger this
+    const hadNoConversation = previousConversationIdRef.current === null || previousConversationIdRef.current === undefined
+    const nowHasConversation = activeConversationId !== null && activeConversationId !== undefined
+
+    if (hadNoConversation && nowHasConversation && onConversationCreated) {
+      console.log('[AssistantChat] New conversation created:', activeConversationId)
+      onConversationCreated(activeConversationId)
+    }
+
+    previousConversationIdRef.current = conversationId
+  }, [activeConversationId, conversationId, onConversationCreated])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Start the chat session when component mounts (only once)
+  // Start or resume the chat session when component mounts or conversationId changes
   useEffect(() => {
-    if (!hasStartedRef.current) {
-      hasStartedRef.current = true
-      start()
+    console.log('[AssistantChat] useEffect running:', {
+      conversationId,
+      isLoadingConversation,
+      lastRef: lastConversationIdRef.current,
+      hasStarted: hasStartedRef.current
+    })
+
+    // Skip if we're loading conversation details
+    if (isLoadingConversation) {
+      console.log('[AssistantChat] Skipping - loading conversation')
+      return
     }
-  }, [start])
+
+    // Only start if conversationId has actually changed
+    if (lastConversationIdRef.current === conversationId && hasStartedRef.current) {
+      console.log('[AssistantChat] Skipping - same conversationId')
+      return
+    }
+
+    // Check if we're switching to a different conversation (not initial mount)
+    const isSwitching = lastConversationIdRef.current !== undefined &&
+                        lastConversationIdRef.current !== conversationId
+
+    console.log('[AssistantChat] Processing conversation change:', {
+      from: lastConversationIdRef.current,
+      to: conversationId,
+      isSwitching
+    })
+
+    lastConversationIdRef.current = conversationId
+    hasStartedRef.current = true
+
+    // Clear existing messages when switching conversations
+    if (isSwitching) {
+      console.log('[AssistantChat] Clearing messages for conversation switch')
+      clearMessages()
+    }
+
+    // Start the session with the conversation ID (or null for new)
+    console.log('[AssistantChat] Starting session with conversationId:', conversationId)
+    start(conversationId)
+  }, [conversationId, isLoadingConversation, start, clearMessages])
+
+  // Handle starting a new chat
+  const handleNewChat = useCallback(() => {
+    clearMessages()
+    onNewChat?.()
+  }, [clearMessages, onNewChat])
+
+  // Handle selecting a conversation from history
+  const handleSelectConversation = useCallback((id: number) => {
+    console.log('[AssistantChat] handleSelectConversation called with id:', id)
+    setShowHistory(false)
+    onSelectConversation?.(id)
+  }, [onSelectConversation])
 
   // Focus input when not loading
   useEffect(() => {
@@ -71,31 +159,92 @@ export function AssistantChat({ projectName }: AssistantChatProps) {
     }
   }
 
+  // Combine initial messages (from resumed conversation) with live messages
+  // Show initialMessages when:
+  // 1. We have initialMessages from the API
+  // 2. AND either messages is empty OR we haven't processed this conversation yet
+  // This prevents showing old conversation messages while switching
+  const isConversationSynced = lastConversationIdRef.current === conversationId && !isLoadingConversation
+  const displayMessages = initialMessages && (messages.length === 0 || !isConversationSynced)
+    ? initialMessages
+    : messages
+  console.log('[AssistantChat] displayMessages decision:', {
+    conversationId,
+    lastRef: lastConversationIdRef.current,
+    isConversationSynced,
+    initialMessagesCount: initialMessages?.length ?? 0,
+    messagesCount: messages.length,
+    displayMessagesCount: displayMessages.length,
+    showingInitial: displayMessages === initialMessages
+  })
+
   return (
     <div className="flex flex-col h-full">
-      {/* Connection status indicator */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b-2 border-[var(--color-neo-border)] bg-[var(--color-neo-bg)]">
-        {connectionStatus === 'connected' ? (
-          <>
-            <Wifi size={14} className="text-[var(--color-neo-done)]" />
-            <span className="text-xs text-[var(--color-neo-text-secondary)]">Connected</span>
-          </>
-        ) : connectionStatus === 'connecting' ? (
-          <>
-            <Loader2 size={14} className="text-[var(--color-neo-progress)] animate-spin" />
-            <span className="text-xs text-[var(--color-neo-text-secondary)]">Connecting...</span>
-          </>
-        ) : (
-          <>
-            <WifiOff size={14} className="text-[var(--color-neo-danger)]" />
-            <span className="text-xs text-[var(--color-neo-text-secondary)]">Disconnected</span>
-          </>
-        )}
+      {/* Header with actions and connection status */}
+      <div className="flex items-center justify-between px-4 py-2 border-b-2 border-[var(--color-neo-border)] bg-[var(--color-neo-bg)]">
+        {/* Action buttons */}
+        <div className="flex items-center gap-1 relative">
+          <button
+            onClick={handleNewChat}
+            className="neo-btn neo-btn-ghost p-1.5 text-[var(--color-neo-text-secondary)] hover:text-[var(--color-neo-text)]"
+            title="New conversation"
+            disabled={isLoading}
+          >
+            <Plus size={16} />
+          </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className={`neo-btn neo-btn-ghost p-1.5 ${
+              showHistory
+                ? 'text-[var(--color-neo-text)] bg-[var(--color-neo-pending)]'
+                : 'text-[var(--color-neo-text-secondary)] hover:text-[var(--color-neo-text)]'
+            }`}
+            title="Conversation history"
+          >
+            <History size={16} />
+          </button>
+
+          {/* History dropdown */}
+          <ConversationHistory
+            projectName={projectName}
+            currentConversationId={conversationId ?? activeConversationId}
+            isOpen={showHistory}
+            onClose={() => setShowHistory(false)}
+            onSelectConversation={handleSelectConversation}
+          />
+        </div>
+
+        {/* Connection status */}
+        <div className="flex items-center gap-2">
+          {connectionStatus === 'connected' ? (
+            <>
+              <Wifi size={14} className="text-[var(--color-neo-done)]" />
+              <span className="text-xs text-[var(--color-neo-text-secondary)]">Connected</span>
+            </>
+          ) : connectionStatus === 'connecting' ? (
+            <>
+              <Loader2 size={14} className="text-[var(--color-neo-progress)] animate-spin" />
+              <span className="text-xs text-[var(--color-neo-text-secondary)]">Connecting...</span>
+            </>
+          ) : (
+            <>
+              <WifiOff size={14} className="text-[var(--color-neo-danger)]" />
+              <span className="text-xs text-[var(--color-neo-text-secondary)]">Disconnected</span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto bg-[var(--color-neo-bg)]">
-        {messages.length === 0 ? (
+        {isLoadingConversation ? (
+          <div className="flex items-center justify-center h-full text-[var(--color-neo-text-secondary)] text-sm">
+            <div className="flex items-center gap-2">
+              <Loader2 size={16} className="animate-spin" />
+              <span>Loading conversation...</span>
+            </div>
+          </div>
+        ) : displayMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-[var(--color-neo-text-secondary)] text-sm">
             {isLoading ? (
               <div className="flex items-center gap-2">
@@ -108,8 +257,8 @@ export function AssistantChat({ projectName }: AssistantChatProps) {
           </div>
         ) : (
           <div className="py-4">
-            {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+            {displayMessages.map((message) => (
+              <ChatMessageComponent key={message.id} message={message} />
             ))}
             <div ref={messagesEndRef} />
           </div>
@@ -117,7 +266,7 @@ export function AssistantChat({ projectName }: AssistantChatProps) {
       </div>
 
       {/* Loading indicator */}
-      {isLoading && messages.length > 0 && (
+      {isLoading && displayMessages.length > 0 && (
         <div className="px-4 py-2 border-t-2 border-[var(--color-neo-border)] bg-[var(--color-neo-bg)]">
           <div className="flex items-center gap-2 text-[var(--color-neo-text-secondary)] text-sm">
             <div className="flex gap-1">
