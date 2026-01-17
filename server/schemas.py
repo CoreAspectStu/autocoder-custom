@@ -80,6 +80,7 @@ class FeatureBase(BaseModel):
     name: str
     description: str
     steps: list[str]
+    dependencies: list[int] = Field(default_factory=list)  # Optional dependencies
 
 
 class FeatureCreate(FeatureBase):
@@ -94,6 +95,7 @@ class FeatureUpdate(BaseModel):
     description: str | None = None
     steps: list[str] | None = None
     priority: int | None = None
+    dependencies: list[int] | None = None  # Optional - can update dependencies
 
 
 class FeatureResponse(FeatureBase):
@@ -102,6 +104,8 @@ class FeatureResponse(FeatureBase):
     priority: int
     passes: bool
     in_progress: bool
+    blocked: bool = False  # Computed: has unmet dependencies
+    blocking_dependencies: list[int] = Field(default_factory=list)  # Computed
 
     class Config:
         from_attributes = True
@@ -127,6 +131,37 @@ class FeatureBulkCreateResponse(BaseModel):
 
 
 # ============================================================================
+# Dependency Graph Schemas
+# ============================================================================
+
+class DependencyGraphNode(BaseModel):
+    """Minimal node for graph visualization (no description exposed for security)."""
+    id: int
+    name: str
+    category: str
+    status: Literal["pending", "in_progress", "done", "blocked"]
+    priority: int
+    dependencies: list[int]
+
+
+class DependencyGraphEdge(BaseModel):
+    """Edge in the dependency graph."""
+    source: int
+    target: int
+
+
+class DependencyGraphResponse(BaseModel):
+    """Response for dependency graph visualization."""
+    nodes: list[DependencyGraphNode]
+    edges: list[DependencyGraphEdge]
+
+
+class DependencyUpdate(BaseModel):
+    """Request schema for updating a feature's dependencies."""
+    dependency_ids: list[int] = Field(..., max_length=20)  # Security: limit
+
+
+# ============================================================================
 # Agent Schemas
 # ============================================================================
 
@@ -134,6 +169,8 @@ class AgentStartRequest(BaseModel):
     """Request schema for starting the agent."""
     yolo_mode: bool | None = None  # None means use global settings
     model: str | None = None  # None means use global settings
+    parallel_mode: bool | None = None  # Enable parallel execution
+    max_concurrency: int | None = None  # Max concurrent agents (1-5)
 
     @field_validator('model')
     @classmethod
@@ -141,6 +178,14 @@ class AgentStartRequest(BaseModel):
         """Validate model is in the allowed list."""
         if v is not None and v not in VALID_MODELS:
             raise ValueError(f"Invalid model. Must be one of: {VALID_MODELS}")
+        return v
+
+    @field_validator('max_concurrency')
+    @classmethod
+    def validate_concurrency(cls, v: int | None) -> int | None:
+        """Validate max_concurrency is between 1 and 5."""
+        if v is not None and (v < 1 or v > 5):
+            raise ValueError("max_concurrency must be between 1 and 5")
         return v
 
 
@@ -151,6 +196,8 @@ class AgentStatus(BaseModel):
     started_at: datetime | None = None
     yolo_mode: bool = False
     model: str | None = None  # Model being used by running agent
+    parallel_mode: bool = False
+    max_concurrency: int | None = None
 
 
 class AgentActionResponse(BaseModel):
@@ -180,6 +227,7 @@ class WSProgressMessage(BaseModel):
     """WebSocket message for progress updates."""
     type: Literal["progress"] = "progress"
     passing: int
+    in_progress: int
     total: int
     percentage: float
 
@@ -196,12 +244,33 @@ class WSLogMessage(BaseModel):
     type: Literal["log"] = "log"
     line: str
     timestamp: datetime
+    featureId: int | None = None
+    agentIndex: int | None = None
 
 
 class WSAgentStatusMessage(BaseModel):
     """WebSocket message for agent status changes."""
     type: Literal["agent_status"] = "agent_status"
     status: str
+
+
+# Agent state for multi-agent tracking
+AgentState = Literal["idle", "thinking", "working", "testing", "success", "error", "struggling"]
+
+# Agent mascot names assigned by index
+AGENT_MASCOTS = ["Spark", "Fizz", "Octo", "Hoot", "Buzz"]
+
+
+class WSAgentUpdateMessage(BaseModel):
+    """WebSocket message for multi-agent status updates."""
+    type: Literal["agent_update"] = "agent_update"
+    agentIndex: int
+    agentName: str  # One of AGENT_MASCOTS
+    featureId: int
+    featureName: str
+    state: AgentState
+    thought: str | None = None
+    timestamp: datetime
 
 
 # ============================================================================

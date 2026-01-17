@@ -8,7 +8,7 @@ SQLite database schema for feature storage using SQLAlchemy.
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, Integer, String, Text, create_engine
+from sqlalchemy import Boolean, Column, Integer, String, Text, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.types import JSON
@@ -29,6 +29,9 @@ class Feature(Base):
     steps = Column(JSON, nullable=False)  # Stored as JSON array
     passes = Column(Boolean, nullable=False, default=False, index=True)
     in_progress = Column(Boolean, nullable=False, default=False, index=True)
+    # Dependencies: list of feature IDs that must be completed before this feature
+    # NULL/empty = no dependencies (backwards compatible)
+    dependencies = Column(JSON, nullable=True, default=None)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -42,7 +45,17 @@ class Feature(Base):
             # Handle legacy NULL values gracefully - treat as False
             "passes": self.passes if self.passes is not None else False,
             "in_progress": self.in_progress if self.in_progress is not None else False,
+            # Dependencies: NULL/empty treated as empty list for backwards compat
+            "dependencies": self.dependencies if self.dependencies else [],
         }
+
+    def get_dependencies_safe(self) -> list[int]:
+        """Safely extract dependencies, handling NULL and malformed data."""
+        if self.dependencies is None:
+            return []
+        if isinstance(self.dependencies, list):
+            return [d for d in self.dependencies if isinstance(d, int)]
+        return []
 
 
 def get_database_path(project_dir: Path) -> Path:
@@ -61,8 +74,6 @@ def get_database_url(project_dir: Path) -> str:
 
 def _migrate_add_in_progress_column(engine) -> None:
     """Add in_progress column to existing databases that don't have it."""
-    from sqlalchemy import text
-
     with engine.connect() as conn:
         # Check if column exists
         result = conn.execute(text("PRAGMA table_info(features)"))
@@ -76,14 +87,29 @@ def _migrate_add_in_progress_column(engine) -> None:
 
 def _migrate_fix_null_boolean_fields(engine) -> None:
     """Fix NULL values in passes and in_progress columns."""
-    from sqlalchemy import text
-
     with engine.connect() as conn:
         # Fix NULL passes values
         conn.execute(text("UPDATE features SET passes = 0 WHERE passes IS NULL"))
         # Fix NULL in_progress values
         conn.execute(text("UPDATE features SET in_progress = 0 WHERE in_progress IS NULL"))
         conn.commit()
+
+
+def _migrate_add_dependencies_column(engine) -> None:
+    """Add dependencies column to existing databases that don't have it.
+
+    Uses NULL default for backwards compatibility - existing features
+    without dependencies will have NULL which is treated as empty list.
+    """
+    with engine.connect() as conn:
+        # Check if column exists
+        result = conn.execute(text("PRAGMA table_info(features)"))
+        columns = [row[1] for row in result.fetchall()]
+
+        if "dependencies" not in columns:
+            # Use TEXT for SQLite JSON storage, NULL default for backwards compat
+            conn.execute(text("ALTER TABLE features ADD COLUMN dependencies TEXT DEFAULT NULL"))
+            conn.commit()
 
 
 def create_database(project_dir: Path) -> tuple:
@@ -97,12 +123,22 @@ def create_database(project_dir: Path) -> tuple:
         Tuple of (engine, SessionLocal)
     """
     db_url = get_database_url(project_dir)
-    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+    engine = create_engine(db_url, connect_args={
+        "check_same_thread": False,
+        "timeout": 30  # Wait up to 30s for locks
+    })
     Base.metadata.create_all(bind=engine)
+
+    # Enable WAL mode for better concurrent read/write performance
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.execute(text("PRAGMA busy_timeout=30000"))
+        conn.commit()
 
     # Migrate existing databases
     _migrate_add_in_progress_column(engine)
     _migrate_fix_null_boolean_fields(engine)
+    _migrate_add_dependencies_column(engine)
 
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return engine, SessionLocal

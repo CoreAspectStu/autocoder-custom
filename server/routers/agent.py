@@ -85,6 +85,8 @@ async def get_agent_status(project_name: str):
         started_at=manager.started_at,
         yolo_mode=manager.yolo_mode,
         model=manager.model,
+        parallel_mode=manager.parallel_mode,
+        max_concurrency=manager.max_concurrency,
     )
 
 
@@ -100,8 +102,15 @@ async def start_agent(
     default_yolo, default_model = _get_settings_defaults()
     yolo_mode = request.yolo_mode if request.yolo_mode is not None else default_yolo
     model = request.model if request.model else default_model
+    parallel_mode = request.parallel_mode or False
+    max_concurrency = request.max_concurrency
 
-    success, message = await manager.start(yolo_mode=yolo_mode, model=model)
+    success, message = await manager.start(
+        yolo_mode=yolo_mode,
+        model=model,
+        parallel_mode=parallel_mode,
+        max_concurrency=max_concurrency,
+    )
 
     return AgentActionResponse(
         success=success,

@@ -66,6 +66,32 @@ export interface Feature {
   steps: string[]
   passes: boolean
   in_progress: boolean
+  dependencies?: number[]           // Optional for backwards compat
+  blocked?: boolean                 // Computed by API
+  blocking_dependencies?: number[]  // Computed by API
+}
+
+// Status type for graph nodes
+export type FeatureStatus = 'pending' | 'in_progress' | 'done' | 'blocked'
+
+// Graph visualization types
+export interface GraphNode {
+  id: number
+  name: string
+  category: string
+  status: FeatureStatus
+  priority: number
+  dependencies: number[]
+}
+
+export interface GraphEdge {
+  source: number
+  target: number
+}
+
+export interface DependencyGraph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 export interface FeatureListResponse {
@@ -80,6 +106,7 @@ export interface FeatureCreate {
   description: string
   steps: string[]
   priority?: number
+  dependencies?: number[]
 }
 
 export interface FeatureUpdate {
@@ -88,6 +115,7 @@ export interface FeatureUpdate {
   description?: string
   steps?: string[]
   priority?: number
+  dependencies?: number[]
 }
 
 // Agent types
@@ -99,6 +127,8 @@ export interface AgentStatusResponse {
   started_at: string | null
   yolo_mode: boolean
   model: string | null  // Model being used by running agent
+  parallel_mode: boolean
+  max_concurrency: number | null
 }
 
 export interface AgentActionResponse {
@@ -140,8 +170,26 @@ export interface TerminalInfo {
   created_at: string
 }
 
+// Agent mascot names for multi-agent UI
+export const AGENT_MASCOTS = ['Spark', 'Fizz', 'Octo', 'Hoot', 'Buzz'] as const
+export type AgentMascot = typeof AGENT_MASCOTS[number]
+
+// Agent state for Mission Control
+export type AgentState = 'idle' | 'thinking' | 'working' | 'testing' | 'success' | 'error' | 'struggling'
+
+// Agent update from backend
+export interface ActiveAgent {
+  agentIndex: number
+  agentName: AgentMascot
+  featureId: number
+  featureName: string
+  state: AgentState
+  thought?: string
+  timestamp: string
+}
+
 // WebSocket message types
-export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status'
+export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update'
 
 export interface WSProgressMessage {
   type: 'progress'
@@ -160,6 +208,20 @@ export interface WSFeatureUpdateMessage {
 export interface WSLogMessage {
   type: 'log'
   line: string
+  timestamp: string
+  featureId?: number
+  agentIndex?: number
+  agentName?: AgentMascot
+}
+
+export interface WSAgentUpdateMessage {
+  type: 'agent_update'
+  agentIndex: number
+  agentName: AgentMascot
+  featureId: number
+  featureName: string
+  state: AgentState
+  thought?: string
   timestamp: string
 }
 
@@ -189,6 +251,7 @@ export type WSMessage =
   | WSFeatureUpdateMessage
   | WSLogMessage
   | WSAgentStatusMessage
+  | WSAgentUpdateMessage
   | WSPongMessage
   | WSDevLogMessage
   | WSDevServerStatusMessage

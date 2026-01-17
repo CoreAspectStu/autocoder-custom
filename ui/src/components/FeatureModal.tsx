@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X, CheckCircle2, Circle, SkipForward, Trash2, Loader2, AlertCircle, Pencil } from 'lucide-react'
-import { useSkipFeature, useDeleteFeature } from '../hooks/useProjects'
+import { X, CheckCircle2, Circle, SkipForward, Trash2, Loader2, AlertCircle, Pencil, Link2, AlertTriangle } from 'lucide-react'
+import { useSkipFeature, useDeleteFeature, useFeatures } from '../hooks/useProjects'
 import { EditFeatureForm } from './EditFeatureForm'
 import type { Feature } from '../lib/types'
 
@@ -37,6 +37,25 @@ export function FeatureModal({ feature, projectName, onClose }: FeatureModalProp
 
   const skipFeature = useSkipFeature(projectName)
   const deleteFeature = useDeleteFeature(projectName)
+  const { data: allFeatures } = useFeatures(projectName)
+
+  // Build a map of feature ID to feature for looking up dependency names
+  const featureMap = new Map<number, Feature>()
+  if (allFeatures) {
+    ;[...allFeatures.pending, ...allFeatures.in_progress, ...allFeatures.done].forEach(f => {
+      featureMap.set(f.id, f)
+    })
+  }
+
+  // Get dependency features
+  const dependencies = (feature.dependencies || [])
+    .map(id => featureMap.get(id))
+    .filter((f): f is Feature => f !== undefined)
+
+  // Get blocking dependencies (unmet dependencies)
+  const blockingDeps = (feature.blocking_dependencies || [])
+    .map(id => featureMap.get(id))
+    .filter((f): f is Feature => f !== undefined)
 
   const handleSkip = async () => {
     setError(null)
@@ -144,6 +163,57 @@ export function FeatureModal({ feature, projectName, onClose }: FeatureModalProp
               {feature.description}
             </p>
           </div>
+
+          {/* Blocked By Warning */}
+          {blockingDeps.length > 0 && (
+            <div className="p-4 bg-[var(--color-neo-warning-bg)] border-3 border-[var(--color-neo-warning-border)]">
+              <h3 className="font-display font-bold mb-2 uppercase text-sm flex items-center gap-2 text-[var(--color-neo-warning-text)]">
+                <AlertTriangle size={16} />
+                Blocked By
+              </h3>
+              <p className="text-sm text-[var(--color-neo-warning-text)] mb-2">
+                This feature cannot start until the following dependencies are complete:
+              </p>
+              <ul className="space-y-1">
+                {blockingDeps.map(dep => (
+                  <li
+                    key={dep.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Circle size={14} className="text-[var(--color-neo-warning-text)]" />
+                    <span className="font-mono text-xs text-[var(--color-neo-warning-text)]">#{dep.id}</span>
+                    <span className="text-[var(--color-neo-warning-text)]">{dep.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Dependencies */}
+          {dependencies.length > 0 && (
+            <div>
+              <h3 className="font-display font-bold mb-2 uppercase text-sm flex items-center gap-2">
+                <Link2 size={16} />
+                Depends On
+              </h3>
+              <ul className="space-y-1">
+                {dependencies.map(dep => (
+                  <li
+                    key={dep.id}
+                    className="flex items-center gap-2 p-2 bg-[var(--color-neo-bg)] border-2 border-[var(--color-neo-border)]"
+                  >
+                    {dep.passes ? (
+                      <CheckCircle2 size={16} className="text-[var(--color-neo-done)]" />
+                    ) : (
+                      <Circle size={16} className="text-[var(--color-neo-text-secondary)]" />
+                    )}
+                    <span className="font-mono text-xs text-[var(--color-neo-text-secondary)]">#{dep.id}</span>
+                    <span className={dep.passes ? 'text-[var(--color-neo-done)]' : ''}>{dep.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Steps */}
           {feature.steps.length > 0 && (

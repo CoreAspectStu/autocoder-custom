@@ -3,7 +3,28 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { WSMessage, AgentStatus, DevServerStatus } from '../lib/types'
+import type {
+  WSMessage,
+  AgentStatus,
+  DevServerStatus,
+  ActiveAgent,
+  AgentMascot,
+} from '../lib/types'
+
+// Activity item for the feed
+interface ActivityItem {
+  agentName: string
+  thought: string
+  timestamp: string
+  featureId: number
+}
+
+// Celebration trigger for overlay
+interface CelebrationTrigger {
+  agentName: AgentMascot
+  featureName: string
+  featureId: number
+}
 
 interface WebSocketState {
   progress: {
@@ -13,14 +34,21 @@ interface WebSocketState {
     percentage: number
   }
   agentStatus: AgentStatus
-  logs: Array<{ line: string; timestamp: string }>
+  logs: Array<{ line: string; timestamp: string; featureId?: number; agentIndex?: number }>
   isConnected: boolean
   devServerStatus: DevServerStatus
   devServerUrl: string | null
   devLogs: Array<{ line: string; timestamp: string }>
+  // Multi-agent state
+  activeAgents: ActiveAgent[]
+  recentActivity: ActivityItem[]
+  // Celebration queue to handle rapid successes without race conditions
+  celebrationQueue: CelebrationTrigger[]
+  celebration: CelebrationTrigger | null
 }
 
 const MAX_LOGS = 100 // Keep last 100 log lines
+const MAX_ACTIVITY = 20 // Keep last 20 activity items
 
 export function useProjectWebSocket(projectName: string | null) {
   const [state, setState] = useState<WebSocketState>({
@@ -31,6 +59,10 @@ export function useProjectWebSocket(projectName: string | null) {
     devServerStatus: 'stopped',
     devServerUrl: null,
     devLogs: [],
+    activeAgents: [],
+    recentActivity: [],
+    celebrationQueue: [],
+    celebration: null,
   })
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -83,13 +115,103 @@ export function useProjectWebSocket(projectName: string | null) {
                 ...prev,
                 logs: [
                   ...prev.logs.slice(-MAX_LOGS + 1),
-                  { line: message.line, timestamp: message.timestamp },
+                  {
+                    line: message.line,
+                    timestamp: message.timestamp,
+                    featureId: message.featureId,
+                    agentIndex: message.agentIndex,
+                  },
                 ],
               }))
               break
 
             case 'feature_update':
               // Feature updates will trigger a refetch via React Query
+              break
+
+            case 'agent_update':
+              setState(prev => {
+                // Update or add the agent in activeAgents
+                const agentIndex = prev.activeAgents.findIndex(
+                  a => a.agentIndex === message.agentIndex
+                )
+
+                let newAgents: ActiveAgent[]
+                if (message.state === 'success') {
+                  // Remove agent from active list on success
+                  newAgents = prev.activeAgents.filter(
+                    a => a.agentIndex !== message.agentIndex
+                  )
+                } else if (agentIndex >= 0) {
+                  // Update existing agent
+                  newAgents = [...prev.activeAgents]
+                  newAgents[agentIndex] = {
+                    agentIndex: message.agentIndex,
+                    agentName: message.agentName,
+                    featureId: message.featureId,
+                    featureName: message.featureName,
+                    state: message.state,
+                    thought: message.thought,
+                    timestamp: message.timestamp,
+                  }
+                } else {
+                  // Add new agent
+                  newAgents = [
+                    ...prev.activeAgents,
+                    {
+                      agentIndex: message.agentIndex,
+                      agentName: message.agentName,
+                      featureId: message.featureId,
+                      featureName: message.featureName,
+                      state: message.state,
+                      thought: message.thought,
+                      timestamp: message.timestamp,
+                    },
+                  ]
+                }
+
+                // Add to activity feed if there's a thought
+                let newActivity = prev.recentActivity
+                if (message.thought) {
+                  newActivity = [
+                    {
+                      agentName: message.agentName,
+                      thought: message.thought,
+                      timestamp: message.timestamp,
+                      featureId: message.featureId,
+                    },
+                    ...prev.recentActivity.slice(0, MAX_ACTIVITY - 1),
+                  ]
+                }
+
+                // Handle celebration queue on success
+                let newCelebrationQueue = prev.celebrationQueue
+                let newCelebration = prev.celebration
+
+                if (message.state === 'success') {
+                  const newCelebrationItem: CelebrationTrigger = {
+                    agentName: message.agentName,
+                    featureName: message.featureName,
+                    featureId: message.featureId,
+                  }
+
+                  // If no celebration is showing, show this one immediately
+                  // Otherwise, add to queue
+                  if (!prev.celebration) {
+                    newCelebration = newCelebrationItem
+                  } else {
+                    newCelebrationQueue = [...prev.celebrationQueue, newCelebrationItem]
+                  }
+                }
+
+                return {
+                  ...prev,
+                  activeAgents: newAgents,
+                  recentActivity: newActivity,
+                  celebrationQueue: newCelebrationQueue,
+                  celebration: newCelebration,
+                }
+              })
               break
 
             case 'dev_log':
@@ -147,6 +269,19 @@ export function useProjectWebSocket(projectName: string | null) {
     }
   }, [])
 
+  // Clear celebration and show next one from queue if available
+  const clearCelebration = useCallback(() => {
+    setState(prev => {
+      // Pop the next celebration from the queue if available
+      const [nextCelebration, ...remainingQueue] = prev.celebrationQueue
+      return {
+        ...prev,
+        celebration: nextCelebration || null,
+        celebrationQueue: remainingQueue,
+      }
+    })
+  }, [])
+
   // Connect when project changes
   useEffect(() => {
     // Reset state when project changes to clear stale data
@@ -158,6 +293,10 @@ export function useProjectWebSocket(projectName: string | null) {
       devServerStatus: 'stopped',
       devServerUrl: null,
       devLogs: [],
+      activeAgents: [],
+      recentActivity: [],
+      celebrationQueue: [],
+      celebration: null,
     })
 
     if (!projectName) {
@@ -200,5 +339,6 @@ export function useProjectWebSocket(projectName: string | null) {
     ...state,
     clearLogs,
     clearDevLogs,
+    clearCelebration,
   }
 }

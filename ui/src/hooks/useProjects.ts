@@ -123,7 +123,11 @@ export function useStartAgent(projectName: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (yoloMode: boolean = false) => api.startAgent(projectName, yoloMode),
+    mutationFn: (options: {
+      yoloMode?: boolean
+      parallelMode?: boolean
+      maxConcurrency?: number
+    } = {}) => api.startAgent(projectName, options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-status', projectName] })
     },

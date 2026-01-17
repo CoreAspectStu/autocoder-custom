@@ -1,8 +1,12 @@
 # Agent-generated output directories
 generations/
+automaker/
 
 nul
 issues/
+
+# Browser profiles for parallel agent execution
+.browser-profiles/
 
 # Log files
 logs/

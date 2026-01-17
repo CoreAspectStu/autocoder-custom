@@ -871,6 +871,96 @@
 }
 
 /* ============================================================================
+   Agent Mascot Animations
+   ============================================================================ */
+
+@keyframes bounce-gentle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes thinking {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(-2px) scale(1.02);
+  }
+  50% {
+    transform: translateY(0) scale(1);
+  }
+  75% {
+    transform: translateY(-2px) scale(0.98);
+  }
+}
+
+@keyframes working {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-1px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes testing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes celebrate {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+  50% {
+    transform: scale(1.15) rotate(0deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(5deg);
+  }
+}
+
+@keyframes shake-gentle {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-2px);
+  }
+  40%, 80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
    Utilities Layer
    ============================================================================ */
 
@@ -969,6 +1059,35 @@
 
   .font-mono {
     font-family: var(--font-neo-mono);
+  }
+
+  /* Agent mascot animation utilities */
+  .animate-bounce-gentle {
+    animation: bounce-gentle 2s ease-in-out infinite;
+  }
+
+  .animate-thinking {
+    animation: thinking 1.5s ease-in-out infinite;
+  }
+
+  .animate-working {
+    animation: working 0.3s ease-in-out infinite;
+  }
+
+  .animate-testing {
+    animation: testing 0.8s ease-in-out infinite;
+  }
+
+  .animate-celebrate {
+    animation: celebrate 0.6s ease-in-out;
+  }
+
+  .animate-shake-gentle {
+    animation: shake-gentle 0.5s ease-in-out infinite;
+  }
+
+  .animate-confetti {
+    animation: confetti 2s ease-out forwards;
   }
 }
 

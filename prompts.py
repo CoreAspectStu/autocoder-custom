@@ -79,6 +79,56 @@ def get_coding_prompt_yolo(project_dir: Path | None = None) -> str:
     return load_prompt("coding_prompt_yolo", project_dir)
 
 
+def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, yolo_mode: bool = False) -> str:
+    """
+    Load the coding prompt with single-feature focus instructions prepended.
+
+    When the parallel orchestrator assigns a specific feature to an agent,
+    this prompt ensures the agent works ONLY on that feature.
+
+    Args:
+        feature_id: The specific feature ID to work on
+        project_dir: Optional project directory for project-specific prompts
+        yolo_mode: If True, use the YOLO prompt variant
+
+    Returns:
+        The prompt with single-feature instructions prepended
+    """
+    # Get the base prompt
+    if yolo_mode:
+        base_prompt = get_coding_prompt_yolo(project_dir)
+    else:
+        base_prompt = get_coding_prompt(project_dir)
+
+    # Prepend single-feature instructions
+    single_feature_header = f"""## SINGLE FEATURE MODE
+
+**CRITICAL: You are assigned to work on Feature #{feature_id} ONLY.**
+
+This session is part of a parallel execution where multiple agents work on different features simultaneously. You MUST:
+
+1. **Skip the `feature_get_next` step** - Your feature is already assigned: #{feature_id}
+2. **Immediately mark feature #{feature_id} as in-progress** using `feature_mark_in_progress`
+3. **Focus ONLY on implementing and testing feature #{feature_id}**
+4. **Do NOT work on any other features** - other agents are handling them
+
+When you complete feature #{feature_id}:
+- Mark it as passing with `feature_mark_passing`
+- Commit your changes
+- End the session
+
+If you cannot complete feature #{feature_id} due to a blocker:
+- Use `feature_skip` to move it to the end of the queue
+- Document the blocker in claude-progress.txt
+- End the session
+
+---
+
+"""
+
+    return single_feature_header + base_prompt
+
+
 def get_app_spec(project_dir: Path) -> str:
     """
     Load the app spec from the project.

@@ -1,0 +1,289 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  Node,
+  Edge,
+  Position,
+  MarkerType,
+  ConnectionMode,
+  Handle,
+} from '@xyflow/react'
+import dagre from 'dagre'
+import { CheckCircle2, Circle, Loader2, AlertTriangle } from 'lucide-react'
+import type { DependencyGraph as DependencyGraphData, GraphNode } from '../lib/types'
+import '@xyflow/react/dist/style.css'
+
+// Node dimensions
+const NODE_WIDTH = 220
+const NODE_HEIGHT = 80
+
+interface DependencyGraphProps {
+  graphData: DependencyGraphData
+  onNodeClick?: (nodeId: number) => void
+}
+
+// Custom node component
+function FeatureNode({ data }: { data: GraphNode & { onClick?: () => void } }) {
+  const statusColors = {
+    pending: 'bg-neo-pending border-neo-border',
+    in_progress: 'bg-neo-progress border-neo-border',
+    done: 'bg-neo-done border-neo-border',
+    blocked: 'bg-neo-danger/20 border-neo-danger',
+  }
+
+  const StatusIcon = () => {
+    switch (data.status) {
+      case 'done':
+        return <CheckCircle2 size={16} className="text-neo-text-on-bright" />
+      case 'in_progress':
+        return <Loader2 size={16} className="text-neo-text-on-bright animate-spin" />
+      case 'blocked':
+        return <AlertTriangle size={16} className="text-neo-danger" />
+      default:
+        return <Circle size={16} className="text-neo-text-on-bright" />
+    }
+  }
+
+  return (
+    <>
+      <Handle type="target" position={Position.Left} className="!bg-neo-border !w-2 !h-2" />
+      <div
+        className={`
+          px-4 py-3 rounded-lg border-2 cursor-pointer
+          transition-all hover:shadow-neo-md
+          ${statusColors[data.status]}
+        `}
+        onClick={data.onClick}
+        style={{ minWidth: NODE_WIDTH - 20, maxWidth: NODE_WIDTH }}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <StatusIcon />
+          <span className="text-xs font-mono text-neo-text-on-bright/70">
+            #{data.priority}
+          </span>
+        </div>
+        <div className="font-bold text-sm text-neo-text-on-bright truncate" title={data.name}>
+          {data.name}
+        </div>
+        <div className="text-xs text-neo-text-on-bright/70 truncate" title={data.category}>
+          {data.category}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} className="!bg-neo-border !w-2 !h-2" />
+    </>
+  )
+}
+
+const nodeTypes = {
+  feature: FeatureNode,
+}
+
+// Layout nodes using dagre
+function getLayoutedElements(
+  nodes: Node[],
+  edges: Edge[],
+  direction: 'TB' | 'LR' = 'LR'
+): { nodes: Node[]; edges: Edge[] } {
+  const dagreGraph = new dagre.graphlib.Graph()
+  dagreGraph.setDefaultEdgeLabel(() => ({}))
+
+  const isHorizontal = direction === 'LR'
+  dagreGraph.setGraph({
+    rankdir: direction,
+    nodesep: 50,
+    ranksep: 100,
+    marginx: 50,
+    marginy: 50,
+  })
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
+  })
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target)
+  })
+
+  dagre.layout(dagreGraph)
+
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id)
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - NODE_WIDTH / 2,
+        y: nodeWithPosition.y - NODE_HEIGHT / 2,
+      },
+      sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
+      targetPosition: isHorizontal ? Position.Left : Position.Top,
+    }
+  })
+
+  return { nodes: layoutedNodes, edges }
+}
+
+export function DependencyGraph({ graphData, onNodeClick }: DependencyGraphProps) {
+  const [direction, setDirection] = useState<'TB' | 'LR'>('LR')
+
+  // Convert graph data to React Flow format
+  const initialElements = useMemo(() => {
+    const nodes: Node[] = graphData.nodes.map((node) => ({
+      id: String(node.id),
+      type: 'feature',
+      position: { x: 0, y: 0 },
+      data: {
+        ...node,
+        onClick: () => onNodeClick?.(node.id),
+      },
+    }))
+
+    const edges: Edge[] = graphData.edges.map((edge, index) => ({
+      id: `e${edge.source}-${edge.target}-${index}`,
+      source: String(edge.source),
+      target: String(edge.target),
+      type: 'smoothstep',
+      animated: false,
+      style: { stroke: 'var(--color-neo-border)', strokeWidth: 2 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: 'var(--color-neo-border)',
+      },
+    }))
+
+    return getLayoutedElements(nodes, edges, direction)
+  }, [graphData, direction, onNodeClick])
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialElements.nodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialElements.edges)
+
+  // Update layout when data or direction changes
+  useEffect(() => {
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      initialElements.nodes,
+      initialElements.edges,
+      direction
+    )
+    setNodes(layoutedNodes)
+    setEdges(layoutedEdges)
+  }, [graphData, direction, setNodes, setEdges, initialElements])
+
+  const onLayout = useCallback(
+    (newDirection: 'TB' | 'LR') => {
+      setDirection(newDirection)
+    },
+    []
+  )
+
+  // Color nodes for minimap
+  const nodeColor = useCallback((node: Node) => {
+    const status = (node.data as unknown as GraphNode).status
+    switch (status) {
+      case 'done':
+        return 'var(--color-neo-done)'
+      case 'in_progress':
+        return 'var(--color-neo-progress)'
+      case 'blocked':
+        return 'var(--color-neo-danger)'
+      default:
+        return 'var(--color-neo-pending)'
+    }
+  }, [])
+
+  if (graphData.nodes.length === 0) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-neo-neutral-100">
+        <div className="text-center">
+          <div className="text-neo-text-secondary mb-2">No features to display</div>
+          <div className="text-sm text-neo-text-muted">
+            Create features to see the dependency graph
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full w-full relative bg-neo-neutral-50">
+      {/* Layout toggle */}
+      <div className="absolute top-4 left-4 z-10 flex gap-2">
+        <button
+          onClick={() => onLayout('LR')}
+          className={`
+            px-3 py-1.5 text-sm font-medium rounded border-2 border-neo-border transition-all
+            ${direction === 'LR'
+              ? 'bg-neo-accent text-white shadow-neo-sm'
+              : 'bg-white text-neo-text hover:bg-neo-neutral-100'
+            }
+          `}
+        >
+          Horizontal
+        </button>
+        <button
+          onClick={() => onLayout('TB')}
+          className={`
+            px-3 py-1.5 text-sm font-medium rounded border-2 border-neo-border transition-all
+            ${direction === 'TB'
+              ? 'bg-neo-accent text-white shadow-neo-sm'
+              : 'bg-white text-neo-text hover:bg-neo-neutral-100'
+            }
+          `}
+        >
+          Vertical
+        </button>
+      </div>
+
+      {/* Legend */}
+      <div className="absolute top-4 right-4 z-10 bg-white border-2 border-neo-border rounded-lg p-3 shadow-neo-sm">
+        <div className="text-xs font-bold mb-2">Status</div>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 rounded bg-neo-pending border border-neo-border" />
+            <span>Pending</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 rounded bg-neo-progress border border-neo-border" />
+            <span>In Progress</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 rounded bg-neo-done border border-neo-border" />
+            <span>Done</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 rounded bg-neo-danger/20 border border-neo-danger" />
+            <span>Blocked</span>
+          </div>
+        </div>
+      </div>
+
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        connectionMode={ConnectionMode.Loose}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        attributionPosition="bottom-left"
+        minZoom={0.1}
+        maxZoom={2}
+      >
+        <Background color="var(--color-neo-neutral-300)" gap={20} size={1} />
+        <Controls
+          className="!bg-white !border-2 !border-neo-border !rounded-lg !shadow-neo-sm"
+          showInteractive={false}
+        />
+        <MiniMap
+          nodeColor={nodeColor}
+          className="!bg-white !border-2 !border-neo-border !rounded-lg !shadow-neo-sm"
+          maskColor="rgba(0, 0, 0, 0.1)"
+        />
+      </ReactFlow>
+    </div>
+  )
+}

@@ -19,8 +19,8 @@ from claude_agent_sdk import ClaudeSDKClient
 # Fix Windows console encoding for Unicode characters (emoji, etc.)
 # Without this, print() crashes when Claude outputs emoji like ✅
 if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True)
 
 from client import create_client
 from progress import has_features, print_progress_summary, print_session_header
@@ -29,6 +29,7 @@ from prompts import (
     get_coding_prompt,
     get_coding_prompt_yolo,
     get_initializer_prompt,
+    get_single_feature_prompt,
 )
 
 # Configuration
@@ -114,6 +115,7 @@ async def run_autonomous_agent(
     model: str,
     max_iterations: Optional[int] = None,
     yolo_mode: bool = False,
+    feature_id: Optional[int] = None,
 ) -> None:
     """
     Run the autonomous agent loop.
@@ -123,6 +125,7 @@ async def run_autonomous_agent(
         model: Claude model to use
         max_iterations: Maximum number of iterations (None for unlimited)
         yolo_mode: If True, skip browser testing and use YOLO prompt
+        feature_id: If set, work only on this specific feature (used by parallel orchestrator)
     """
     print("\n" + "=" * 70)
     print("  AUTONOMOUS CODING AGENT DEMO")
@@ -133,6 +136,8 @@ async def run_autonomous_agent(
         print("Mode: YOLO (testing disabled)")
     else:
         print("Mode: Standard (full testing)")
+    if feature_id:
+        print(f"Single-feature mode: Feature #{feature_id}")
     if max_iterations:
         print(f"Max iterations: {max_iterations}")
     else:
@@ -178,13 +183,18 @@ async def run_autonomous_agent(
         print_session_header(iteration, is_first_run)
 
         # Create client (fresh context)
-        client = create_client(project_dir, model, yolo_mode=yolo_mode)
+        # In single-feature mode, pass agent_id for browser isolation
+        agent_id = f"feature-{feature_id}" if feature_id else None
+        client = create_client(project_dir, model, yolo_mode=yolo_mode, agent_id=agent_id)
 
         # Choose prompt based on session type
         # Pass project_dir to enable project-specific prompts
         if is_first_run:
             prompt = get_initializer_prompt(project_dir)
             is_first_run = False  # Only use initializer once
+        elif feature_id:
+            # Single-feature mode (used by parallel orchestrator)
+            prompt = get_single_feature_prompt(feature_id, project_dir, yolo_mode)
         else:
             # Use YOLO prompt if in YOLO mode
             if yolo_mode:

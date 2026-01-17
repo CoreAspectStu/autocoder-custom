@@ -15,6 +15,7 @@ from typing import Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from .schemas import AGENT_MASCOTS
 from .services.dev_server_manager import get_devserver_manager
 from .services.process_manager import get_manager
 
@@ -22,6 +23,177 @@ from .services.process_manager import get_manager
 _count_passing_tests = None
 
 logger = logging.getLogger(__name__)
+
+# Pattern to extract feature ID from parallel orchestrator output
+FEATURE_ID_PATTERN = re.compile(r'\[Feature #(\d+)\]\s*(.*)')
+
+# Patterns for detecting agent activity and thoughts
+THOUGHT_PATTERNS = [
+    # Claude's tool usage patterns (actual format: [Tool: name])
+    (re.compile(r'\[Tool:\s*Read\]', re.I), 'thinking'),
+    (re.compile(r'\[Tool:\s*(?:Write|Edit|NotebookEdit)\]', re.I), 'working'),
+    (re.compile(r'\[Tool:\s*Bash\]', re.I), 'testing'),
+    (re.compile(r'\[Tool:\s*(?:Glob|Grep)\]', re.I), 'thinking'),
+    (re.compile(r'\[Tool:\s*(\w+)\]', re.I), 'working'),  # Fallback for other tools
+    # Claude's internal thoughts
+    (re.compile(r'(?:Reading|Analyzing|Checking|Looking at|Examining)\s+(.+)', re.I), 'thinking'),
+    (re.compile(r'(?:Creating|Writing|Adding|Implementing|Building)\s+(.+)', re.I), 'working'),
+    (re.compile(r'(?:Testing|Verifying|Running tests|Validating)\s+(.+)', re.I), 'testing'),
+    (re.compile(r'(?:Error|Failed|Cannot|Unable to|Exception)\s+(.+)', re.I), 'struggling'),
+    # Test results
+    (re.compile(r'(?:PASS|passed|success)', re.I), 'success'),
+    (re.compile(r'(?:FAIL|failed|error)', re.I), 'struggling'),
+]
+
+
+class AgentTracker:
+    """Tracks active agents and their states for multi-agent mode."""
+
+    def __init__(self):
+        # feature_id -> {name, state, last_thought, agent_index}
+        self.active_agents: dict[int, dict] = {}
+        self._next_agent_index = 0
+        self._lock = asyncio.Lock()
+
+    async def process_line(self, line: str) -> dict | None:
+        """
+        Process an output line and return an agent_update message if relevant.
+
+        Returns None if no update should be emitted.
+        """
+        # Check for feature-specific output
+        match = FEATURE_ID_PATTERN.match(line)
+        if not match:
+            # Also check for orchestrator status messages
+            if line.startswith("Started agent for feature #"):
+                try:
+                    feature_id = int(re.search(r'#(\d+)', line).group(1))
+                    return await self._handle_agent_start(feature_id, line)
+                except (AttributeError, ValueError):
+                    pass
+            elif line.startswith("Feature #") and ("completed" in line or "failed" in line):
+                try:
+                    feature_id = int(re.search(r'#(\d+)', line).group(1))
+                    is_success = "completed" in line
+                    return await self._handle_agent_complete(feature_id, is_success)
+                except (AttributeError, ValueError):
+                    pass
+            return None
+
+        feature_id = int(match.group(1))
+        content = match.group(2)
+
+        async with self._lock:
+            # Ensure agent is tracked
+            if feature_id not in self.active_agents:
+                agent_index = self._next_agent_index
+                self._next_agent_index += 1
+                self.active_agents[feature_id] = {
+                    'name': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
+                    'agent_index': agent_index,
+                    'state': 'thinking',
+                    'feature_name': f'Feature #{feature_id}',
+                    'last_thought': None,
+                }
+
+            agent = self.active_agents[feature_id]
+
+            # Detect state and thought from content
+            state = 'working'
+            thought = None
+
+            for pattern, detected_state in THOUGHT_PATTERNS:
+                m = pattern.search(content)
+                if m:
+                    state = detected_state
+                    thought = m.group(1) if m.lastindex else content[:100]
+                    break
+
+            # Only emit update if state changed or we have a new thought
+            if state != agent['state'] or thought != agent['last_thought']:
+                agent['state'] = state
+                if thought:
+                    agent['last_thought'] = thought
+
+                return {
+                    'type': 'agent_update',
+                    'agentIndex': agent['agent_index'],
+                    'agentName': agent['name'],
+                    'featureId': feature_id,
+                    'featureName': agent['feature_name'],
+                    'state': state,
+                    'thought': thought,
+                    'timestamp': datetime.now().isoformat(),
+                }
+
+        return None
+
+    def get_agent_info(self, feature_id: int) -> tuple[int | None, str | None]:
+        """Get agent index and name for a feature ID.
+
+        Returns:
+            Tuple of (agentIndex, agentName) or (None, None) if not tracked.
+        """
+        agent = self.active_agents.get(feature_id)
+        if agent:
+            return agent['agent_index'], agent['name']
+        return None, None
+
+    async def _handle_agent_start(self, feature_id: int, line: str) -> dict | None:
+        """Handle agent start message from orchestrator."""
+        async with self._lock:
+            agent_index = self._next_agent_index
+            self._next_agent_index += 1
+
+            # Try to extract feature name from line
+            feature_name = f'Feature #{feature_id}'
+            name_match = re.search(r'#\d+:\s*(.+)$', line)
+            if name_match:
+                feature_name = name_match.group(1)
+
+            self.active_agents[feature_id] = {
+                'name': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
+                'agent_index': agent_index,
+                'state': 'thinking',
+                'feature_name': feature_name,
+                'last_thought': 'Starting work...',
+            }
+
+            return {
+                'type': 'agent_update',
+                'agentIndex': agent_index,
+                'agentName': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
+                'featureId': feature_id,
+                'featureName': feature_name,
+                'state': 'thinking',
+                'thought': 'Starting work...',
+                'timestamp': datetime.now().isoformat(),
+            }
+
+    async def _handle_agent_complete(self, feature_id: int, is_success: bool) -> dict | None:
+        """Handle agent completion message from orchestrator."""
+        async with self._lock:
+            if feature_id not in self.active_agents:
+                return None
+
+            agent = self.active_agents[feature_id]
+            state = 'success' if is_success else 'error'
+
+            result = {
+                'type': 'agent_update',
+                'agentIndex': agent['agent_index'],
+                'agentName': agent['name'],
+                'featureId': feature_id,
+                'featureName': agent['feature_name'],
+                'state': state,
+                'thought': 'Completed successfully!' if is_success else 'Failed to complete',
+                'timestamp': datetime.now().isoformat(),
+            }
+
+            # Remove from active agents
+            del self.active_agents[feature_id]
+
+            return result
 
 
 def _get_project_path(project_name: str) -> Path:
@@ -171,14 +343,38 @@ async def project_websocket(websocket: WebSocket, project_name: str):
     # Get agent manager and register callbacks
     agent_manager = get_manager(project_name, project_dir, ROOT_DIR)
 
+    # Create agent tracker for multi-agent mode
+    agent_tracker = AgentTracker()
+
     async def on_output(line: str):
         """Handle agent output - broadcast to this WebSocket."""
         try:
-            await websocket.send_json({
+            # Extract feature ID from line if present
+            feature_id = None
+            agent_index = None
+            match = FEATURE_ID_PATTERN.match(line)
+            if match:
+                feature_id = int(match.group(1))
+                agent_index, _ = agent_tracker.get_agent_info(feature_id)
+
+            # Send the raw log line with optional feature/agent attribution
+            log_msg = {
                 "type": "log",
                 "line": line,
                 "timestamp": datetime.now().isoformat(),
-            })
+            }
+            if feature_id is not None:
+                log_msg["featureId"] = feature_id
+            if agent_index is not None:
+                log_msg["agentIndex"] = agent_index
+
+            await websocket.send_json(log_msg)
+
+            # Check if this line indicates agent activity (parallel mode)
+            # and emit agent_update messages if so
+            agent_update = await agent_tracker.process_line(line)
+            if agent_update:
+                await websocket.send_json(agent_update)
         except Exception:
             pass  # Connection may be closed
 

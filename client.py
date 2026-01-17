@@ -52,13 +52,25 @@ def get_playwright_headless() -> bool:
 
 # Feature MCP tools for feature/test management
 FEATURE_MCP_TOOLS = [
+    # Core feature operations
     "mcp__features__feature_get_stats",
     "mcp__features__feature_get_next",
+    "mcp__features__feature_claim_next",  # Atomic get+claim for parallel execution
     "mcp__features__feature_get_for_regression",
     "mcp__features__feature_mark_in_progress",
     "mcp__features__feature_mark_passing",
     "mcp__features__feature_skip",
     "mcp__features__feature_create_bulk",
+    "mcp__features__feature_create",
+    "mcp__features__feature_clear_in_progress",
+    # Dependency management
+    "mcp__features__feature_add_dependency",
+    "mcp__features__feature_remove_dependency",
+    "mcp__features__feature_set_dependencies",
+    # Parallel execution support
+    "mcp__features__feature_get_ready",
+    "mcp__features__feature_get_blocked",
+    "mcp__features__feature_get_graph",
 ]
 
 # Playwright MCP tools for browser automation
@@ -107,7 +119,12 @@ BUILTIN_TOOLS = [
 ]
 
 
-def create_client(project_dir: Path, model: str, yolo_mode: bool = False):
+def create_client(
+    project_dir: Path,
+    model: str,
+    yolo_mode: bool = False,
+    agent_id: str | None = None,
+):
     """
     Create a Claude Agent SDK client with multi-layered security.
 
@@ -115,6 +132,8 @@ def create_client(project_dir: Path, model: str, yolo_mode: bool = False):
         project_dir: Directory for the project
         model: Claude model to use
         yolo_mode: If True, skip Playwright MCP server for rapid prototyping
+        agent_id: Optional unique identifier for browser isolation in parallel mode.
+                  When provided, each agent gets its own browser profile.
 
     Returns:
         Configured ClaudeSDKClient (from claude_agent_sdk)
@@ -211,6 +230,16 @@ def create_client(project_dir: Path, model: str, yolo_mode: bool = False):
         playwright_args = ["@playwright/mcp@latest", "--viewport-size", "1280x720"]
         if get_playwright_headless():
             playwright_args.append("--headless")
+
+        # Browser isolation for parallel execution
+        # Each agent gets its own isolated browser context to prevent tab conflicts
+        if agent_id:
+            # Use --isolated for ephemeral browser context
+            # This creates a fresh, isolated context without persistent state
+            # Note: --isolated and --user-data-dir are mutually exclusive
+            playwright_args.append("--isolated")
+            print(f"   - Browser isolation enabled for agent: {agent_id}")
+
         mcp_servers["playwright"] = {
             "command": "npx",
             "args": playwright_args,

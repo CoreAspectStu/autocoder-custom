@@ -1,11 +1,13 @@
 import { FeatureCard } from './FeatureCard'
 import { Plus, Sparkles } from 'lucide-react'
-import type { Feature } from '../lib/types'
+import type { Feature, ActiveAgent } from '../lib/types'
 
 interface KanbanColumnProps {
   title: string
   count: number
   features: Feature[]
+  allFeatures?: Feature[]  // For dependency status calculation
+  activeAgents?: ActiveAgent[]  // Active agents for showing which agent is working on a feature
   color: 'pending' | 'progress' | 'done'
   onFeatureClick: (feature: Feature) => void
   onAddFeature?: () => void
@@ -23,12 +25,18 @@ export function KanbanColumn({
   title,
   count,
   features,
+  allFeatures = [],
+  activeAgents = [],
   color,
   onFeatureClick,
   onAddFeature,
   onExpandProject,
   showExpandButton,
 }: KanbanColumnProps) {
+  // Create a map of feature ID to active agent for quick lookup
+  const agentByFeatureId = new Map(
+    activeAgents.map(agent => [agent.featureId, agent])
+  )
   return (
     <div
       className="neo-card overflow-hidden"
@@ -86,6 +94,8 @@ export function KanbanColumn({
                 feature={feature}
                 onClick={() => onFeatureClick(feature)}
                 isInProgress={color === 'progress'}
+                allFeatures={allFeatures}
+                activeAgent={agentByFeatureId.get(feature.id)}
               />
             </div>
           ))

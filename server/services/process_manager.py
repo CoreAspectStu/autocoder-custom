@@ -80,6 +80,8 @@ class AgentProcessManager:
         self._output_task: asyncio.Task | None = None
         self.yolo_mode: bool = False  # YOLO mode for rapid prototyping
         self.model: str | None = None  # Model being used
+        self.parallel_mode: bool = False  # Parallel execution mode
+        self.max_concurrency: int | None = None  # Max concurrent agents
 
         # Support multiple callbacks (for multiple WebSocket clients)
         self._output_callbacks: Set[Callable[[str], Awaitable[None]]] = set()
@@ -241,13 +243,21 @@ class AgentProcessManager:
                     self.status = "stopped"
                 self._remove_lock()
 
-    async def start(self, yolo_mode: bool = False, model: str | None = None) -> tuple[bool, str]:
+    async def start(
+        self,
+        yolo_mode: bool = False,
+        model: str | None = None,
+        parallel_mode: bool = False,
+        max_concurrency: int | None = None,
+    ) -> tuple[bool, str]:
         """
         Start the agent as a subprocess.
 
         Args:
             yolo_mode: If True, run in YOLO mode (no browser testing)
             model: Model to use (e.g., claude-opus-4-5-20251101)
+            parallel_mode: If True, run multiple features in parallel
+            max_concurrency: Max concurrent agents (default 3 if parallel enabled)
 
         Returns:
             Tuple of (success, message)
@@ -261,6 +271,8 @@ class AgentProcessManager:
         # Store for status queries
         self.yolo_mode = yolo_mode
         self.model = model
+        self.parallel_mode = parallel_mode
+        self.max_concurrency = max_concurrency
 
         # Build command - pass absolute path to project directory
         cmd = [
@@ -277,6 +289,11 @@ class AgentProcessManager:
         # Add --yolo flag if YOLO mode is enabled
         if yolo_mode:
             cmd.append("--yolo")
+
+        # Add --parallel flag if parallel mode is enabled
+        if parallel_mode:
+            cmd.append("--parallel")
+            cmd.append(str(max_concurrency or 3))  # Default to 3 concurrent agents
 
         try:
             # Start subprocess with piped stdout/stderr
@@ -340,6 +357,8 @@ class AgentProcessManager:
             self.started_at = None
             self.yolo_mode = False  # Reset YOLO mode
             self.model = None  # Reset model
+            self.parallel_mode = False  # Reset parallel mode
+            self.max_concurrency = None  # Reset concurrency
 
             return True, "Agent stopped"
         except Exception as e:
@@ -422,6 +441,8 @@ class AgentProcessManager:
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "yolo_mode": self.yolo_mode,
             "model": self.model,
+            "parallel_mode": self.parallel_mode,
+            "max_concurrency": self.max_concurrency,
         }
 
 

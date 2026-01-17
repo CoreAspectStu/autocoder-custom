@@ -12,6 +12,7 @@ import type {
   FeatureUpdate,
   FeatureBulkCreate,
   FeatureBulkCreateResponse,
+  DependencyGraph,
   AgentStatusResponse,
   AgentActionResponse,
   SetupStatus,
@@ -142,6 +143,50 @@ export async function createFeaturesBulk(
 }
 
 // ============================================================================
+// Dependency Graph API
+// ============================================================================
+
+export async function getDependencyGraph(projectName: string): Promise<DependencyGraph> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/features/graph`)
+}
+
+export async function addDependency(
+  projectName: string,
+  featureId: number,
+  dependencyId: number
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
+    { method: 'POST' }
+  )
+}
+
+export async function removeDependency(
+  projectName: string,
+  featureId: number,
+  dependencyId: number
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
+    { method: 'DELETE' }
+  )
+}
+
+export async function setDependencies(
+  projectName: string,
+  featureId: number,
+  dependencyIds: number[]
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ dependency_ids: dependencyIds }),
+    }
+  )
+}
+
+// ============================================================================
 // Agent API
 // ============================================================================
 
@@ -151,11 +196,19 @@ export async function getAgentStatus(projectName: string): Promise<AgentStatusRe
 
 export async function startAgent(
   projectName: string,
-  yoloMode: boolean = false
+  options: {
+    yoloMode?: boolean
+    parallelMode?: boolean
+    maxConcurrency?: number
+  } = {}
 ): Promise<AgentActionResponse> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/agent/start`, {
     method: 'POST',
-    body: JSON.stringify({ yolo_mode: yoloMode }),
+    body: JSON.stringify({
+      yolo_mode: options.yoloMode ?? false,
+      parallel_mode: options.parallelMode ?? false,
+      max_concurrency: options.maxConcurrency,
+    }),
   })
 }
 

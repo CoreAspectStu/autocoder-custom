@@ -1,15 +1,21 @@
 import { KanbanColumn } from './KanbanColumn'
-import type { Feature, FeatureListResponse } from '../lib/types'
+import type { Feature, FeatureListResponse, ActiveAgent } from '../lib/types'
 
 interface KanbanBoardProps {
   features: FeatureListResponse | undefined
   onFeatureClick: (feature: Feature) => void
   onAddFeature?: () => void
   onExpandProject?: () => void
+  activeAgents?: ActiveAgent[]
 }
 
-export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandProject }: KanbanBoardProps) {
+export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandProject, activeAgents = [] }: KanbanBoardProps) {
   const hasFeatures = features && (features.pending.length + features.in_progress.length + features.done.length) > 0
+
+  // Combine all features for dependency status calculation
+  const allFeatures = features
+    ? [...features.pending, ...features.in_progress, ...features.done]
+    : []
 
   if (!features) {
     return (
@@ -34,6 +40,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
         title="Pending"
         count={features.pending.length}
         features={features.pending}
+        allFeatures={allFeatures}
+        activeAgents={activeAgents}
         color="pending"
         onFeatureClick={onFeatureClick}
         onAddFeature={onAddFeature}
@@ -44,6 +52,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
         title="In Progress"
         count={features.in_progress.length}
         features={features.in_progress}
+        allFeatures={allFeatures}
+        activeAgents={activeAgents}
         color="progress"
         onFeatureClick={onFeatureClick}
       />
@@ -51,6 +61,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
         title="Done"
         count={features.done.length}
         features={features.done}
+        allFeatures={allFeatures}
+        activeAgents={activeAgents}
         color="done"
         onFeatureClick={onFeatureClick}
       />

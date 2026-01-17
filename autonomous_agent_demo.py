@@ -19,6 +19,12 @@ Example Usage:
 
     # YOLO mode: rapid prototyping without browser testing
     python autonomous_agent_demo.py --project-dir my-app --yolo
+
+    # Parallel execution with 3 concurrent agents (default)
+    python autonomous_agent_demo.py --project-dir my-app --parallel
+
+    # Parallel execution with 5 concurrent agents
+    python autonomous_agent_demo.py --project-dir my-app --parallel 5
 """
 
 import argparse
@@ -91,6 +97,24 @@ Authentication:
         help="Enable YOLO mode: rapid prototyping without browser testing",
     )
 
+    parser.add_argument(
+        "--parallel",
+        "-p",
+        type=int,
+        nargs="?",
+        const=3,
+        default=None,
+        metavar="N",
+        help="Enable parallel execution with N concurrent agents (default: 3, max: 5)",
+    )
+
+    parser.add_argument(
+        "--feature-id",
+        type=int,
+        default=None,
+        help="Work on a specific feature ID only (used by parallel orchestrator)",
+    )
+
     return parser.parse_args()
 
 
@@ -123,15 +147,30 @@ def main() -> None:
             return
 
     try:
-        # Run the agent (MCP server handles feature database)
-        asyncio.run(
-            run_autonomous_agent(
-                project_dir=project_dir,
-                model=args.model,
-                max_iterations=args.max_iterations,
-                yolo_mode=args.yolo,
+        if args.parallel is not None:
+            # Parallel execution mode
+            from parallel_orchestrator import run_parallel_orchestrator
+
+            print(f"Running in parallel mode with {args.parallel} concurrent agents")
+            asyncio.run(
+                run_parallel_orchestrator(
+                    project_dir=project_dir,
+                    max_concurrency=args.parallel,
+                    model=args.model,
+                    yolo_mode=args.yolo,
+                )
             )
-        )
+        else:
+            # Standard single-agent mode (MCP server handles feature database)
+            asyncio.run(
+                run_autonomous_agent(
+                    project_dir=project_dir,
+                    model=args.model,
+                    max_iterations=args.max_iterations,
+                    yolo_mode=args.yolo,
+                    feature_id=args.feature_id,
+                )
+            )
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
         print("To resume, run the same command again")

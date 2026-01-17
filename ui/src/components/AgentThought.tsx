@@ -25,14 +25,14 @@ function isAgentThought(line: string): boolean {
 
   // Skip JSON and very short lines
   if (/^[[{]/.test(trimmed)) return false
-  if (trimmed.length < 15) return false
+  if (trimmed.length < 10) return false
 
   // Skip lines that are just paths or technical output
   if (/^[A-Za-z]:\\/.test(trimmed)) return false
   if (/^\/[a-z]/.test(trimmed)) return false
 
-  // Keep narrative text (starts with capital, looks like a sentence)
-  return /^[A-Z]/.test(trimmed) && trimmed.length > 20
+  // Keep narrative text (looks like a sentence, relaxed filter)
+  return trimmed.length > 10
 }
 
 /**

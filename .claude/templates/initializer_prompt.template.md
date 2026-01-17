@@ -32,23 +32,35 @@ Use the feature_create_bulk tool to add all features at once:
 Use the feature_create_bulk tool with features=[
   {
     "category": "functional",
-    "name": "Brief feature name",
-    "description": "Brief description of the feature and what this test verifies",
+    "name": "User can create an account",
+    "description": "Basic user registration functionality",
     "steps": [
-      "Step 1: Navigate to relevant page",
-      "Step 2: Perform action",
-      "Step 3: Verify expected result"
+      "Step 1: Navigate to registration page",
+      "Step 2: Fill in required fields",
+      "Step 3: Submit form and verify account created"
     ]
   },
   {
-    "category": "style",
-    "name": "Brief feature name",
-    "description": "Brief description of UI/UX requirement",
+    "category": "functional",
+    "name": "User can log in",
+    "description": "Authentication with existing credentials",
     "steps": [
-      "Step 1: Navigate to page",
-      "Step 2: Take screenshot",
-      "Step 3: Verify visual requirements"
-    ]
+      "Step 1: Navigate to login page",
+      "Step 2: Enter credentials",
+      "Step 3: Verify successful login and redirect"
+    ],
+    "depends_on_indices": [0]
+  },
+  {
+    "category": "functional",
+    "name": "User can view dashboard",
+    "description": "Protected dashboard requires authentication",
+    "steps": [
+      "Step 1: Log in as user",
+      "Step 2: Navigate to dashboard",
+      "Step 3: Verify personalized content displays"
+    ],
+    "depends_on_indices": [1]
   }
 ]
 ```
@@ -57,6 +69,7 @@ Use the feature_create_bulk tool with features=[
 - IDs and priorities are assigned automatically based on order
 - All features start with `passes: false` by default
 - You can create features in batches if there are many (e.g., 50 at a time)
+- Use `depends_on_indices` to specify dependencies (see FEATURE DEPENDENCIES section below)
 
 **Requirements for features:**
 
@@ -72,6 +85,86 @@ Use the feature_create_bulk tool with features=[
 - All features start with `passes: false` automatically
 - Cover every feature in the spec exhaustively
 - **MUST include tests from ALL 20 mandatory categories below**
+
+---
+
+## FEATURE DEPENDENCIES
+
+Dependencies enable **parallel execution** of independent features. When you specify dependencies correctly, multiple agents can work on unrelated features simultaneously, dramatically speeding up development.
+
+### Why Dependencies Matter
+
+1. **Parallel Execution**: Features without dependencies can run in parallel
+2. **Logical Ordering**: Ensures features are built in the right order
+3. **Blocking Prevention**: An agent won't start a feature until its dependencies pass
+
+### How to Determine Dependencies
+
+Ask yourself: "What MUST be working before this feature can be tested?"
+
+| Dependency Type | Example |
+|-----------------|---------|
+| **Data dependencies** | "Edit item" depends on "Create item" |
+| **Auth dependencies** | "View dashboard" depends on "User can log in" |
+| **Navigation dependencies** | "Modal close works" depends on "Modal opens" |
+| **UI dependencies** | "Filter results" depends on "Display results list" |
+| **API dependencies** | "Fetch user data" depends on "API authentication" |
+
+### Using `depends_on_indices`
+
+Since feature IDs aren't assigned until after creation, use **array indices** (0-based) to reference dependencies:
+
+```json
+{
+  "features": [
+    { "name": "Create account", ... },           // Index 0
+    { "name": "Login", "depends_on_indices": [0] },  // Index 1, depends on 0
+    { "name": "View profile", "depends_on_indices": [1] }, // Index 2, depends on 1
+    { "name": "Edit profile", "depends_on_indices": [2] }  // Index 3, depends on 2
+  ]
+}
+```
+
+### Rules for Dependencies
+
+1. **Can only depend on EARLIER features**: Index must be less than current feature's position
+2. **No circular dependencies**: A cannot depend on B if B depends on A
+3. **Maximum 20 dependencies** per feature
+4. **Foundation features have NO dependencies**: First features in each category typically have none
+5. **Don't over-depend**: Only add dependencies that are truly required for testing
+
+### Best Practices
+
+1. **Start with foundation features** (index 0-10): Core setup, basic navigation, authentication
+2. **Group related features together**: Keep CRUD operations adjacent
+3. **Chain complex flows**: Registration → Login → Dashboard → Settings
+4. **Keep dependencies shallow**: Prefer 1-2 dependencies over deep chains
+5. **Skip dependencies for independent features**: Visual tests often have no dependencies
+
+### Example: Todo App Feature Chain
+
+```json
+[
+  // Foundation (no dependencies)
+  { "name": "App loads without errors", "category": "functional" },
+  { "name": "Navigation bar displays", "category": "style" },
+
+  // Auth chain
+  { "name": "User can register", "depends_on_indices": [0] },
+  { "name": "User can login", "depends_on_indices": [2] },
+  { "name": "User can logout", "depends_on_indices": [3] },
+
+  // Todo CRUD (depends on auth)
+  { "name": "User can create todo", "depends_on_indices": [3] },
+  { "name": "User can view todos", "depends_on_indices": [5] },
+  { "name": "User can edit todo", "depends_on_indices": [5] },
+  { "name": "User can delete todo", "depends_on_indices": [5] },
+
+  // Advanced features (multiple dependencies)
+  { "name": "User can filter todos", "depends_on_indices": [6] },
+  { "name": "User can search todos", "depends_on_indices": [6] }
+]
+```
 
 ---
 

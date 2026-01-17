@@ -1,4 +1,5 @@
-import { Play, Square, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Play, Square, Loader2, GitBranch } from 'lucide-react'
 import {
   useStartAgent,
   useStopAgent,
@@ -15,19 +16,57 @@ export function AgentControl({ projectName, status }: AgentControlProps) {
   const { data: settings } = useSettings()
   const yoloMode = settings?.yolo_mode ?? false
 
+  // Concurrency: 1 = single agent, 2-5 = parallel
+  const [concurrency, setConcurrency] = useState(3)
+
   const startAgent = useStartAgent(projectName)
   const stopAgent = useStopAgent(projectName)
 
   const isLoading = startAgent.isPending || stopAgent.isPending
+  const isRunning = status === 'running' || status === 'paused'
+  const isParallel = concurrency > 1
 
-  const handleStart = () => startAgent.mutate(yoloMode)
+  const handleStart = () => startAgent.mutate({
+    yoloMode,
+    parallelMode: isParallel,
+    maxConcurrency: isParallel ? concurrency : undefined,
+  })
   const handleStop = () => stopAgent.mutate()
 
   // Simplified: either show Start (when stopped/crashed) or Stop (when running/paused)
   const isStopped = status === 'stopped' || status === 'crashed'
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center gap-2">
+      {/* Concurrency slider - always visible when stopped */}
+      {isStopped && (
+        <div className="flex items-center gap-2">
+          <GitBranch size={16} className={isParallel ? 'text-[var(--color-neo-primary)]' : 'text-gray-400'} />
+          <input
+            type="range"
+            min={1}
+            max={5}
+            value={concurrency}
+            onChange={(e) => setConcurrency(Number(e.target.value))}
+            disabled={isLoading}
+            className="w-16 h-2 accent-[var(--color-neo-primary)] cursor-pointer"
+            title={`${concurrency} concurrent agent${concurrency > 1 ? 's' : ''}`}
+            aria-label="Set number of concurrent agents"
+          />
+          <span className="text-xs font-bold min-w-[1.5rem] text-center">
+            {concurrency}x
+          </span>
+        </div>
+      )}
+
+      {/* Show concurrency indicator when running with multiple agents */}
+      {isRunning && isParallel && (
+        <div className="flex items-center gap-1 text-xs text-[var(--color-neo-primary)] font-bold">
+          <GitBranch size={14} />
+          <span>{concurrency}x</span>
+        </div>
+      )}
+
       {isStopped ? (
         <button
           onClick={handleStart}
