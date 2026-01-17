@@ -1,30 +1,33 @@
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, ScrollText, X, Copy, Check } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AgentAvatar } from './AgentAvatar'
-import type { ActiveAgent } from '../lib/types'
+import type { ActiveAgent, AgentLogEntry } from '../lib/types'
 
 interface AgentCardProps {
   agent: ActiveAgent
+  onShowLogs?: (agentIndex: number) => void
 }
 
 // Get a friendly state description
 function getStateText(state: ActiveAgent['state']): string {
   switch (state) {
     case 'idle':
-      return 'Waiting...'
+      return 'Standing by...'
     case 'thinking':
-      return 'Thinking...'
+      return 'Pondering...'
     case 'working':
-      return 'Coding...'
+      return 'Coding away...'
     case 'testing':
-      return 'Testing...'
+      return 'Checking work...'
     case 'success':
-      return 'Done!'
+      return 'Nailed it!'
     case 'error':
-      return 'Hit an issue'
+      return 'Trying plan B...'
     case 'struggling':
-      return 'Retrying...'
+      return 'Being persistent...'
     default:
-      return 'Working...'
+      return 'Busy...'
   }
 }
 
@@ -34,8 +37,9 @@ function getStateColor(state: ActiveAgent['state']): string {
     case 'success':
       return 'text-neo-done'
     case 'error':
+      return 'text-neo-pending'  // Yellow - just pivoting, not a real error
     case 'struggling':
-      return 'text-neo-danger'
+      return 'text-orange-500'   // Orange - working hard, being persistent
     case 'working':
     case 'testing':
       return 'text-neo-progress'
@@ -46,8 +50,9 @@ function getStateColor(state: ActiveAgent['state']): string {
   }
 }
 
-export function AgentCard({ agent }: AgentCardProps) {
+export function AgentCard({ agent, onShowLogs }: AgentCardProps) {
   const isActive = ['thinking', 'working', 'testing'].includes(agent.state)
+  const hasLogs = agent.logs && agent.logs.length > 0
 
   return (
     <div
@@ -68,6 +73,16 @@ export function AgentCard({ agent }: AgentCardProps) {
             {getStateText(agent.state)}
           </div>
         </div>
+        {/* Log button */}
+        {hasLogs && onShowLogs && (
+          <button
+            onClick={() => onShowLogs(agent.agentIndex)}
+            className="p-1 hover:bg-neo-bg-secondary rounded transition-colors"
+            title={`View logs (${agent.logs?.length || 0} entries)`}
+          >
+            <ScrollText size={14} className="text-neo-text-secondary" />
+          </button>
+        )}
       </div>
 
       {/* Feature info */}
@@ -95,5 +110,105 @@ export function AgentCard({ agent }: AgentCardProps) {
         </div>
       )}
     </div>
+  )
+}
+
+// Log viewer modal component
+interface AgentLogModalProps {
+  agent: ActiveAgent
+  logs: AgentLogEntry[]
+  onClose: () => void
+}
+
+export function AgentLogModal({ agent, logs, onClose }: AgentLogModalProps) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    const logText = logs
+      .map(log => `[${log.timestamp}] ${log.line}`)
+      .join('\n')
+    await navigator.clipboard.writeText(logText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const getLogColor = (type: AgentLogEntry['type']) => {
+    switch (type) {
+      case 'error':
+        return 'text-neo-danger'
+      case 'state_change':
+        return 'text-neo-progress'
+      default:
+        return 'text-neo-text'
+    }
+  }
+
+  // Use portal to render modal at document body level (avoids overflow:hidden issues)
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 bg-black/50"
+      style={{ zIndex: 9999 }}
+      onClick={(e) => {
+        // Close when clicking backdrop
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="neo-card w-full max-w-4xl max-h-[80vh] flex flex-col bg-neo-bg">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b-3 border-neo-border">
+          <div className="flex items-center gap-3">
+            <AgentAvatar name={agent.agentName} state={agent.state} size="sm" />
+            <div>
+              <h2 className="font-display font-bold text-lg">
+                {agent.agentName} Logs
+              </h2>
+              <p className="text-sm text-neo-text-secondary">
+                Feature #{agent.featureId}: {agent.featureName}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopy}
+              className="neo-button neo-button-sm flex items-center gap-1"
+              title="Copy all logs"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-neo-bg-secondary rounded transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Log content */}
+        <div className="flex-1 overflow-auto p-4 bg-neo-bg-secondary font-mono text-xs">
+          {logs.length === 0 ? (
+            <p className="text-neo-text-secondary italic">No logs available</p>
+          ) : (
+            <div className="space-y-1">
+              {logs.map((log, idx) => (
+                <div key={idx} className={`${getLogColor(log.type)} whitespace-pre-wrap break-all`}>
+                  <span className="text-neo-muted">
+                    [{new Date(log.timestamp).toLocaleTimeString()}]
+                  </span>{' '}
+                  {log.line}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-3 border-t-2 border-neo-border/30 text-xs text-neo-text-secondary">
+          {logs.length} log entries
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }

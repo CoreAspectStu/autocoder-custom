@@ -9,6 +9,7 @@ import type {
   DevServerStatus,
   ActiveAgent,
   AgentMascot,
+  AgentLogEntry,
 } from '../lib/types'
 
 // Activity item for the feed
@@ -42,6 +43,8 @@ interface WebSocketState {
   // Multi-agent state
   activeAgents: ActiveAgent[]
   recentActivity: ActivityItem[]
+  // Per-agent logs for debugging (indexed by agentIndex)
+  agentLogs: Map<number, AgentLogEntry[]>
   // Celebration queue to handle rapid successes without race conditions
   celebrationQueue: CelebrationTrigger[]
   celebration: CelebrationTrigger | null
@@ -49,6 +52,7 @@ interface WebSocketState {
 
 const MAX_LOGS = 100 // Keep last 100 log lines
 const MAX_ACTIVITY = 20 // Keep last 20 activity items
+const MAX_AGENT_LOGS = 500 // Keep last 500 log lines per agent
 
 export function useProjectWebSocket(projectName: string | null) {
   const [state, setState] = useState<WebSocketState>({
@@ -61,6 +65,7 @@ export function useProjectWebSocket(projectName: string | null) {
     devLogs: [],
     activeAgents: [],
     recentActivity: [],
+    agentLogs: new Map(),
     celebrationQueue: [],
     celebration: null,
   })
@@ -111,9 +116,9 @@ export function useProjectWebSocket(projectName: string | null) {
               break
 
             case 'log':
-              setState(prev => ({
-                ...prev,
-                logs: [
+              setState(prev => {
+                // Update global logs
+                const newLogs = [
                   ...prev.logs.slice(-MAX_LOGS + 1),
                   {
                     line: message.line,
@@ -121,8 +126,26 @@ export function useProjectWebSocket(projectName: string | null) {
                     featureId: message.featureId,
                     agentIndex: message.agentIndex,
                   },
-                ],
-              }))
+                ]
+
+                // Also store in per-agent logs if we have an agentIndex
+                let newAgentLogs = prev.agentLogs
+                if (message.agentIndex !== undefined) {
+                  newAgentLogs = new Map(prev.agentLogs)
+                  const existingLogs = newAgentLogs.get(message.agentIndex) || []
+                  const logEntry: AgentLogEntry = {
+                    line: message.line,
+                    timestamp: message.timestamp,
+                    type: 'output',
+                  }
+                  newAgentLogs.set(
+                    message.agentIndex,
+                    [...existingLogs.slice(-MAX_AGENT_LOGS + 1), logEntry]
+                  )
+                }
+
+                return { ...prev, logs: newLogs, agentLogs: newAgentLogs }
+              })
               break
 
             case 'feature_update':
@@ -131,21 +154,38 @@ export function useProjectWebSocket(projectName: string | null) {
 
             case 'agent_update':
               setState(prev => {
+                // Log state change to per-agent logs
+                const newAgentLogs = new Map(prev.agentLogs)
+                const existingLogs = newAgentLogs.get(message.agentIndex) || []
+                const stateLogEntry: AgentLogEntry = {
+                  line: `[STATE] ${message.state}${message.thought ? `: ${message.thought}` : ''}`,
+                  timestamp: message.timestamp,
+                  type: message.state === 'error' ? 'error' : 'state_change',
+                }
+                newAgentLogs.set(
+                  message.agentIndex,
+                  [...existingLogs.slice(-MAX_AGENT_LOGS + 1), stateLogEntry]
+                )
+
+                // Get current logs for this agent to attach to ActiveAgent
+                const agentLogsArray = newAgentLogs.get(message.agentIndex) || []
+
                 // Update or add the agent in activeAgents
-                const agentIndex = prev.activeAgents.findIndex(
+                const existingAgentIdx = prev.activeAgents.findIndex(
                   a => a.agentIndex === message.agentIndex
                 )
 
                 let newAgents: ActiveAgent[]
-                if (message.state === 'success') {
-                  // Remove agent from active list on success
+                if (message.state === 'success' || message.state === 'error') {
+                  // Remove agent from active list on completion (success or failure)
+                  // But keep the logs in agentLogs map for debugging
                   newAgents = prev.activeAgents.filter(
                     a => a.agentIndex !== message.agentIndex
                   )
-                } else if (agentIndex >= 0) {
+                } else if (existingAgentIdx >= 0) {
                   // Update existing agent
                   newAgents = [...prev.activeAgents]
-                  newAgents[agentIndex] = {
+                  newAgents[existingAgentIdx] = {
                     agentIndex: message.agentIndex,
                     agentName: message.agentName,
                     featureId: message.featureId,
@@ -153,6 +193,7 @@ export function useProjectWebSocket(projectName: string | null) {
                     state: message.state,
                     thought: message.thought,
                     timestamp: message.timestamp,
+                    logs: agentLogsArray,
                   }
                 } else {
                   // Add new agent
@@ -166,6 +207,7 @@ export function useProjectWebSocket(projectName: string | null) {
                       state: message.state,
                       thought: message.thought,
                       timestamp: message.timestamp,
+                      logs: agentLogsArray,
                     },
                   ]
                 }
@@ -207,6 +249,7 @@ export function useProjectWebSocket(projectName: string | null) {
                 return {
                   ...prev,
                   activeAgents: newAgents,
+                  agentLogs: newAgentLogs,
                   recentActivity: newActivity,
                   celebrationQueue: newCelebrationQueue,
                   celebration: newCelebration,
@@ -295,6 +338,7 @@ export function useProjectWebSocket(projectName: string | null) {
       devLogs: [],
       activeAgents: [],
       recentActivity: [],
+      agentLogs: new Map(),
       celebrationQueue: [],
       celebration: null,
     })
@@ -335,10 +379,26 @@ export function useProjectWebSocket(projectName: string | null) {
     setState(prev => ({ ...prev, devLogs: [] }))
   }, [])
 
+  // Get logs for a specific agent (useful for debugging even after agent completes/fails)
+  const getAgentLogs = useCallback((agentIndex: number): AgentLogEntry[] => {
+    return state.agentLogs.get(agentIndex) || []
+  }, [state.agentLogs])
+
+  // Clear logs for a specific agent
+  const clearAgentLogs = useCallback((agentIndex: number) => {
+    setState(prev => {
+      const newAgentLogs = new Map(prev.agentLogs)
+      newAgentLogs.delete(agentIndex)
+      return { ...prev, agentLogs: newAgentLogs }
+    })
+  }, [])
+
   return {
     ...state,
     clearLogs,
     clearDevLogs,
     clearCelebration,
+    getAgentLogs,
+    clearAgentLogs,
   }
 }

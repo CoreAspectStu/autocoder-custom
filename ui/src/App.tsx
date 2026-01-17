@@ -336,6 +336,7 @@ function App() {
               <AgentMissionControl
                 agents={wsState.activeAgents}
                 recentActivity={wsState.recentActivity}
+                getAgentLogs={wsState.getAgentLogs}
               />
             )}
 

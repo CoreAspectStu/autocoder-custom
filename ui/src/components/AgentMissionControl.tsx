@@ -1,8 +1,8 @@
 import { Rocket, ChevronDown, ChevronUp, Activity } from 'lucide-react'
 import { useState } from 'react'
-import { AgentCard } from './AgentCard'
+import { AgentCard, AgentLogModal } from './AgentCard'
 import { ActivityFeed } from './ActivityFeed'
-import type { ActiveAgent } from '../lib/types'
+import type { ActiveAgent, AgentLogEntry } from '../lib/types'
 
 const ACTIVITY_COLLAPSED_KEY = 'autocoder-activity-collapsed'
 
@@ -15,12 +15,14 @@ interface AgentMissionControlProps {
     featureId: number
   }>
   isExpanded?: boolean
+  getAgentLogs?: (agentIndex: number) => AgentLogEntry[]
 }
 
 export function AgentMissionControl({
   agents,
   recentActivity,
   isExpanded: defaultExpanded = true,
+  getAgentLogs,
 }: AgentMissionControlProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [activityCollapsed, setActivityCollapsed] = useState(() => {
@@ -30,6 +32,8 @@ export function AgentMissionControl({
       return false
     }
   })
+  // State for log modal
+  const [selectedAgentForLogs, setSelectedAgentForLogs] = useState<ActiveAgent | null>(null)
 
   const toggleActivityCollapsed = () => {
     const newValue = !activityCollapsed
@@ -80,7 +84,16 @@ export function AgentMissionControl({
           {/* Agent Cards Row */}
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
             {agents.map((agent) => (
-              <AgentCard key={`agent-${agent.agentIndex}`} agent={agent} />
+              <AgentCard
+                key={`agent-${agent.agentIndex}`}
+                agent={agent}
+                onShowLogs={(agentIndex) => {
+                  const agentToShow = agents.find(a => a.agentIndex === agentIndex)
+                  if (agentToShow) {
+                    setSelectedAgentForLogs(agentToShow)
+                  }
+                }}
+              />
             ))}
           </div>
 
@@ -116,6 +129,15 @@ export function AgentMissionControl({
           )}
         </div>
       </div>
+
+      {/* Log Modal */}
+      {selectedAgentForLogs && getAgentLogs && (
+        <AgentLogModal
+          agent={selectedAgentForLogs}
+          logs={getAgentLogs(selectedAgentForLogs.agentIndex)}
+          onClose={() => setSelectedAgentForLogs(null)}
+        />
+      )}
     </div>
   )
 }

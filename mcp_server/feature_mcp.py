@@ -41,6 +41,7 @@ from api.dependency_resolver import (
     would_create_circular_dependency,
     are_dependencies_satisfied,
     get_blocking_dependencies,
+    compute_scheduling_scores,
     MAX_DEPENDENCIES_PER_FEATURE,
 )
 
@@ -178,7 +179,11 @@ def feature_get_next() -> str:
 
         # Get pending, non-in-progress features
         pending = [f for f in all_features if not f.passes and not f.in_progress]
-        pending.sort(key=lambda f: (f.priority, f.id))
+
+        # Sort by scheduling score (higher = first), then priority, then id
+        all_dicts = [f.to_dict() for f in all_features]
+        scores = compute_scheduling_scores(all_dicts)
+        pending.sort(key=lambda f: (-scores.get(f.id, 0), f.priority, f.id))
 
         if not pending:
             if any(f.in_progress for f in all_features if not f.passes):
@@ -247,7 +252,11 @@ def _feature_claim_next_internal(attempt: int = 0) -> str:
 
             # Get pending, non-in-progress features
             pending = [f for f in all_features if not f.passes and not f.in_progress]
-            pending.sort(key=lambda f: (f.priority, f.id))
+
+            # Sort by scheduling score (higher = first), then priority, then id
+            all_dicts = [f.to_dict() for f in all_features]
+            scores = compute_scheduling_scores(all_dicts)
+            pending.sort(key=lambda f: (-scores.get(f.id, 0), f.priority, f.id))
 
             if not pending:
                 if any(f.in_progress for f in all_features if not f.passes):
@@ -814,6 +823,7 @@ def feature_get_ready(
         passing_ids = {f.id for f in all_features if f.passes}
 
         ready = []
+        all_dicts = [f.to_dict() for f in all_features]
         for f in all_features:
             if f.passes or f.in_progress:
                 continue
@@ -821,8 +831,9 @@ def feature_get_ready(
             if all(dep_id in passing_ids for dep_id in deps):
                 ready.append(f.to_dict())
 
-        # Sort by priority
-        ready.sort(key=lambda f: (f["priority"], f["id"]))
+        # Sort by scheduling score (higher = first), then priority, then id
+        scores = compute_scheduling_scores(all_dicts)
+        ready.sort(key=lambda f: (-scores.get(f["id"], 0), f["priority"], f["id"]))
 
         return json.dumps({
             "features": ready[:limit],

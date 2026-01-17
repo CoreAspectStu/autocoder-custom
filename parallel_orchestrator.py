@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Callable, Awaitable
 
 from api.database import Feature, create_database
-from api.dependency_resolver import are_dependencies_satisfied
+from api.dependency_resolver import are_dependencies_satisfied, compute_scheduling_scores
 
 # Root directory of autocoder (where this script and autonomous_agent_demo.py live)
 AUTOCODER_ROOT = Path(__file__).parent.resolve()
@@ -103,8 +103,10 @@ class ParallelOrchestrator:
                     continue
                 resumable.append(f.to_dict())
 
-            # Sort by priority (highest priority first)
-            resumable.sort(key=lambda f: (f["priority"], f["id"]))
+            # Sort by scheduling score (higher = first), then priority, then id
+            all_dicts = [f.to_dict() for f in session.query(Feature).all()]
+            scores = compute_scheduling_scores(all_dicts)
+            resumable.sort(key=lambda f: (-scores.get(f["id"], 0), f["priority"], f["id"]))
             return resumable
         finally:
             session.close()
@@ -131,18 +133,25 @@ class ParallelOrchestrator:
                 if are_dependencies_satisfied(f.to_dict(), all_dicts):
                     ready.append(f.to_dict())
 
-            # Sort by priority
-            ready.sort(key=lambda f: (f["priority"], f["id"]))
+            # Sort by scheduling score (higher = first), then priority, then id
+            scores = compute_scheduling_scores(all_dicts)
+            ready.sort(key=lambda f: (-scores.get(f["id"], 0), f["priority"], f["id"]))
             return ready
         finally:
             session.close()
 
     def get_all_complete(self) -> bool:
-        """Check if all features are complete."""
+        """Check if all features are complete or permanently failed."""
         session = self.get_session()
         try:
-            pending = session.query(Feature).filter(Feature.passes == False).count()
-            return pending == 0
+            all_features = session.query(Feature).all()
+            for f in all_features:
+                if f.passes:
+                    continue  # Completed successfully
+                if self._failure_counts.get(f.id, 0) >= MAX_FEATURE_RETRIES:
+                    continue  # Permanently failed, count as "done"
+                return False  # Still workable
+            return True
         finally:
             session.close()
 
@@ -289,6 +298,7 @@ class ParallelOrchestrator:
         status = "completed" if return_code == 0 else "failed"
         if self.on_status:
             self.on_status(feature_id, status)
+        # CRITICAL: This print triggers the WebSocket to emit agent_update with state='error' or 'success'
         print(f"Feature #{feature_id} {status}", flush=True)
 
     def stop_feature(self, feature_id: int) -> tuple[bool, str]:

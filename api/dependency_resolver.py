@@ -245,6 +245,81 @@ def _detect_cycles(features: list[dict], feature_map: dict) -> list[list[int]]:
     return cycles
 
 
+def compute_scheduling_scores(features: list[dict]) -> dict[int, float]:
+    """Compute scheduling scores for all features.
+
+    Higher scores mean higher priority for scheduling. The algorithm considers:
+    1. Unblocking potential - Features that unblock more downstream work score higher
+    2. Depth in graph - Features with no dependencies (roots) are "shovel-ready"
+    3. User priority - Existing priority field as tiebreaker
+
+    Score formula: (1000 * unblock) + (100 * depth_score) + (10 * priority_factor)
+
+    Args:
+        features: List of feature dicts with id, priority, dependencies fields
+
+    Returns:
+        Dict mapping feature_id -> score (higher = schedule first)
+    """
+    if not features:
+        return {}
+
+    # Build adjacency lists
+    children: dict[int, list[int]] = {f["id"]: [] for f in features}  # who depends on me
+    parents: dict[int, list[int]] = {f["id"]: [] for f in features}   # who I depend on
+
+    for f in features:
+        for dep_id in (f.get("dependencies") or []):
+            if dep_id in children:  # Only valid deps
+                children[dep_id].append(f["id"])
+                parents[f["id"]].append(dep_id)
+
+    # Calculate depths via BFS from roots
+    depths: dict[int, int] = {}
+    roots = [f["id"] for f in features if not parents[f["id"]]]
+    queue = [(root, 0) for root in roots]
+    while queue:
+        node_id, depth = queue.pop(0)
+        if node_id not in depths or depth > depths[node_id]:
+            depths[node_id] = depth
+        for child_id in children[node_id]:
+            queue.append((child_id, depth + 1))
+
+    # Handle orphaned nodes (shouldn't happen but be safe)
+    for f in features:
+        if f["id"] not in depths:
+            depths[f["id"]] = 0
+
+    # Calculate transitive downstream counts (reverse topo order)
+    downstream: dict[int, int] = {f["id"]: 0 for f in features}
+    # Process in reverse depth order (leaves first)
+    for fid in sorted(depths.keys(), key=lambda x: -depths[x]):
+        for parent_id in parents[fid]:
+            downstream[parent_id] += 1 + downstream[fid]
+
+    # Normalize and compute scores
+    max_depth = max(depths.values()) if depths else 0
+    max_downstream = max(downstream.values()) if downstream else 0
+
+    scores: dict[int, float] = {}
+    for f in features:
+        fid = f["id"]
+
+        # Unblocking score: 0-1, higher = unblocks more
+        unblock = downstream[fid] / max_downstream if max_downstream > 0 else 0
+
+        # Depth score: 0-1, higher = closer to root (no deps)
+        depth_score = 1 - (depths[fid] / max_depth) if max_depth > 0 else 1
+
+        # Priority factor: 0-1, lower priority number = higher factor
+        priority = f.get("priority", 999)
+        priority_factor = (10 - min(priority, 10)) / 10
+
+        scores[fid] = (1000 * unblock) + (100 * depth_score) + (10 * priority_factor)
+
+    return scores
+
+
 def get_ready_features(features: list[dict], limit: int = 10) -> list[dict]:
     """Get features that are ready to be worked on.
 
@@ -270,8 +345,9 @@ def get_ready_features(features: list[dict], limit: int = 10) -> list[dict]:
         if all(dep_id in passing_ids for dep_id in deps):
             ready.append(f)
 
-    # Sort by priority
-    ready.sort(key=lambda f: (f.get("priority", 999), f["id"]))
+    # Sort by scheduling score (higher = first), then priority, then id
+    scores = compute_scheduling_scores(features)
+    ready.sort(key=lambda f: (-scores.get(f["id"], 0), f.get("priority", 999), f["id"]))
 
     return ready[:limit]
 

@@ -177,6 +177,13 @@ export type AgentMascot = typeof AGENT_MASCOTS[number]
 // Agent state for Mission Control
 export type AgentState = 'idle' | 'thinking' | 'working' | 'testing' | 'success' | 'error' | 'struggling'
 
+// Individual log entry for an agent
+export interface AgentLogEntry {
+  line: string
+  timestamp: string
+  type: 'output' | 'state_change' | 'error'
+}
+
 // Agent update from backend
 export interface ActiveAgent {
   agentIndex: number
@@ -186,6 +193,7 @@ export interface ActiveAgent {
   state: AgentState
   thought?: string
   timestamp: string
+  logs?: AgentLogEntry[]  // Per-agent log history
 }
 
 // WebSocket message types

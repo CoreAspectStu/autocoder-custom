@@ -203,8 +203,14 @@ async def run_autonomous_agent(
                 prompt = get_coding_prompt(project_dir)
 
         # Run session with async context manager
-        async with client:
-            status, response = await run_agent_session(client, prompt, project_dir)
+        # Wrap in try/except to handle MCP server startup failures gracefully
+        try:
+            async with client:
+                status, response = await run_agent_session(client, prompt, project_dir)
+        except Exception as e:
+            print(f"Client/MCP server error: {e}")
+            # Don't crash - return error status so the loop can retry
+            status, response = "error", str(e)
 
         # Handle status
         if status == "continue":
