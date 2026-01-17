@@ -37,14 +37,12 @@ from sqlalchemy.sql.expression import func
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.database import Feature, create_database
-from api.migration import migrate_json_to_sqlite
 from api.dependency_resolver import (
-    would_create_circular_dependency,
-    are_dependencies_satisfied,
-    get_blocking_dependencies,
-    compute_scheduling_scores,
     MAX_DEPENDENCIES_PER_FEATURE,
+    compute_scheduling_scores,
+    would_create_circular_dependency,
 )
+from api.migration import migrate_json_to_sqlite
 
 # Configuration from environment
 PROJECT_DIR = Path(os.environ.get("PROJECT_DIR", ".")).resolve()

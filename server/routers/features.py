@@ -575,7 +575,7 @@ def _get_dependency_resolver():
     root = Path(__file__).parent.parent.parent
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
-    from api.dependency_resolver import would_create_circular_dependency, MAX_DEPENDENCIES_PER_FEATURE
+    from api.dependency_resolver import MAX_DEPENDENCIES_PER_FEATURE, would_create_circular_dependency
     return would_create_circular_dependency, MAX_DEPENDENCIES_PER_FEATURE
 
 

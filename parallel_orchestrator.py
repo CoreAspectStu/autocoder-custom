@@ -15,9 +15,8 @@ import os
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
-from typing import Callable, Awaitable
+from typing import Callable
 
 import psutil
 
@@ -499,7 +498,9 @@ async def run_parallel_orchestrator(
 def main():
     """Main entry point for parallel orchestration."""
     import argparse
+
     from dotenv import load_dotenv
+
     from registry import DEFAULT_MODEL, get_project_path
 
     load_dotenv()
