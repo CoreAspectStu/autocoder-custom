@@ -131,6 +131,9 @@ class SchedulerService:
             start_dt = datetime.strptime(schedule.start_time, "%H:%M")
             end_dt = start_dt + timedelta(minutes=schedule.duration_minutes)
 
+            # Detect midnight crossing
+            crosses_midnight = end_dt.date() != start_dt.date()
+
             # Handle midnight wraparound for end time
             end_hour = end_dt.hour
             end_minute = end_dt.minute
@@ -148,8 +151,15 @@ class SchedulerService:
             )
 
             # Stop job - CRITICAL: timezone=timezone.utc is required for correct UTC scheduling
+            # If schedule crosses midnight, shift days forward so stop occurs on next day
             stop_job_id = f"schedule_{schedule.id}_stop"
-            stop_trigger = CronTrigger(hour=end_hour, minute=end_minute, day_of_week=days, timezone=timezone.utc)
+            if crosses_midnight:
+                shifted_bitfield = self._shift_days_forward(schedule.days_of_week)
+                stop_days = self._bitfield_to_cron_days(shifted_bitfield)
+            else:
+                stop_days = days
+
+            stop_trigger = CronTrigger(hour=end_hour, minute=end_minute, day_of_week=stop_days, timezone=timezone.utc)
             self.scheduler.add_job(
                 self._handle_scheduled_stop,
                 stop_trigger,
@@ -304,27 +314,34 @@ class SchedulerService:
 
     def _is_within_window(self, schedule, now: datetime) -> bool:
         """Check if current time is within schedule window."""
-        # Check if active on this day
-        if not schedule.is_active_on_day(now.weekday()):
-            return False
-
-        # Parse schedule times
+        # Parse schedule times (keep timezone awareness from now)
         start_hour, start_minute = map(int, schedule.start_time.split(":"))
         start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
 
         # Calculate end time
         end_time = start_time + timedelta(minutes=schedule.duration_minutes)
 
-        current_time = now.replace(tzinfo=None) if now.tzinfo else now
-        start_time = start_time.replace(tzinfo=None)
-        end_time = end_time.replace(tzinfo=None)
+        # Detect midnight crossing
+        crosses_midnight = end_time < start_time or end_time.date() != start_time.date()
 
-        # Handle midnight wraparound
-        if end_time.day > start_time.day:
-            # Schedule crosses midnight
-            return current_time >= start_time or current_time < end_time.replace(day=start_time.day)
+        if crosses_midnight:
+            # Check today's window (start_time to midnight) OR yesterday's window (midnight to end_time)
+            # Today: if we're after start_time on the current day
+            if schedule.is_active_on_day(now.weekday()) and now >= start_time:
+                return True
+
+            # Yesterday: check if we're before end_time and yesterday was active
+            yesterday = (now.weekday() - 1) % 7
+            if schedule.is_active_on_day(yesterday):
+                yesterday_start = start_time - timedelta(days=1)
+                yesterday_end = end_time - timedelta(days=1)
+                if yesterday_start <= now < yesterday_end:
+                    return True
+
+            return False
         else:
-            return start_time <= current_time < end_time
+            # Normal case: doesn't cross midnight
+            return schedule.is_active_on_day(now.weekday()) and start_time <= now < end_time
 
     async def _start_agent(self, project_name: str, project_dir: Path, schedule):
         """Start the agent for a project."""
@@ -562,6 +579,27 @@ class SchedulerService:
 
         except Exception as e:
             logger.error(f"Error checking startup for {project_name}: {e}")
+
+    @staticmethod
+    def _shift_days_forward(bitfield: int) -> int:
+        """
+        Shift the 7-bit day mask forward by one day for midnight-crossing schedules.
+
+        Examples:
+            Monday (1) -> Tuesday (2)
+            Sunday (64) -> Monday (1)
+            Mon+Tue (3) -> Tue+Wed (6)
+        """
+        shifted = 0
+        # Shift each day forward, wrapping Sunday to Monday
+        if bitfield & 1:    shifted |= 2   # Mon -> Tue
+        if bitfield & 2:    shifted |= 4   # Tue -> Wed
+        if bitfield & 4:    shifted |= 8   # Wed -> Thu
+        if bitfield & 8:    shifted |= 16  # Thu -> Fri
+        if bitfield & 16:   shifted |= 32  # Fri -> Sat
+        if bitfield & 32:   shifted |= 64  # Sat -> Sun
+        if bitfield & 64:   shifted |= 1   # Sun -> Mon
+        return shifted
 
     @staticmethod
     def _bitfield_to_cron_days(bitfield: int) -> str:

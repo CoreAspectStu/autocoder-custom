@@ -102,6 +102,12 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
         return
       }
 
+      // Validate duration
+      if (newSchedule.duration_minutes < 1 || newSchedule.duration_minutes > 1440) {
+        setError('Duration must be between 1 and 1440 minutes')
+        return
+      }
+
       // Convert local time to UTC
       const scheduleToCreate = {
         ...newSchedule,
@@ -309,12 +315,14 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                 min="1"
                 max="1440"
                 value={newSchedule.duration_minutes}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const parsed = parseInt(e.target.value, 10)
+                  const value = isNaN(parsed) ? 1 : Math.max(1, Math.min(1440, parsed))
                   setNewSchedule((prev) => ({
                     ...prev,
-                    duration_minutes: parseInt(e.target.value) || 0,
+                    duration_minutes: value,
                   }))
-                }
+                }}
                 className="neo-input w-full"
               />
               <div className="text-xs text-gray-600 mt-1">

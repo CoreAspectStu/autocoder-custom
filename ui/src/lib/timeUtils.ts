@@ -73,7 +73,7 @@ export function formatNextRun(isoString: string): string {
   }
 
   // Further out - show day and time
-  return date.toLocaleDateString([], {
+  return date.toLocaleString([], {
     weekday: 'short',
     hour: 'numeric',
     minute: '2-digit'

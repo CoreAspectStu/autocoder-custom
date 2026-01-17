@@ -306,19 +306,11 @@ async def update_schedule(
 
         was_enabled = schedule.enabled
 
-        # Update fields
-        if data.start_time is not None:
-            schedule.start_time = data.start_time
-        if data.duration_minutes is not None:
-            schedule.duration_minutes = data.duration_minutes
-        if data.days_of_week is not None:
-            schedule.days_of_week = data.days_of_week
-        if data.enabled is not None:
-            schedule.enabled = data.enabled
-        if data.yolo_mode is not None:
-            schedule.yolo_mode = data.yolo_mode
-        if data.model is not None:
-            schedule.model = data.model
+        # Update only fields that were explicitly provided
+        # This allows sending {"model": null} to clear it vs omitting the field entirely
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(schedule, field, value)
 
         db.commit()
         db.refresh(schedule)
