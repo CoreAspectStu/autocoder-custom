@@ -398,6 +398,7 @@ function App() {
                   <DependencyGraph
                     graphData={graphData}
                     onNodeClick={handleGraphNodeClick}
+                    activeAgents={wsState.activeAgents}
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center">

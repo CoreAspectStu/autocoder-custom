@@ -16,7 +16,8 @@ import {
 } from '@xyflow/react'
 import dagre from 'dagre'
 import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
-import type { DependencyGraph as DependencyGraphData, GraphNode } from '../lib/types'
+import type { DependencyGraph as DependencyGraphData, GraphNode, ActiveAgent, AgentMascot, AgentState } from '../lib/types'
+import { AgentAvatar } from './AgentAvatar'
 import '@xyflow/react/dist/style.css'
 
 // Node dimensions
@@ -26,6 +27,13 @@ const NODE_HEIGHT = 80
 interface DependencyGraphProps {
   graphData: DependencyGraphData
   onNodeClick?: (nodeId: number) => void
+  activeAgents?: ActiveAgent[]
+}
+
+// Agent info to display on a node
+interface NodeAgentInfo {
+  name: AgentMascot
+  state: AgentState
 }
 
 // Error boundary to catch and recover from ReactFlow rendering errors
@@ -85,7 +93,7 @@ class GraphErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
 }
 
 // Custom node component
-function FeatureNode({ data }: { data: GraphNode & { onClick?: () => void } }) {
+function FeatureNode({ data }: { data: GraphNode & { onClick?: () => void; agent?: NodeAgentInfo } }) {
   const statusColors = {
     pending: 'bg-neo-pending border-neo-border',
     in_progress: 'bg-neo-progress border-neo-border',
@@ -112,17 +120,31 @@ function FeatureNode({ data }: { data: GraphNode & { onClick?: () => void } }) {
       <div
         className={`
           px-4 py-3 rounded-lg border-2 cursor-pointer
-          transition-all hover:shadow-neo-md
+          transition-all hover:shadow-neo-md relative
           ${statusColors[data.status]}
         `}
         onClick={data.onClick}
         style={{ minWidth: NODE_WIDTH - 20, maxWidth: NODE_WIDTH }}
       >
+        {/* Agent avatar badge - positioned at top right */}
+        {data.agent && (
+          <div className="absolute -top-3 -right-3 z-10">
+            <div className="rounded-full border-2 border-neo-border bg-white shadow-neo-sm">
+              <AgentAvatar name={data.agent.name} state={data.agent.state} size="sm" />
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-1">
           <StatusIcon />
           <span className="text-xs font-mono text-neo-text-on-bright/70">
             #{data.priority}
           </span>
+          {/* Show agent name inline if present */}
+          {data.agent && (
+            <span className="text-xs font-bold text-neo-text-on-bright ml-auto">
+              {data.agent.name}
+            </span>
+          )}
         </div>
         <div className="font-bold text-sm text-neo-text-on-bright truncate" title={data.name}>
           {data.name}
@@ -184,7 +206,7 @@ function getLayoutedElements(
   return { nodes: layoutedNodes, edges }
 }
 
-function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) {
+function DependencyGraphInner({ graphData, onNodeClick, activeAgents = [] }: DependencyGraphProps) {
   const [direction, setDirection] = useState<'TB' | 'LR'>('LR')
 
   // Use ref for callback to avoid triggering re-renders when callback identity changes
@@ -198,6 +220,15 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
     onNodeClickRef.current?.(nodeId)
   }, [])
 
+  // Create a map of featureId to agent info for quick lookup
+  const agentByFeatureId = useMemo(() => {
+    const map = new Map<number, NodeAgentInfo>()
+    for (const agent of activeAgents) {
+      map.set(agent.featureId, { name: agent.agentName, state: agent.state })
+    }
+    return map
+  }, [activeAgents])
+
   // Convert graph data to React Flow format
   // Only recalculate when graphData or direction changes (not when onNodeClick changes)
   const initialElements = useMemo(() => {
@@ -208,6 +239,7 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
       data: {
         ...node,
         onClick: () => handleNodeClick(node.id),
+        agent: agentByFeatureId.get(node.id),
       },
     }))
 
@@ -225,7 +257,7 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
     }))
 
     return getLayoutedElements(nodes, edges, direction)
-  }, [graphData, direction, handleNodeClick])
+  }, [graphData, direction, handleNodeClick, agentByFeatureId])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialElements.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialElements.edges)
@@ -237,9 +269,16 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
 
   useEffect(() => {
     // Create a simple hash of the graph data to detect actual changes
+    // Include agent assignments so nodes update when agents change
+    const agentInfo = Array.from(agentByFeatureId.entries()).map(([id, agent]) => ({
+      featureId: id,
+      agentName: agent.name,
+      agentState: agent.state,
+    }))
     const graphHash = JSON.stringify({
       nodes: graphData.nodes.map(n => ({ id: n.id, status: n.status })),
       edges: graphData.edges,
+      agents: agentInfo,
     })
 
     // Only update if graph data or direction actually changed
@@ -255,7 +294,7 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
       setNodes(layoutedNodes)
       setEdges(layoutedEdges)
     }
-  }, [graphData, direction, setNodes, setEdges, initialElements])
+  }, [graphData, direction, setNodes, setEdges, initialElements, agentByFeatureId])
 
   const onLayout = useCallback(
     (newDirection: 'TB' | 'LR') => {
@@ -374,7 +413,7 @@ function DependencyGraphInner({ graphData, onNodeClick }: DependencyGraphProps) 
 }
 
 // Wrapper component with error boundary for stability
-export function DependencyGraph({ graphData, onNodeClick }: DependencyGraphProps) {
+export function DependencyGraph({ graphData, onNodeClick, activeAgents }: DependencyGraphProps) {
   // Use a key based on graph data length to force remount on structural changes
   // This helps recover from corrupted ReactFlow state
   const [resetKey, setResetKey] = useState(0)
@@ -385,7 +424,7 @@ export function DependencyGraph({ graphData, onNodeClick }: DependencyGraphProps
 
   return (
     <GraphErrorBoundary key={resetKey} onReset={handleReset}>
-      <DependencyGraphInner graphData={graphData} onNodeClick={onNodeClick} />
+      <DependencyGraphInner graphData={graphData} onNodeClick={onNodeClick} activeAgents={activeAgents} />
     </GraphErrorBoundary>
   )
 }
