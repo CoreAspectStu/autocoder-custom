@@ -25,12 +25,14 @@
       <styling>Tailwind CSS</styling>
       <state_management>React hooks and context</state_management>
       <routing>React Router for navigation</routing>
-      <port>3000</port>
+      <port>4000</port>
+      <note>Use ports 4000-4099 range for AutoCoder dev servers</note>
     </frontend>
     <backend>
       <runtime>Node.js with Express</runtime>
       <database>SQLite with better-sqlite3</database>
-      <port>3001</port>
+      <port>4001</port>
+      <note>Use ports 4000-4099 range for AutoCoder dev servers</note>
     </backend>
     <communication>
       <api>RESTful endpoints</api>

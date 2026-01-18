@@ -14,6 +14,7 @@ from .filesystem import router as filesystem_router
 from .projects import router as projects_router
 from .settings import router as settings_router
 from .spec_creation import router as spec_creation_router
+from .status import router as status_router
 from .terminal import router as terminal_router
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     "filesystem_router",
     "assistant_chat_router",
     "settings_router",
+    "status_router",
     "terminal_router",
 ]

@@ -31,6 +31,7 @@ from .routers import (
     projects_router,
     settings_router,
     spec_creation_router,
+    status_router,
     terminal_router,
 )
 from .schemas import SetupStatus
@@ -117,6 +118,7 @@ app.include_router(filesystem_router)
 app.include_router(assistant_chat_router)
 app.include_router(settings_router)
 app.include_router(terminal_router)
+app.include_router(status_router)
 
 
 # ============================================================================
