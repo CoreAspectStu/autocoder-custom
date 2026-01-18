@@ -237,14 +237,22 @@ chmod +x remote-start.sh
 
 **File:** `server/routers/status.py`
 
-Provides `/status` endpoint showing all running dev servers.
+Provides `/status` endpoint showing all registered projects and their dev server status.
+
+**Key features:**
+- Detects configured port from `vite.config.js`, `vite.config.ts`, or `package.json`
+- Checks if the port is actually listening (detects ANY running server, not just AutoCoder-started ones)
+- Uses JavaScript fetch for updates (no page flashing)
+- Only updates DOM when data changes
 
 ```python
 """
-Status Router - Shows all running dev servers across projects.
+Status Router - Shows all registered projects and detects running dev servers.
 """
 
+import json
 import re
+import socket
 import sys
 from pathlib import Path
 
@@ -256,89 +264,91 @@ if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
 from registry import list_registered_projects
-from ..services.dev_server_manager import get_devserver_manager
 
 router = APIRouter(tags=["status"])
 
 
+def get_project_port(project_path: Path) -> int | None:
+    """Get configured dev server port from project config files."""
+    # Check vite.config.js / vite.config.ts
+    for config_file in ["vite.config.js", "vite.config.ts"]:
+        vite_config = project_path / config_file
+        if vite_config.exists():
+            try:
+                content = vite_config.read_text()
+                match = re.search(r'port:\s*(\d+)', content)
+                if match:
+                    return int(match.group(1))
+            except Exception:
+                pass
+
+    # Check package.json dev script for -p or --port
+    package_json = project_path / "package.json"
+    if package_json.exists():
+        try:
+            data = json.loads(package_json.read_text())
+            dev_script = data.get("scripts", {}).get("dev", "")
+            match = re.search(r'(?:-p\s+|--port[=\s])(\d+)', dev_script)
+            if match:
+                return int(match.group(1))
+        except Exception:
+            pass
+
+    # Default ports by framework
+    if (project_path / "next.config.js").exists():
+        return 3000
+    if (project_path / "vite.config.js").exists():
+        return 5173
+
+    return None
+
+
+def is_port_listening(port: int) -> bool:
+    """Check if something is listening on the given port."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(('127.0.0.1', port)) == 0
+    except Exception:
+        return False
+
+
 @router.get("/api/status/devservers")
 async def list_all_devservers():
-    """JSON API: List all dev servers."""
+    """List all registered projects with their actual running status."""
     projects = list_registered_projects()
     servers = []
+
     for name, info in projects.items():
         project_path = Path(info.get("path", ""))
         if not project_path.exists():
             continue
-        manager = get_devserver_manager(name, project_path)
-        await manager.healthcheck()
-        if manager.status != "stopped":
-            servers.append({
-                "project": name,
-                "status": manager.status,
-                "url": manager.detected_url,
-                "pid": manager.pid,
-            })
+
+        port = get_project_port(project_path)
+        is_running = port is not None and is_port_listening(port)
+
+        servers.append({
+            "project": name,
+            "status": "running" if is_running else "stopped",
+            "port": port,
+            "url": f"http://localhost:{port}/" if is_running and port else None,
+        })
+
     return {"servers": servers, "count": len(servers)}
 
 
 @router.get("/status", response_class=HTMLResponse)
 async def status_page():
-    """HTML status page showing all dev servers."""
-    projects = list_registered_projects()
-    rows = []
-
-    for name, info in projects.items():
-        project_path = Path(info.get("path", ""))
-        if not project_path.exists():
-            continue
-        manager = get_devserver_manager(name, project_path)
-        await manager.healthcheck()
-
-        status = manager.status
-        url = manager.detected_url or "-"
-        port = "-"
-        if manager.detected_url:
-            match = re.search(r':(\d+)', manager.detected_url)
-            if match:
-                port = match.group(1)
-
-        if status == "running":
-            badge = '<span style="color:#10b981;font-weight:bold;">● Running</span>'
-        elif status == "crashed":
-            badge = '<span style="color:#ef4444;font-weight:bold;">● Crashed</span>'
-        else:
-            badge = '<span style="color:#6b7280;">○ Stopped</span>'
-
-        url_cell = f'<a href="{url}" target="_blank">{url}</a>' if url != "-" else "-"
-        rows.append(f"<tr><td>{name}</td><td>{badge}</td><td>{port}</td><td>{url_cell}</td></tr>")
-
-    return HTMLResponse(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>AutoCoder - Dev Servers</title>
-        <meta http-equiv="refresh" content="5">
-        <style>
-            body {{ font-family: system-ui; background: #f9fafb; padding: 20px; }}
-            table {{ width: 100%; max-width: 800px; margin: 0 auto; background: white;
-                     border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }}
-            th {{ background: #f9fafb; font-weight: 600; }}
-            h1 {{ text-align: center; }}
-        </style>
-    </head>
-    <body>
-        <h1>🚀 Dev Servers</h1>
-        <table>
-            <tr><th>Project</th><th>Status</th><th>Port</th><th>URL</th></tr>
-            {"".join(rows) or "<tr><td colspan='4'>No projects</td></tr>"}
-        </table>
-        <p style="text-align:center;color:#9ca3af;font-size:12px;">Auto-refreshes every 5 seconds</p>
-    </body>
-    </html>
-    """)
+    """HTML status page with JavaScript auto-refresh (no flashing)."""
+    # Initial render + JavaScript for updates
+    # See full implementation in server/routers/status.py
+    ...
 ```
+
+The full implementation includes:
+- CSS styling for the status table
+- JavaScript that fetches `/api/status/devservers` every 5 seconds
+- DOM diffing to only update when data changes (prevents flashing)
 
 ## Files Modified
 
