@@ -2,6 +2,29 @@
 
 This directory tracks all custom modifications made to the vanilla AutoCoder project for remote server deployment.
 
+## 🚀 TL;DR - Quick Start
+
+**What is this?** Remote server infrastructure for running AutoCoder on headless servers via SSH.
+
+**Quick commands:**
+```bash
+./remote-start.sh ui              # Start Web UI (port 8888)
+./remote-start.sh status          # Check what's running
+./remote-start.sh doctor          # Check system health
+./remote-start.sh --help          # Show all commands
+```
+
+**Access:** http://localhost:8888 (via SSH tunnel: `ssh -L 8888:localhost:8888 stu@server`)
+
+**Documentation:**
+- **Quick reference:** `custom/docs/remote-quickstart.md`
+- **User guide:** `custom/docs/remote-setup.md`
+- **Full inventory:** Keep reading this file
+
+**Slash commands:** `/autocoder` to start UI, `/autocoder-help` for reference
+
+---
+
 ## 📁 Directory Structure
 
 ```

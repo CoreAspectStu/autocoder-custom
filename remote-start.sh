@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 TMUX_SESSION_PREFIX="autocoder"
-UI_SESSION="${TMUX_SESSION_PREFIX}-ui"
+UI_SESSION_BASE="${TMUX_SESSION_PREFIX}-ui"
 AGENT_SESSION="${TMUX_SESSION_PREFIX}-agent"
 DISPLAY_NUM=99
 XVFB_PID_FILE="/tmp/autocoder-xvfb.pid"
@@ -254,6 +254,115 @@ cmd_attach() {
     cmd_logs "$@"
 }
 
+cmd_doctor() {
+    echo ""
+    echo -e "${CYAN}AutoCoder System Health Check${NC}"
+    echo "=============================="
+    echo ""
+
+    local all_good=true
+
+    # Check dependencies
+    echo -e "${CYAN}[1/7] Checking dependencies...${NC}"
+    local missing=()
+    for cmd in tmux xvfb-run python3 Xvfb; do
+        if command -v "$cmd" &>/dev/null; then
+            echo "  ✓ $cmd found"
+        else
+            echo -e "  ${RED}✗ $cmd missing${NC}"
+            missing+=("$cmd")
+            all_good=false
+        fi
+    done
+
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo -e "${YELLOW}  Install with: sudo apt-get install tmux xvfb python3${NC}"
+    fi
+    echo ""
+
+    # Check Xvfb status
+    echo -e "${CYAN}[2/7] Checking Xvfb...${NC}"
+    if [ -f "$XVFB_PID_FILE" ] && kill -0 "$(cat "$XVFB_PID_FILE")" 2>/dev/null; then
+        echo "  ✓ Xvfb running (PID: $(cat "$XVFB_PID_FILE"), DISPLAY=:$DISPLAY_NUM)"
+    else
+        echo -e "  ${YELLOW}⚠ Xvfb not running (will start automatically)${NC}"
+    fi
+    echo ""
+
+    # Check tmux sessions
+    echo -e "${CYAN}[3/7] Checking tmux sessions...${NC}"
+    local session_count=$(tmux list-sessions 2>/dev/null | grep -c "^${TMUX_SESSION_PREFIX}" || echo 0)
+    if [ "$session_count" -gt 0 ]; then
+        echo "  ✓ Found $session_count active session(s)"
+        tmux list-sessions 2>/dev/null | grep "^${TMUX_SESSION_PREFIX}" | sed 's/^/    /'
+    else
+        echo "  ℹ No active sessions"
+    fi
+    echo ""
+
+    # Check Python environment
+    echo -e "${CYAN}[4/7] Checking Python environment...${NC}"
+    if [ -d "$SCRIPT_DIR/venv" ]; then
+        echo "  ✓ Virtual environment found"
+        if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
+            local py_version=$("$SCRIPT_DIR/venv/bin/python" --version 2>&1)
+            echo "    $py_version"
+        fi
+    else
+        echo -e "  ${YELLOW}⚠ Virtual environment not found${NC}"
+        echo "    Run: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+        all_good=false
+    fi
+    echo ""
+
+    # Check port availability
+    echo -e "${CYAN}[5/7] Checking port availability...${NC}"
+    if lsof -i:8888 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "  ✓ Port 8888 in use (UI likely running)"
+        local pid=$(lsof -i:8888 -sTCP:LISTEN -t 2>/dev/null | head -1)
+        echo "    PID: $pid"
+    else
+        echo "  ℹ Port 8888 available"
+    fi
+    echo ""
+
+    # Check disk space
+    echo -e "${CYAN}[6/7] Checking disk space...${NC}"
+    local disk_usage=$(df "$SCRIPT_DIR" | tail -1 | awk '{print $5}' | sed 's/%//')
+    if [ "$disk_usage" -lt 80 ]; then
+        echo "  ✓ Disk usage: ${disk_usage}%"
+    elif [ "$disk_usage" -lt 90 ]; then
+        echo -e "  ${YELLOW}⚠ Disk usage: ${disk_usage}%${NC}"
+    else
+        echo -e "  ${RED}✗ Disk usage: ${disk_usage}% (critically low)${NC}"
+        all_good=false
+    fi
+    echo ""
+
+    # Check log files
+    echo -e "${CYAN}[7/7] Checking log files...${NC}"
+    if [ -f "$SCRIPT_DIR/autocoder-ui.log" ]; then
+        local log_size=$(du -h "$SCRIPT_DIR/autocoder-ui.log" | cut -f1)
+        echo "  ✓ autocoder-ui.log ($log_size)"
+        local error_count=$(grep -c -i "error" "$SCRIPT_DIR/autocoder-ui.log" 2>/dev/null || echo "0")
+        if [ "$error_count" -gt 0 ] 2>/dev/null; then
+            echo -e "    ${YELLOW}⚠ Found $error_count error(s) in log${NC}"
+        fi
+    else
+        echo "  ℹ No log files yet"
+    fi
+    echo ""
+
+    # Summary
+    echo "=============================="
+    if [ "$all_good" = true ]; then
+        echo -e "${GREEN}✓ System healthy - ready to start${NC}"
+    else
+        echo -e "${YELLOW}⚠ Issues detected - review above${NC}"
+    fi
+    echo ""
+}
+
 cmd_help() {
     echo ""
     echo -e "${CYAN}AutoCoder Remote Launcher${NC}"
@@ -263,6 +372,7 @@ cmd_help() {
     echo "  ui              Start the Web UI (port 8888)"
     echo "  agent <project> Start agent for a specific project"
     echo "  status          Show running sessions"
+    echo "  doctor          Check system health and dependencies"
     echo "  stop            Stop all AutoCoder sessions"
     echo "  logs <name>     View logs (use 'ui' or project name)"
     echo "  attach <name>   Attach to session (Ctrl+B, D to detach)"
@@ -295,6 +405,9 @@ case "${1:-help}" in
         ;;
     status)
         cmd_status
+        ;;
+    doctor)
+        cmd_doctor
         ;;
     stop)
         cmd_stop

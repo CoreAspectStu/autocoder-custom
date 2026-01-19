@@ -77,7 +77,25 @@ def get_project_port(project_path: Path) -> int | None:
 
 
 def is_port_listening(port: int) -> bool:
-    """Check if something is listening on the given port."""
+    """
+    Check if something is listening on the given port.
+    Uses lsof for more reliable detection, falls back to socket check.
+    """
+    # Method 1: Use lsof (more reliable, shows actual process)
+    try:
+        result = subprocess.run(
+            ['lsof', '-i', f':{port}', '-sTCP:LISTEN', '-t'],
+            capture_output=True,
+            text=True,
+            timeout=1
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return True
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        # lsof not available or timed out, fall back to socket method
+        pass
+
+    # Method 2: Socket connection check (fallback)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
@@ -85,6 +103,31 @@ def is_port_listening(port: int) -> bool:
             return result == 0
     except Exception:
         return False
+
+
+def get_port_process_info(port: int) -> dict | None:
+    """
+    Get detailed information about the process listening on a port.
+    Returns dict with pid, command, or None if no process found.
+    """
+    try:
+        result = subprocess.run(
+            ['lsof', '-i', f':{port}', '-sTCP:LISTEN', '-Fn', '-Fc'],
+            capture_output=True,
+            text=True,
+            timeout=1
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().split('\n')
+            info = {}
+            for line in lines:
+                if line.startswith('p'):
+                    info['pid'] = line[1:]
+                elif line.startswith('c'):
+                    info['command'] = line[1:]
+            return info if info else None
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return None
 
 
 @router.get("/api/status/devservers")
