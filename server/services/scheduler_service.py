@@ -592,13 +592,20 @@ class SchedulerService:
         """
         shifted = 0
         # Shift each day forward, wrapping Sunday to Monday
-        if bitfield & 1:    shifted |= 2   # Mon -> Tue
-        if bitfield & 2:    shifted |= 4   # Tue -> Wed
-        if bitfield & 4:    shifted |= 8   # Wed -> Thu
-        if bitfield & 8:    shifted |= 16  # Thu -> Fri
-        if bitfield & 16:   shifted |= 32  # Fri -> Sat
-        if bitfield & 32:   shifted |= 64  # Sat -> Sun
-        if bitfield & 64:   shifted |= 1   # Sun -> Mon
+        if bitfield & 1:
+            shifted |= 2   # Mon -> Tue
+        if bitfield & 2:
+            shifted |= 4   # Tue -> Wed
+        if bitfield & 4:
+            shifted |= 8   # Wed -> Thu
+        if bitfield & 8:
+            shifted |= 16  # Thu -> Fri
+        if bitfield & 16:
+            shifted |= 32  # Fri -> Sat
+        if bitfield & 32:
+            shifted |= 64  # Sat -> Sun
+        if bitfield & 64:
+            shifted |= 1   # Sun -> Mon
         return shifted
 
     @staticmethod
