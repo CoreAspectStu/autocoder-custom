@@ -186,8 +186,8 @@ async def run_autonomous_agent(
         iteration += 1
 
         # Check if all features are already complete (before starting a new session)
-        # Skip this check on first iteration if it's a fresh start (initializer needs to run)
-        if not is_first_run and iteration == 1:
+        # Skip this check if running as initializer (needs to create features first)
+        if not is_initializer and iteration == 1:
             passing, in_progress, total = count_passing_tests(project_dir)
             if total > 0 and passing == total:
                 print("\n" + "=" * 70)
