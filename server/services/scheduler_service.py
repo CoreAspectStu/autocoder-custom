@@ -285,6 +285,20 @@ class SchedulerService:
                 ).delete()
                 db.commit()
 
+                # Check for active manual-start overrides that prevent auto-stop
+                active_start_override = db.query(ScheduleOverride).filter(
+                    ScheduleOverride.schedule_id == schedule_id,
+                    ScheduleOverride.override_type == "start",
+                    ScheduleOverride.expires_at > now,
+                ).first()
+
+                if active_start_override:
+                    logger.info(
+                        f"Skipping scheduled stop for {project_name}: "
+                        f"active manual-start override (expires {active_start_override.expires_at})"
+                    )
+                    return
+
                 # Stop agent
                 await self._stop_agent(project_name, project_dir)
 
