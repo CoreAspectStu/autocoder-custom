@@ -86,7 +86,7 @@ export function AgentControl({ projectName, status }: AgentControlProps) {
         )}
 
         {!nextRun?.is_currently_running && nextRun?.next_start && (
-          <div className="flex items-center gap-2 text-sm text-white font-bold">
+          <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-white font-bold">
             <Clock size={16} className="flex-shrink-0" />
             <span>Next: {formatNextRun(nextRun.next_start)}</span>
           </div>

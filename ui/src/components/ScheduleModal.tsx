@@ -171,7 +171,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Clock size={24} className="text-[var(--color-neo-progress)]" />
-            <h2 className="text-xl font-bold text-gray-900">Agent Schedules</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Agent Schedules</h2>
           </div>
           <button
             ref={firstFocusableRef}
@@ -185,14 +185,14 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
 
         {/* Error display */}
         {error && (
-          <div className="mb-4 p-3 border-2 border-red-500 bg-red-50 text-red-800 rounded">
+          <div className="mb-4 p-3 border-2 border-red-500 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded">
             {error}
           </div>
         )}
 
         {/* Loading state */}
         {isLoading && (
-          <div className="text-center py-8 text-gray-600">
+          <div className="text-center py-8 text-gray-600 dark:text-gray-300">
             Loading schedules...
           </div>
         )}
@@ -212,8 +212,8 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                   <div className="flex-1">
                     {/* Time and duration */}
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-lg font-bold text-gray-900">{localTime}</span>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{localTime}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
                         for {duration}
                       </span>
                     </div>
@@ -228,7 +228,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                             className={`text-xs px-2 py-1 rounded border-2 ${
                               isActive
                                 ? 'border-[var(--color-neo-progress)] bg-[var(--color-neo-progress)] text-white font-bold'
-                                : 'border-gray-300 text-gray-400'
+                                : 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
                             }`}
                           >
                             {day.label}
@@ -238,7 +238,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                     </div>
 
                     {/* Metadata */}
-                    <div className="flex gap-3 text-xs text-gray-600">
+                    <div className="flex gap-3 text-xs text-gray-600 dark:text-gray-300">
                       {schedule.yolo_mode && (
                         <span className="font-bold text-yellow-600">⚡ YOLO mode</span>
                       )}
@@ -282,23 +282,23 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
 
         {/* Empty state */}
         {!isLoading && schedules.length === 0 && (
-          <div className="text-center py-6 text-gray-600 mb-6">
-            <Clock size={48} className="mx-auto mb-2 opacity-50 text-gray-400" />
+          <div className="text-center py-6 text-gray-600 dark:text-gray-300 mb-6">
+            <Clock size={48} className="mx-auto mb-2 opacity-50 text-gray-400 dark:text-gray-500" />
             <p>No schedules configured yet</p>
           </div>
         )}
 
         {/* Divider */}
-        <div className="border-t-2 border-gray-200 my-6"></div>
+        <div className="border-t-2 border-gray-200 dark:border-gray-700 my-6"></div>
 
         {/* Add new schedule form */}
         <div>
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Schedule</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Schedule</h3>
 
           {/* Time and duration */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Start Time (Local)</label>
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">Start Time (Local)</label>
               <input
                 type="time"
                 value={newSchedule.start_time}
@@ -309,7 +309,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Duration (minutes)</label>
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">Duration (minutes)</label>
               <input
                 type="number"
                 min="1"
@@ -325,7 +325,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                 }}
                 className="neo-input w-full"
               />
-              <div className="text-xs text-gray-600 mt-1">
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 {formatDuration(newSchedule.duration_minutes)}
               </div>
             </div>
@@ -333,7 +333,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
 
           {/* Days of week */}
           <div className="mb-4">
-            <label className="block text-sm font-bold text-gray-700 mb-2">Days</label>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">Days</label>
             <div className="flex gap-2">
               {DAYS.map((day) => {
                 const isActive = isDayActive(newSchedule.days_of_week, day.bit)
@@ -365,13 +365,13 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                 }
                 className="w-4 h-4"
               />
-              <span className="text-sm font-bold text-gray-700">YOLO Mode (skip testing)</span>
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-200">YOLO Mode (skip testing)</span>
             </label>
           </div>
 
           {/* Model selection (optional) */}
           <div className="mb-6">
-            <label className="block text-sm font-bold text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
               Model (optional, defaults to global setting)
             </label>
             <input
