@@ -6,10 +6,16 @@ Main entry point for the Autonomous Coding UI server.
 Provides REST API, WebSocket, and static file serving.
 """
 
+import asyncio
 import os
 import shutil
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Fix for Windows subprocess support in asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from dotenv import load_dotenv
 
