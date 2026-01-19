@@ -7,7 +7,7 @@ This directory contains patches for remote access functionality that may be over
 After running `git pull` from upstream, if you see merge conflicts or lost functionality:
 
 ```bash
-./patches/apply-remote-access.sh
+custom/patches/apply-remote-access.sh
 ./remote-start.sh stop && ./remote-start.sh ui
 ```
 
@@ -26,9 +26,10 @@ These are new files that upstream doesn't have:
 |------|---------|
 | `server/routers/status.py` | Status page with port detection |
 | `remote-start.sh` | tmux/Xvfb session management |
-| `docs/remote-*.md` | Documentation |
-| `docs/ports-4000-4099.txt` | SSH config port forwards |
-| `patches/` | This directory |
+| `custom/docs/remote-*.md` | Documentation |
+| `custom/docs/ports-4000-4099.txt` | SSH config port forwards |
+| `custom/patches/` | This directory |
+| `custom/README.md` | Master index of all customizations |
 
 ## Manual Fix (if script fails)
 
