@@ -141,11 +141,36 @@ def install_npm_deps() -> bool:
 
 
 def build_frontend() -> bool:
-    """Build the React frontend if dist doesn't exist."""
+    """Build the React frontend if dist doesn't exist or is stale."""
     dist_dir = UI_DIR / "dist"
+    src_dir = UI_DIR / "src"
 
-    if dist_dir.exists():
-        print("  Frontend already built")
+    # Check if build is needed
+    needs_build = False
+
+    if not dist_dir.exists():
+        needs_build = True
+    elif src_dir.exists():
+        # Find the newest file in dist/ directory
+        newest_dist_mtime = 0
+        for dist_file in dist_dir.rglob("*"):
+            if dist_file.is_file():
+                file_mtime = dist_file.stat().st_mtime
+                if file_mtime > newest_dist_mtime:
+                    newest_dist_mtime = file_mtime
+
+        # Check if any source file is newer than the newest dist file
+        if newest_dist_mtime > 0:
+            for src_file in src_dir.rglob("*"):
+                if src_file.is_file() and src_file.stat().st_mtime > newest_dist_mtime:
+                    needs_build = True
+                    break
+        else:
+            # No files found in dist, need to rebuild
+            needs_build = True
+
+    if not needs_build:
+        print("  Frontend already built (up to date)")
         return True
 
     print("  Building React frontend...")
