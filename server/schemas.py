@@ -501,6 +501,12 @@ class ScheduleCreate(BaseModel):
     enabled: bool = True
     yolo_mode: bool = False
     model: str | None = None
+    max_concurrency: int = Field(
+        default=3,
+        ge=1,
+        le=5,
+        description="Max concurrent agents (1-5)"
+    )
 
     @field_validator('model')
     @classmethod
@@ -522,6 +528,7 @@ class ScheduleUpdate(BaseModel):
     enabled: bool | None = None
     yolo_mode: bool | None = None
     model: str | None = None
+    max_concurrency: int | None = Field(None, ge=1, le=5)
 
     @field_validator('model')
     @classmethod
@@ -542,6 +549,7 @@ class ScheduleResponse(BaseModel):
     enabled: bool
     yolo_mode: bool
     model: str | None
+    max_concurrency: int
     crash_count: int
     created_at: datetime
 

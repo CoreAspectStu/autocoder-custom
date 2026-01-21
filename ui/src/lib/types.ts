@@ -503,6 +503,7 @@ export interface Schedule {
   enabled: boolean
   yolo_mode: boolean
   model: string | null
+  max_concurrency: number // 1-5 concurrent agents
   crash_count: number
   created_at: string
 }
@@ -514,6 +515,7 @@ export interface ScheduleCreate {
   enabled: boolean
   yolo_mode: boolean
   model: string | null
+  max_concurrency: number // 1-5 concurrent agents
 }
 
 export interface ScheduleUpdate {
@@ -523,6 +525,7 @@ export interface ScheduleUpdate {
   enabled?: boolean
   yolo_mode?: boolean
   model?: string | null
+  max_concurrency?: number
 }
 
 export interface ScheduleListResponse {

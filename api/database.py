@@ -81,6 +81,7 @@ class Schedule(Base):
     # Agent configuration for scheduled runs
     yolo_mode = Column(Boolean, nullable=False, default=False)
     model = Column(String(50), nullable=True)  # None = use global default
+    max_concurrency = Column(Integer, nullable=False, default=3)  # 1-5 concurrent agents
 
     # Crash recovery tracking
     crash_count = Column(Integer, nullable=False, default=0)  # Resets at window start
@@ -104,6 +105,7 @@ class Schedule(Base):
             "enabled": self.enabled,
             "yolo_mode": self.yolo_mode,
             "model": self.model,
+            "max_concurrency": self.max_concurrency,
             "crash_count": self.crash_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -272,6 +274,14 @@ def _migrate_add_schedules_tables(engine) -> None:
             with engine.connect() as conn:
                 conn.execute(
                     text("ALTER TABLE schedules ADD COLUMN crash_count INTEGER DEFAULT 0")
+                )
+                conn.commit()
+
+        # Add max_concurrency column if missing (for upgrades)
+        if "max_concurrency" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE schedules ADD COLUMN max_concurrency INTEGER DEFAULT 3")
                 )
                 conn.commit()
 

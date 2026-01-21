@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { Clock, Trash2, X } from 'lucide-react'
+import { Clock, GitBranch, Trash2, X } from 'lucide-react'
 import {
   useSchedules,
   useCreateSchedule,
@@ -47,6 +47,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
     enabled: true,
     yolo_mode: false,
     model: null,
+    max_concurrency: 3,
   })
 
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +125,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
         enabled: true,
         yolo_mode: false,
         model: null,
+        max_concurrency: 3,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create schedule')
@@ -242,6 +244,10 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                       {schedule.yolo_mode && (
                         <span className="font-bold text-yellow-600">⚡ YOLO mode</span>
                       )}
+                      <span className="flex items-center gap-1">
+                        <GitBranch size={12} />
+                        {schedule.max_concurrency}x
+                      </span>
                       {schedule.model && <span>Model: {schedule.model}</span>}
                       {schedule.crash_count > 0 && (
                         <span className="text-red-600">Crashes: {schedule.crash_count}</span>
@@ -367,6 +373,37 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
               />
               <span className="text-sm font-bold text-gray-700 dark:text-gray-200">YOLO Mode (skip testing)</span>
             </label>
+          </div>
+
+          {/* Concurrency slider */}
+          <div className="mb-4">
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
+              Concurrent Agents (1-5)
+            </label>
+            <div className="flex items-center gap-3">
+              <GitBranch
+                size={16}
+                className={newSchedule.max_concurrency > 1 ? 'text-[var(--color-neo-primary)]' : 'text-gray-400'}
+              />
+              <input
+                type="range"
+                min={1}
+                max={5}
+                value={newSchedule.max_concurrency}
+                onChange={(e) =>
+                  setNewSchedule((prev) => ({ ...prev, max_concurrency: Number(e.target.value) }))
+                }
+                className="flex-1 h-2 accent-[var(--color-neo-primary)] cursor-pointer"
+                title={`${newSchedule.max_concurrency} concurrent agent${newSchedule.max_concurrency > 1 ? 's' : ''}`}
+                aria-label="Set number of concurrent agents"
+              />
+              <span className="text-sm font-bold min-w-[2rem] text-center text-gray-900 dark:text-white">
+                {newSchedule.max_concurrency}x
+              </span>
+            </div>
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Run {newSchedule.max_concurrency} agent{newSchedule.max_concurrency > 1 ? 's' : ''} in parallel for faster feature completion
+            </div>
           </div>
 
           {/* Model selection (optional) */}

@@ -368,10 +368,14 @@ class SchedulerService:
             logger.info(f"Agent already running for {project_name}, skipping scheduled start")
             return
 
-        logger.info(f"Starting agent for {project_name} (schedule {schedule.id}, yolo={schedule.yolo_mode})")
+        logger.info(
+            f"Starting agent for {project_name} "
+            f"(schedule {schedule.id}, yolo={schedule.yolo_mode}, concurrency={schedule.max_concurrency})"
+        )
         success, msg = await manager.start(
             yolo_mode=schedule.yolo_mode,
             model=schedule.model,
+            max_concurrency=schedule.max_concurrency,
         )
 
         if success:
