@@ -77,13 +77,8 @@ def get_current_auth_method() -> tuple[str, bool]:
         - auth_method: "claude_login" or "api_key"
         - api_key_configured: True if ANTHROPIC_AUTH_TOKEN is set
     """
-    # Check environment variable (takes precedence)
-    api_key = os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip()
-
-    if api_key and not api_key.startswith("#"):
-        return ("api_key", True)
-
-    # Check .env file for uncommented API key
+    # Check .env file first (source of truth for persistent settings)
+    # Environment variables may be cached from server startup
     content = read_env_file()
     pattern = r'^ANTHROPIC_AUTH_TOKEN\s*=\s*(.+)$'
     match = re.search(pattern, content, re.MULTILINE)
