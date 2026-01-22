@@ -387,8 +387,8 @@ def matches_pattern(command: str, pattern: str) -> bool:
             return False
         return command.startswith(prefix)
 
-    # Local script paths (./scripts/build.sh matches build.sh)
-    if pattern.startswith("./") or pattern.startswith("../"):
+    # Path patterns (./scripts/build.sh, scripts/test.sh, etc.)
+    if "/" in pattern:
         # Extract the script name from the pattern
         pattern_name = os.path.basename(pattern)
         return command == pattern or command == pattern_name or command.endswith("/" + pattern_name)
@@ -441,6 +441,9 @@ def load_org_config() -> Optional[dict]:
                 if not isinstance(cmd, dict):
                     return None
                 if "name" not in cmd:
+                    return None
+                # Validate that name is a non-empty string
+                if not isinstance(cmd["name"], str) or cmd["name"].strip() == "":
                     return None
 
         # Validate blocked_commands if present

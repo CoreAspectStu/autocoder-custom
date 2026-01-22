@@ -20,7 +20,7 @@ This directory contains example configuration files for controlling which bash c
 
 When you create a new project with AutoCoder, it automatically creates:
 
-```
+```text
 my-project/
   .autocoder/
     allowed_commands.yaml    ← Automatically created from template
@@ -119,7 +119,7 @@ blocked_commands:
 
 When the agent tries to run a command, the system checks in this order:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │ 1. HARDCODED BLOCKLIST (highest priority)          │
 │    sudo, dd, shutdown, reboot, chown, etc.          │
@@ -501,12 +501,12 @@ commands:
 **5. Check the agent output:**
 
 The agent will show security hook messages like:
-```
+```text
 Command 'sudo' is blocked at organization level and cannot be approved.
 ```
 
 Or:
-```
+```text
 Command 'wget' is not allowed.
 To allow this command:
   1. Add to .autocoder/allowed_commands.yaml for this project, OR

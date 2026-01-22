@@ -183,12 +183,19 @@ def test_pattern_matching():
         ("sudo", "*", False, "bare wildcard doesn't match sudo"),
         ("anything", "*", False, "bare wildcard doesn't match anything"),
 
-        # Local script paths
+        # Local script paths (with ./ prefix)
         ("build.sh", "./scripts/build.sh", True, "script name matches path"),
         ("./scripts/build.sh", "./scripts/build.sh", True, "exact script path"),
         ("scripts/build.sh", "./scripts/build.sh", True, "relative script path"),
         ("/abs/path/scripts/build.sh", "./scripts/build.sh", True, "absolute path matches"),
         ("test.sh", "./scripts/build.sh", False, "different script name"),
+
+        # Path patterns (without ./ prefix - new behavior)
+        ("test.sh", "scripts/test.sh", True, "script name matches path pattern"),
+        ("scripts/test.sh", "scripts/test.sh", True, "exact path pattern match"),
+        ("/abs/path/scripts/test.sh", "scripts/test.sh", True, "absolute path matches pattern"),
+        ("build.sh", "scripts/test.sh", False, "different script name in pattern"),
+        ("integration.test.js", "tests/integration.test.js", True, "script with dots matches"),
 
         # Non-matches
         ("go", "swift*", False, "go doesn't match swift*"),
@@ -451,6 +458,51 @@ blocked_commands:
             passed += 1
         else:
             print("  FAIL: Missing org config returns None")
+            failed += 1
+
+        # Test 3: Non-string command name is rejected
+        org_config_path.write_text("""version: 1
+allowed_commands:
+  - name: 123
+    description: Invalid numeric name
+""")
+        config = load_org_config()
+        if config is None:
+            print("  PASS: Non-string command name rejected")
+            passed += 1
+        else:
+            print("  FAIL: Non-string command name rejected")
+            print(f"         Got: {config}")
+            failed += 1
+
+        # Test 4: Empty command name is rejected
+        org_config_path.write_text("""version: 1
+allowed_commands:
+  - name: ""
+    description: Empty name
+""")
+        config = load_org_config()
+        if config is None:
+            print("  PASS: Empty command name rejected")
+            passed += 1
+        else:
+            print("  FAIL: Empty command name rejected")
+            print(f"         Got: {config}")
+            failed += 1
+
+        # Test 5: Whitespace-only command name is rejected
+        org_config_path.write_text("""version: 1
+allowed_commands:
+  - name: "   "
+    description: Whitespace name
+""")
+        config = load_org_config()
+        if config is None:
+            print("  PASS: Whitespace-only command name rejected")
+            passed += 1
+        else:
+            print("  FAIL: Whitespace-only command name rejected")
+            print(f"         Got: {config}")
             failed += 1
 
         # Restore HOME
