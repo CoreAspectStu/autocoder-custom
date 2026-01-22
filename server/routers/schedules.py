@@ -8,10 +8,16 @@ Provides CRUD operations for time-based schedule configuration.
 
 import re
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Generator, Tuple
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy.orm import Session
+
+# Schedule limits to prevent resource exhaustion
+MAX_SCHEDULES_PER_PROJECT = 50
 
 from ..schemas import (
     NextRunResponse,
@@ -48,8 +54,15 @@ def validate_project_name(name: str) -> str:
     return name
 
 
-def _get_db_session(project_name: str):
-    """Get database session for a project."""
+@contextmanager
+def _get_db_session(project_name: str) -> Generator[Tuple[Session, Path], None, None]:
+    """Get database session for a project as a context manager.
+
+    Usage:
+        with _get_db_session(project_name) as (db, project_path):
+            # ... use db ...
+        # db is automatically closed
+    """
     from api.database import create_database
 
     project_name = validate_project_name(project_name)
@@ -68,7 +81,11 @@ def _get_db_session(project_name: str):
         )
 
     _, SessionLocal = create_database(project_path)
-    return SessionLocal(), project_path
+    db = SessionLocal()
+    try:
+        yield db, project_path
+    finally:
+        db.close()
 
 
 @router.get("", response_model=ScheduleListResponse)
@@ -76,9 +93,7 @@ async def list_schedules(project_name: str):
     """Get all schedules for a project."""
     from api.database import Schedule
 
-    db, _ = _get_db_session(project_name)
-
-    try:
+    with _get_db_session(project_name) as (db, _):
         schedules = db.query(Schedule).filter(
             Schedule.project_name == project_name
         ).order_by(Schedule.start_time).all()
@@ -100,8 +115,6 @@ async def list_schedules(project_name: str):
                 for s in schedules
             ]
         )
-    finally:
-        db.close()
 
 
 @router.post("", response_model=ScheduleResponse, status_code=201)
@@ -111,9 +124,18 @@ async def create_schedule(project_name: str, data: ScheduleCreate):
 
     from ..services.scheduler_service import get_scheduler
 
-    db, project_path = _get_db_session(project_name)
+    with _get_db_session(project_name) as (db, project_path):
+        # Check schedule limit to prevent resource exhaustion
+        existing_count = db.query(Schedule).filter(
+            Schedule.project_name == project_name
+        ).count()
 
-    try:
+        if existing_count >= MAX_SCHEDULES_PER_PROJECT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum schedules per project ({MAX_SCHEDULES_PER_PROJECT}) exceeded"
+            )
+
         # Create schedule record
         schedule = Schedule(
             project_name=project_name,
@@ -178,9 +200,6 @@ async def create_schedule(project_name: str, data: ScheduleCreate):
             created_at=schedule.created_at,
         )
 
-    finally:
-        db.close()
-
 
 @router.get("/next", response_model=NextRunResponse)
 async def get_next_scheduled_run(project_name: str):
@@ -189,9 +208,7 @@ async def get_next_scheduled_run(project_name: str):
 
     from ..services.scheduler_service import get_scheduler
 
-    db, _ = _get_db_session(project_name)
-
-    try:
+    with _get_db_session(project_name) as (db, _):
         schedules = db.query(Schedule).filter(
             Schedule.project_name == project_name,
             Schedule.enabled == True,  # noqa: E712
@@ -245,18 +262,13 @@ async def get_next_scheduled_run(project_name: str):
             active_schedule_count=active_count,
         )
 
-    finally:
-        db.close()
-
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(project_name: str, schedule_id: int):
     """Get a single schedule by ID."""
     from api.database import Schedule
 
-    db, _ = _get_db_session(project_name)
-
-    try:
+    with _get_db_session(project_name) as (db, _):
         schedule = db.query(Schedule).filter(
             Schedule.id == schedule_id,
             Schedule.project_name == project_name,
@@ -278,9 +290,6 @@ async def get_schedule(project_name: str, schedule_id: int):
             created_at=schedule.created_at,
         )
 
-    finally:
-        db.close()
-
 
 @router.patch("/{schedule_id}", response_model=ScheduleResponse)
 async def update_schedule(
@@ -293,9 +302,7 @@ async def update_schedule(
 
     from ..services.scheduler_service import get_scheduler
 
-    db, project_path = _get_db_session(project_name)
-
-    try:
+    with _get_db_session(project_name) as (db, project_path):
         schedule = db.query(Schedule).filter(
             Schedule.id == schedule_id,
             Schedule.project_name == project_name,
@@ -337,9 +344,6 @@ async def update_schedule(
             created_at=schedule.created_at,
         )
 
-    finally:
-        db.close()
-
 
 @router.delete("/{schedule_id}", status_code=204)
 async def delete_schedule(project_name: str, schedule_id: int):
@@ -348,9 +352,7 @@ async def delete_schedule(project_name: str, schedule_id: int):
 
     from ..services.scheduler_service import get_scheduler
 
-    db, _ = _get_db_session(project_name)
-
-    try:
+    with _get_db_session(project_name) as (db, _):
         schedule = db.query(Schedule).filter(
             Schedule.id == schedule_id,
             Schedule.project_name == project_name,
@@ -366,9 +368,6 @@ async def delete_schedule(project_name: str, schedule_id: int):
         # Delete from database
         db.delete(schedule)
         db.commit()
-
-    finally:
-        db.close()
 
 
 def _calculate_window_end(schedule, now: datetime) -> datetime:

@@ -7,7 +7,7 @@ Each project has its own assistant.db file in the project directory.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
+def _utc_now() -> datetime:
+    """Return current UTC time. Replacement for deprecated datetime.utcnow()."""
+    return datetime.now(timezone.utc)
+
+
 class Conversation(Base):
     """A conversation with the assistant for a project."""
     __tablename__ = "conversations"
@@ -26,8 +31,8 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_name = Column(String(100), nullable=False, index=True)
     title = Column(String(200), nullable=True)  # Optional title, derived from first message
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")
 
@@ -40,7 +45,7 @@ class ConversationMessage(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
     role = Column(String(20), nullable=False)  # "user" | "assistant" | "system"
     content = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=_utc_now)
 
     conversation = relationship("Conversation", back_populates="messages")
 
@@ -175,7 +180,7 @@ def add_message(project_dir: Path, conversation_id: int, role: str, content: str
         session.add(message)
 
         # Update conversation's updated_at timestamp
-        conversation.updated_at = datetime.utcnow()
+        conversation.updated_at = _utc_now()
 
         # Auto-generate title from first user message if not set
         if not conversation.title and role == "user":

@@ -14,8 +14,9 @@ import {
   useToggleSchedule,
 } from '../hooks/useSchedules'
 import {
-  utcToLocal,
-  localToUTC,
+  utcToLocalWithDayShift,
+  localToUTCWithDayShift,
+  adjustDaysForDayShift,
   formatDuration,
   DAYS,
   isDayActive,
@@ -109,10 +110,18 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
         return
       }
 
-      // Convert local time to UTC
+      // Convert local time to UTC and get day shift
+      const { time: utcTime, dayShift } = localToUTCWithDayShift(newSchedule.start_time)
+
+      // Adjust days_of_week based on day shift
+      // If UTC is on the next day (dayShift = 1), shift days forward
+      // If UTC is on the previous day (dayShift = -1), shift days backward
+      const adjustedDays = adjustDaysForDayShift(newSchedule.days_of_week, dayShift)
+
       const scheduleToCreate = {
         ...newSchedule,
-        start_time: localToUTC(newSchedule.start_time),
+        start_time: utcTime,
+        days_of_week: adjustedDays,
       }
 
       await createSchedule.mutateAsync(scheduleToCreate)
@@ -203,8 +212,12 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
         {!isLoading && schedules.length > 0 && (
           <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto">
             {schedules.map((schedule) => {
-              const localTime = utcToLocal(schedule.start_time)
+              // Convert UTC time to local and get day shift for display
+              const { time: localTime, dayShift } = utcToLocalWithDayShift(schedule.start_time)
               const duration = formatDuration(schedule.duration_minutes)
+              // Adjust displayed days: if local is next day (dayShift=1), shift forward
+              // if local is prev day (dayShift=-1), shift backward
+              const displayDays = adjustDaysForDayShift(schedule.days_of_week, dayShift)
 
               return (
                 <div
@@ -223,7 +236,7 @@ export function ScheduleModal({ projectName, isOpen, onClose }: ScheduleModalPro
                     {/* Days */}
                     <div className="flex gap-1 mb-2">
                       {DAYS.map((day) => {
-                        const isActive = isDayActive(schedule.days_of_week, day.bit)
+                        const isActive = isDayActive(displayDays, day.bit)
                         return (
                           <span
                             key={day.label}

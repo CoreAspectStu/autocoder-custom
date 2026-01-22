@@ -6,11 +6,27 @@ SQLite database schema for feature storage using SQLAlchemy.
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, create_engine, text
+
+def _utc_now() -> datetime:
+    """Return current UTC time. Replacement for deprecated _utc_now()."""
+    return datetime.now(timezone.utc)
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    text,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
 from sqlalchemy.types import JSON
@@ -65,6 +81,14 @@ class Schedule(Base):
 
     __tablename__ = "schedules"
 
+    # Database-level CHECK constraints for data integrity
+    __table_args__ = (
+        CheckConstraint('duration_minutes >= 1 AND duration_minutes <= 1440', name='ck_schedule_duration'),
+        CheckConstraint('days_of_week >= 0 AND days_of_week <= 127', name='ck_schedule_days'),
+        CheckConstraint('max_concurrency >= 1 AND max_concurrency <= 5', name='ck_schedule_concurrency'),
+        CheckConstraint('crash_count >= 0', name='ck_schedule_crash_count'),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     project_name = Column(String(50), nullable=False, index=True)
 
@@ -87,7 +111,7 @@ class Schedule(Base):
     crash_count = Column(Integer, nullable=False, default=0)  # Resets at window start
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
 
     # Relationships
     overrides = relationship(
@@ -131,7 +155,7 @@ class ScheduleOverride(Base):
     expires_at = Column(DateTime, nullable=False)  # When this window ends (UTC)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
 
     # Relationships
     schedule = relationship("Schedule", back_populates="overrides")

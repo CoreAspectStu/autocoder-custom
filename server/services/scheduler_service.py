@@ -368,6 +368,14 @@ class SchedulerService:
             logger.info(f"Agent already running for {project_name}, skipping scheduled start")
             return
 
+        # Register crash callback to enable auto-restart during scheduled windows
+        async def on_status_change(status: str):
+            if status == "crashed":
+                logger.info(f"Crash detected for {project_name}, attempting recovery")
+                await self.handle_crash_during_window(project_name, project_dir)
+
+        manager.add_status_callback(on_status_change)
+
         logger.info(
             f"Starting agent for {project_name} "
             f"(schedule {schedule.id}, yolo={schedule.yolo_mode}, concurrency={schedule.max_concurrency})"
@@ -382,6 +390,8 @@ class SchedulerService:
             logger.info(f"✓ Agent started successfully for {project_name}")
         else:
             logger.error(f"✗ Failed to start agent for {project_name}: {msg}")
+            # Remove callback if start failed
+            manager.remove_status_callback(on_status_change)
 
     async def _stop_agent(self, project_name: str, project_dir: Path):
         """Stop the agent for a project."""
@@ -457,7 +467,10 @@ class SchedulerService:
     def _create_override_for_active_schedules(
         self, project_name: str, project_dir: Path, override_type: str
     ):
-        """Create overrides for all active schedule windows."""
+        """Create overrides for all active schedule windows.
+
+        Uses atomic delete-then-create pattern to prevent race conditions.
+        """
         from api.database import Schedule, ScheduleOverride, create_database
 
         try:
@@ -479,17 +492,20 @@ class SchedulerService:
                     # Calculate window end time
                     window_end = self._calculate_window_end(schedule, now)
 
-                    # Check if override already exists
-                    existing = db.query(ScheduleOverride).filter(
+                    # Atomic operation: delete any existing overrides of this type
+                    # and create a new one in the same transaction
+                    deleted = db.query(ScheduleOverride).filter(
                         ScheduleOverride.schedule_id == schedule.id,
                         ScheduleOverride.override_type == override_type,
-                        ScheduleOverride.expires_at > now,
-                    ).first()
+                    ).delete()
 
-                    if existing:
-                        continue
+                    if deleted:
+                        logger.debug(
+                            f"Removed {deleted} existing '{override_type}' override(s) "
+                            f"for schedule {schedule.id}"
+                        )
 
-                    # Create override
+                    # Create new override
                     override = ScheduleOverride(
                         schedule_id=schedule.id,
                         override_type=override_type,

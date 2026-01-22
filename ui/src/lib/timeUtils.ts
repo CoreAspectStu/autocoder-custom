@@ -4,38 +4,135 @@
  *
  * Utilities for converting between UTC and local time for schedule management.
  * All times in the database are stored in UTC and displayed in the user's local timezone.
+ *
+ * IMPORTANT: When converting times, day boundaries may be crossed. For example:
+ * - Tokyo (UTC+9) user sets 02:00 local → 17:00 UTC previous day
+ * - New York (UTC-5) user sets 22:00 local → 03:00 UTC next day
+ *
+ * The days_of_week bitfield must be adjusted accordingly using shiftDaysForward/shiftDaysBackward.
  */
+
+/**
+ * Result of time conversion including day shift information.
+ */
+export interface TimeConversionResult {
+  time: string
+  dayShift: -1 | 0 | 1 // -1 = previous day, 0 = same day, 1 = next day
+}
 
 /**
  * Convert "HH:MM" UTC time to user's local time.
  * @param utcTime Time string in "HH:MM" format (UTC)
- * @returns Time string in "HH:MM" format (local)
+ * @returns Object with local time string and day shift indicator
  */
-export function utcToLocal(utcTime: string): string {
+export function utcToLocalWithDayShift(utcTime: string): TimeConversionResult {
   const [hours, minutes] = utcTime.split(':').map(Number)
-  const utcDate = new Date()
-  utcDate.setUTCHours(hours, minutes, 0, 0)
+
+  // Use a fixed reference date to calculate the shift
+  const utcDate = new Date(Date.UTC(2000, 0, 15, hours, minutes, 0, 0)) // Jan 15, 2000
+  const localDay = utcDate.getDate()
+
+  let dayShift: -1 | 0 | 1 = 0
+  if (localDay === 14) dayShift = -1 // Went to previous day
+  if (localDay === 16) dayShift = 1 // Went to next day
 
   const localHours = utcDate.getHours()
   const localMinutes = utcDate.getMinutes()
 
-  return `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`
+  return {
+    time: `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`,
+    dayShift,
+  }
+}
+
+/**
+ * Convert "HH:MM" UTC time to user's local time (legacy function for backwards compatibility).
+ * @param utcTime Time string in "HH:MM" format (UTC)
+ * @returns Time string in "HH:MM" format (local)
+ */
+export function utcToLocal(utcTime: string): string {
+  return utcToLocalWithDayShift(utcTime).time
 }
 
 /**
  * Convert "HH:MM" local time to UTC for storage.
  * @param localTime Time string in "HH:MM" format (local)
- * @returns Time string in "HH:MM" format (UTC)
+ * @returns Object with UTC time string and day shift indicator
  */
-export function localToUTC(localTime: string): string {
+export function localToUTCWithDayShift(localTime: string): TimeConversionResult {
   const [hours, minutes] = localTime.split(':').map(Number)
-  const localDate = new Date()
-  localDate.setHours(hours, minutes, 0, 0)
+
+  // Use a fixed reference date to calculate the shift
+  // Set local time on Jan 15, then check UTC date
+  const localDate = new Date(2000, 0, 15, hours, minutes, 0, 0) // Jan 15, 2000 local
+  const utcDay = localDate.getUTCDate()
+
+  let dayShift: -1 | 0 | 1 = 0
+  if (utcDay === 14) dayShift = -1 // UTC is previous day
+  if (utcDay === 16) dayShift = 1 // UTC is next day
 
   const utcHours = localDate.getUTCHours()
   const utcMinutes = localDate.getUTCMinutes()
 
-  return `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}`
+  return {
+    time: `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}`,
+    dayShift,
+  }
+}
+
+/**
+ * Convert "HH:MM" local time to UTC for storage (legacy function for backwards compatibility).
+ * @param localTime Time string in "HH:MM" format (local)
+ * @returns Time string in "HH:MM" format (UTC)
+ */
+export function localToUTC(localTime: string): string {
+  return localToUTCWithDayShift(localTime).time
+}
+
+/**
+ * Shift days_of_week bitfield forward by one day.
+ * Used when UTC time is on the next day relative to local time.
+ * Example: Mon(1) -> Tue(2), Sun(64) -> Mon(1)
+ */
+export function shiftDaysForward(bitfield: number): number {
+  let shifted = 0
+  if (bitfield & 1) shifted |= 2 // Mon -> Tue
+  if (bitfield & 2) shifted |= 4 // Tue -> Wed
+  if (bitfield & 4) shifted |= 8 // Wed -> Thu
+  if (bitfield & 8) shifted |= 16 // Thu -> Fri
+  if (bitfield & 16) shifted |= 32 // Fri -> Sat
+  if (bitfield & 32) shifted |= 64 // Sat -> Sun
+  if (bitfield & 64) shifted |= 1 // Sun -> Mon
+  return shifted
+}
+
+/**
+ * Shift days_of_week bitfield backward by one day.
+ * Used when UTC time is on the previous day relative to local time.
+ * Example: Tue(2) -> Mon(1), Mon(1) -> Sun(64)
+ */
+export function shiftDaysBackward(bitfield: number): number {
+  let shifted = 0
+  if (bitfield & 1) shifted |= 64 // Mon -> Sun
+  if (bitfield & 2) shifted |= 1 // Tue -> Mon
+  if (bitfield & 4) shifted |= 2 // Wed -> Tue
+  if (bitfield & 8) shifted |= 4 // Thu -> Wed
+  if (bitfield & 16) shifted |= 8 // Fri -> Thu
+  if (bitfield & 32) shifted |= 16 // Sat -> Fri
+  if (bitfield & 64) shifted |= 32 // Sun -> Sat
+  return shifted
+}
+
+/**
+ * Adjust days_of_week bitfield based on day shift from time conversion.
+ * @param bitfield Original days_of_week bitfield
+ * @param dayShift Day shift from time conversion (-1, 0, or 1)
+ * @returns Adjusted bitfield
+ */
+export function adjustDaysForDayShift(bitfield: number, dayShift: -1 | 0 | 1): number {
+  if (dayShift === 1) return shiftDaysForward(bitfield)
+  if (dayShift === -1) return shiftDaysBackward(bitfield)
+  return bitfield
 }
 
 /**
