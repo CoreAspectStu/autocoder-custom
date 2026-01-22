@@ -173,8 +173,8 @@ class ParallelOrchestrator:
         self._lock = threading.Lock()
         # Coding agents: feature_id -> process
         self.running_coding_agents: dict[int, subprocess.Popen] = {}
-        # Testing agents: list of processes (not tied to specific features)
-        self.running_testing_agents: list[subprocess.Popen] = []
+        # Testing agents: feature_id -> process (feature being tested)
+        self.running_testing_agents: dict[int, subprocess.Popen] = {}
         # Legacy alias for backward compatibility
         self.running_agents = self.running_coding_agents
         self.abort_events: dict[int, threading.Event] = {}
@@ -192,6 +192,75 @@ class ParallelOrchestrator:
     def get_session(self):
         """Get a new database session."""
         return self._session_maker()
+
+    def claim_feature_for_testing(self) -> int | None:
+        """Claim a random passing feature for regression testing.
+
+        Returns the feature ID if successful, None if no features available.
+        Sets testing_in_progress=True on the claimed feature.
+        """
+        session = self.get_session()
+        try:
+            from sqlalchemy.sql.expression import func
+
+            # Find a passing feature that's not being worked on
+            # Exclude features already being tested by this orchestrator
+            with self._lock:
+                testing_feature_ids = set(self.running_testing_agents.keys())
+
+            candidate = (
+                session.query(Feature)
+                .filter(Feature.passes == True)
+                .filter(Feature.in_progress == False)
+                .filter(Feature.testing_in_progress == False)
+                .filter(~Feature.id.in_(testing_feature_ids) if testing_feature_ids else True)
+                .order_by(func.random())
+                .first()
+            )
+
+            if not candidate:
+                return None
+
+            # Atomic claim using UPDATE with WHERE clause
+            result = session.execute(
+                text("""
+                    UPDATE features
+                    SET testing_in_progress = 1
+                    WHERE id = :feature_id
+                      AND passes = 1
+                      AND in_progress = 0
+                      AND testing_in_progress = 0
+                """),
+                {"feature_id": candidate.id}
+            )
+            session.commit()
+
+            if result.rowcount == 0:
+                # Another process claimed it
+                return None
+
+            return candidate.id
+        except Exception as e:
+            session.rollback()
+            debug_log.log("TESTING", f"Failed to claim feature for testing: {e}")
+            return None
+        finally:
+            session.close()
+
+    def release_testing_claim(self, feature_id: int):
+        """Release a testing claim on a feature (called when testing agent exits)."""
+        session = self.get_session()
+        try:
+            session.execute(
+                text("UPDATE features SET testing_in_progress = 0 WHERE id = :feature_id"),
+                {"feature_id": feature_id}
+            )
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            debug_log.log("TESTING", f"Failed to release testing claim for feature {feature_id}: {e}")
+        finally:
+            session.close()
 
     def get_resumable_features(self) -> list[dict]:
         """Get features that were left in_progress from a previous session.
@@ -563,13 +632,11 @@ class ParallelOrchestrator:
     def _spawn_testing_agent(self) -> tuple[bool, str]:
         """Spawn a testing agent subprocess for regression testing.
 
-        CRITICAL: Lock is held during the entire spawn operation to prevent
-        TOCTOU race conditions where multiple threads could pass limit checks
-        and spawn excess agents.
+        Claims a feature BEFORE spawning the agent (same pattern as coding agents).
+        This ensures we know which feature is being tested for UI display.
         """
-        # Hold lock for entire operation to prevent TOCTOU race
+        # Check limits first (under lock)
         with self._lock:
-            # Check limits
             current_testing_count = len(self.running_testing_agents)
             if current_testing_count >= self.max_concurrency:
                 debug_log.log("TESTING", f"Skipped spawn - at max testing agents ({current_testing_count}/{self.max_concurrency})")
@@ -579,7 +646,21 @@ class ParallelOrchestrator:
                 debug_log.log("TESTING", f"Skipped spawn - at max total agents ({total_agents}/{MAX_TOTAL_AGENTS})")
                 return False, f"At max total agents ({total_agents})"
 
-            debug_log.log("TESTING", "Attempting to spawn testing agent subprocess")
+        # Claim a feature for testing (outside lock to avoid holding during DB ops)
+        feature_id = self.claim_feature_for_testing()
+        if feature_id is None:
+            debug_log.log("TESTING", "No features available for testing")
+            return False, "No features available for testing"
+
+        debug_log.log("TESTING", f"Claimed feature #{feature_id} for testing")
+
+        # Now spawn with the claimed feature ID
+        with self._lock:
+            # Re-check limits in case another thread spawned while we were claiming
+            current_testing_count = len(self.running_testing_agents)
+            if current_testing_count >= self.max_concurrency:
+                self.release_testing_claim(feature_id)
+                return False, f"At max testing agents ({current_testing_count})"
 
             cmd = [
                 sys.executable,
@@ -588,10 +669,10 @@ class ParallelOrchestrator:
                 "--project-dir", str(self.project_dir),
                 "--max-iterations", "1",
                 "--agent-type", "testing",
+                "--testing-feature-id", str(feature_id),
             ]
             if self.model:
                 cmd.extend(["--model", self.model])
-            # Testing agents don't need --yolo flag (they use testing prompt regardless)
 
             try:
                 proc = subprocess.Popen(
@@ -604,25 +685,26 @@ class ParallelOrchestrator:
                 )
             except Exception as e:
                 debug_log.log("TESTING", f"FAILED to spawn testing agent: {e}")
+                self.release_testing_claim(feature_id)
                 return False, f"Failed to start testing agent: {e}"
 
-            # Register process immediately while still holding lock
-            self.running_testing_agents.append(proc)
+            # Register process with feature ID (same pattern as coding agents)
+            self.running_testing_agents[feature_id] = proc
             testing_count = len(self.running_testing_agents)
 
-        # Start output reader thread (feature_id=None for testing agents)
-        # This can be outside lock since process is already registered
+        # Start output reader thread with feature ID (same as coding agents)
         threading.Thread(
             target=self._read_output,
-            args=(None, proc, threading.Event(), "testing"),
+            args=(feature_id, proc, threading.Event(), "testing"),
             daemon=True
         ).start()
 
-        print(f"Started testing agent (PID {proc.pid})", flush=True)
-        debug_log.log("TESTING", "Successfully spawned testing agent",
+        print(f"Started testing agent for feature #{feature_id} (PID {proc.pid})", flush=True)
+        debug_log.log("TESTING", f"Successfully spawned testing agent for feature #{feature_id}",
             pid=proc.pid,
+            feature_id=feature_id,
             total_testing_agents=testing_count)
-        return True, "Started testing agent"
+        return True, f"Started testing agent for feature #{feature_id}"
 
     async def _run_initializer(self) -> bool:
         """Run initializer agent as blocking subprocess.
@@ -706,10 +788,8 @@ class ParallelOrchestrator:
                 if self.on_output:
                     self.on_output(feature_id or 0, line)
                 else:
-                    if agent_type == "testing":
-                        print(f"[Testing] {line}", flush=True)
-                    else:
-                        print(f"[Feature #{feature_id}] {line}", flush=True)
+                    # Both coding and testing agents now use [Feature #X] format
+                    print(f"[Feature #{feature_id}] {line}", flush=True)
             proc.wait()
         finally:
             self._on_agent_complete(feature_id, proc.returncode, agent_type, proc)
@@ -730,17 +810,27 @@ class ParallelOrchestrator:
           is safe.
 
         For testing agents:
-        - Just remove from the running list.
+        - Remove from running dict and release testing claim on feature.
         """
         if agent_type == "testing":
             with self._lock:
-                if proc in self.running_testing_agents:
-                    self.running_testing_agents.remove(proc)
+                # Remove from dict by finding the feature_id for this proc
+                found_feature_id = None
+                for fid, p in list(self.running_testing_agents.items()):
+                    if p is proc:
+                        found_feature_id = fid
+                        del self.running_testing_agents[fid]
+                        break
+
+            # Release testing claim on the feature
+            if found_feature_id is not None:
+                self.release_testing_claim(found_feature_id)
 
             status = "completed" if return_code == 0 else "failed"
-            print(f"Testing agent (PID {proc.pid}) {status}", flush=True)
-            debug_log.log("COMPLETE", "Testing agent finished",
+            print(f"Feature #{feature_id} testing {status}", flush=True)
+            debug_log.log("COMPLETE", f"Testing agent for feature #{feature_id} finished",
                 pid=proc.pid,
+                feature_id=feature_id,
                 status=status)
             return
 
@@ -846,11 +936,12 @@ class ParallelOrchestrator:
 
         # Stop testing agents
         with self._lock:
-            testing_procs = list(self.running_testing_agents)
+            testing_items = list(self.running_testing_agents.items())
 
-        for proc in testing_procs:
+        for feature_id, proc in testing_items:
             result = kill_process_tree(proc, timeout=5.0)
-            debug_log.log("STOP", f"Killed testing agent PID {proc.pid} process tree",
+            self.release_testing_claim(feature_id)
+            debug_log.log("STOP", f"Killed testing agent for feature #{feature_id} (PID {proc.pid})",
                 status=result.status, children_found=result.children_found,
                 children_terminated=result.children_terminated, children_killed=result.children_killed)
 

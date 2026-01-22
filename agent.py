@@ -117,6 +117,7 @@ async def run_autonomous_agent(
     yolo_mode: bool = False,
     feature_id: Optional[int] = None,
     agent_type: Optional[str] = None,
+    testing_feature_id: Optional[int] = None,
 ) -> None:
     """
     Run the autonomous agent loop.
@@ -128,6 +129,7 @@ async def run_autonomous_agent(
         yolo_mode: If True, skip browser testing in coding agent prompts
         feature_id: If set, work only on this specific feature (used by orchestrator for coding agents)
         agent_type: Type of agent: "initializer", "coding", "testing", or None (auto-detect)
+        testing_feature_id: For testing agents, the pre-claimed feature ID to test
     """
     print("\n" + "=" * 70)
     print("  AUTONOMOUS CODING AGENT")
@@ -220,7 +222,7 @@ async def run_autonomous_agent(
         if agent_type == "initializer":
             prompt = get_initializer_prompt(project_dir)
         elif agent_type == "testing":
-            prompt = get_testing_prompt(project_dir)
+            prompt = get_testing_prompt(project_dir, testing_feature_id)
         elif feature_id:
             # Single-feature mode (used by orchestrator for coding agents)
             prompt = get_single_feature_prompt(feature_id, project_dir, yolo_mode)

@@ -40,17 +40,15 @@ chmod +x init.sh
 
 Otherwise, start servers manually.
 
-### STEP 3: CLAIM A FEATURE TO TEST
+### STEP 3: GET YOUR ASSIGNED FEATURE
 
-Atomically claim ONE passing feature for regression testing:
+Your feature has been pre-assigned by the orchestrator. Use `feature_get_by_id` to get the details:
 
 ```
-Use the feature_claim_for_testing tool
+Use the feature_get_by_id tool with feature_id={your_assigned_id}
 ```
 
-This atomically claims a random passing feature that:
-- Is not being worked on by coding agents
-- Is not already being tested by another testing agent
+The orchestrator has already claimed this feature for testing (set `testing_in_progress=true`).
 
 **CRITICAL:** You MUST call `feature_release_testing` when done, regardless of pass/fail.
 
@@ -157,9 +155,8 @@ echo "[Testing] Session complete - verified/fixed feature #{id}" >> claude-progr
 
 ### Feature Management
 - `feature_get_stats` - Get progress overview (passing/in_progress/total counts)
-- `feature_claim_for_testing` - **USE THIS** - Atomically claim a feature for testing
+- `feature_get_by_id` - Get your assigned feature details
 - `feature_release_testing` - **REQUIRED** - Release claim after testing (pass tested_ok=true/false)
-- `feature_get_for_regression` - (Legacy) Get random passing features without claiming
 - `feature_mark_failing` - Mark a feature as failing (when you find a regression)
 - `feature_mark_passing` - Mark a feature as passing (after fixing a regression)
 

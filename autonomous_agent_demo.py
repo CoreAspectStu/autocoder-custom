@@ -141,6 +141,13 @@ Authentication:
         help="Agent type (used by orchestrator to spawn specialized subprocesses)",
     )
 
+    parser.add_argument(
+        "--testing-feature-id",
+        type=int,
+        default=None,
+        help="Feature ID to regression test (used by orchestrator for testing agents)",
+    )
+
     # Testing agent configuration
     parser.add_argument(
         "--testing-ratio",
@@ -197,6 +204,7 @@ def main() -> None:
                     yolo_mode=args.yolo,
                     feature_id=args.feature_id,
                     agent_type=args.agent_type,
+                    testing_feature_id=args.testing_feature_id,
                 )
             )
         else:
