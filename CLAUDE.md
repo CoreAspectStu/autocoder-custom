@@ -2,6 +2,46 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ IMPORTANT: Custom Modified Instance
+
+**This is NOT vanilla AutoCoder.** This instance has significant custom modifications:
+
+- **Enhanced Status Dashboard** - `server/routers/status.py` (1132 lines with XML formatting, modal UI, health metrics)
+- **Remote Server Management** - `remote-start.sh` (tmux-based server control)
+- **Port Assignment System** - 4000-4099 range for SSH tunnel compatibility
+- **Custom Documentation** - `custom/` directory with guides and patches
+
+### 🔄 Updating from Upstream
+
+**⚠️ TRIGGER PHRASES - WHEN YOU SEE THESE, FOLLOW THE UPDATE GUIDE:**
+- "update autocoder"
+- "pull from upstream"
+- "get latest changes"
+- "merge upstream"
+- "update from the base repo"
+
+**MANDATORY FIRST STEP:** Read this file BEFORE doing anything:
+```
+/home/stu/projects/autocoder/custom/docs/UPDATE-GUIDE.md
+```
+
+**DO NOT:**
+- ❌ Run `git pull` without reading the guide first
+- ❌ Make any assumptions about what's safe to overwrite
+- ❌ Skip the backup branch creation
+- ❌ Forget to test after merging
+
+**DO:**
+- ✅ Read UPDATE-GUIDE.md completely
+- ✅ Create backup branch with date: `git branch backup-$(date +%Y-%m-%d)`
+- ✅ Follow the documented conflict resolution patterns
+- ✅ Test thoroughly after merge
+- ✅ Install any new dependencies from requirements.txt
+
+**Last successful update:** 2026-01-22 (merged 28 commits successfully)
+
+---
+
 ## Project Overview
 
 This is an autonomous coding agent system with a React-based UI. It uses the Claude Agent SDK to build complete applications over multiple sessions using a two-agent pattern:
