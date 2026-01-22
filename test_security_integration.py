@@ -326,21 +326,21 @@ def test_invalid_yaml_ignored():
             return False
 
 
-def test_50_command_limit():
-    """Test that configs with >50 commands are rejected."""
+def test_100_command_limit():
+    """Test that configs with >100 commands are rejected."""
     print("\n" + "=" * 70)
-    print("TEST 9: 50 command limit enforced")
+    print("TEST 9: 100 command limit enforced")
     print("=" * 70)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
 
-        # Create config with 51 commands
+        # Create config with 101 commands
         autocoder_dir = project_dir / ".autocoder"
         autocoder_dir.mkdir()
 
         commands = [
-            f"  - name: cmd{i}\n    description: Command {i}" for i in range(51)
+            f"  - name: cmd{i}\n    description: Command {i}" for i in range(101)
         ]
         (autocoder_dir / "allowed_commands.yaml").write_text(
             "version: 1\ncommands:\n" + "\n".join(commands)
@@ -353,10 +353,10 @@ def test_50_command_limit():
         result = asyncio.run(bash_security_hook(input_data, context=context))
 
         if result.get("decision") == "block":
-            print("✅ PASS: Config with >50 commands rejected")
+            print("✅ PASS: Config with >100 commands rejected")
             return True
         else:
-            print("❌ FAIL: Config with >50 commands should be rejected")
+            print("❌ FAIL: Config with >100 commands should be rejected")
             return False
 
 
@@ -376,7 +376,7 @@ def main():
         test_org_blocklist_enforcement,
         test_org_allowlist_inheritance,
         test_invalid_yaml_ignored,
-        test_50_command_limit,
+        test_100_command_limit,
     ]
 
     passed = 0

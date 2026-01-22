@@ -263,8 +263,8 @@ commands:
             print(f"         Got: {config}")
             failed += 1
 
-        # Test 4: Over limit (50 commands)
-        commands = [f"  - name: cmd{i}\n    description: Command {i}" for i in range(51)]
+        # Test 4: Over limit (100 commands)
+        commands = [f"  - name: cmd{i}\n    description: Command {i}" for i in range(101)]
         config_path.write_text("version: 1\ncommands:\n" + "\n".join(commands))
         config = load_project_commands(project_dir)
         if config is None:

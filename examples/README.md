@@ -72,7 +72,7 @@ commands:
 - ✅ Temporary tools needed during development
 
 **Limits:**
-- Maximum 50 commands per project
+- Maximum 100 commands per project
 - Cannot override org-level blocked commands
 - Cannot allow hardcoded blocklist commands (sudo, dd, etc.)
 
@@ -321,13 +321,13 @@ blocked_commands: []  # Rely on hardcoded blocklist only
    - Bad: Adding `xcodebuild` to org config when only one project uses it
    - Good: Add `xcodebuild` to that project's config
 
-4. **Don't exceed the 50 command limit per project**
-   - If you need more, you're probably being too specific
-   - Use wildcards instead: `npm-*` covers many npm tools
+4. **Don't exceed the 100 command limit per project**
+   - If you need more, you're probably listing subcommands unnecessarily
+   - Use wildcards instead: `flutter*` covers all flutter commands, not just the base
 
 5. **Don't ignore validation errors**
    - If your YAML is rejected, fix the structure
-   - Common issues: missing `version`, malformed lists, over 50 commands
+   - Common issues: missing `version`, malformed lists, over 100 commands
 
 ---
 

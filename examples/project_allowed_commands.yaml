@@ -113,7 +113,7 @@ commands: []
 #   - Scripts: "./scripts/build.sh" matches the script by name
 #
 # Limits:
-#   - Maximum 50 commands per project
+#   - Maximum 100 commands per project
 #   - Commands in the blocklist (sudo, dd, shutdown, etc.) can NEVER be allowed
 #   - Org-level blocked commands (see ~/.autocoder/config.yaml) cannot be overridden
 #

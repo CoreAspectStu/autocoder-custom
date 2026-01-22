@@ -491,8 +491,8 @@ def load_project_commands(project_dir: Path) -> Optional[dict]:
         if not isinstance(commands, list):
             return None
 
-        # Enforce 50 command limit
-        if len(commands) > 50:
+        # Enforce 100 command limit
+        if len(commands) > 100:
             return None
 
         # Validate each command entry

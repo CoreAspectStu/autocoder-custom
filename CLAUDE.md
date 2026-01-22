@@ -233,7 +233,7 @@ blocked_commands:
 - Scripts: `./scripts/build.sh` matches the script by name from any directory
 
 **Limits:**
-- Maximum 50 commands per project config
+- Maximum 100 commands per project config
 - Blocklisted commands (sudo, dd, shutdown, etc.) can NEVER be allowed
 - Org-level blocked commands cannot be overridden by project configs
 
