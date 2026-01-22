@@ -15,7 +15,7 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from claude_agent_sdk.types import HookMatcher
 from dotenv import load_dotenv
 
-from security import bash_security_hook, web_tools_auto_approve_hook
+from security import bash_security_hook
 
 # Load environment variables from .env file if present
 load_dotenv()
@@ -181,7 +181,7 @@ def create_client(
     security_settings = {
         "sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True},
         "permissions": {
-            "defaultMode": "bypassPermissions",  # Auto-approve all tools
+            "defaultMode": "acceptEdits",  # Auto-approve edits within allowed directories
             "allow": permissions_list,
         },
     }
@@ -273,7 +273,6 @@ def create_client(
             hooks={
                 "PreToolUse": [
                     HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
-                    HookMatcher(matcher="WebFetch|WebSearch", hooks=[web_tools_auto_approve_hook]),
                 ],
             },
             max_turns=1000,

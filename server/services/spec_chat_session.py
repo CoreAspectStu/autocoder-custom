@@ -181,8 +181,15 @@ class SpecChatSession:
                     # System prompt loaded from CLAUDE.md via setting_sources
                     # Include "user" for global skills and subagents from ~/.claude/
                     setting_sources=["project", "user"],
-                    # No allowed_tools restriction - full access to all tools, skills, subagents
-                    permission_mode="bypassPermissions",  # Auto-approve all tools
+                    allowed_tools=[
+                        "Read",
+                        "Write",
+                        "Edit",
+                        "Glob",
+                        "WebFetch",
+                        "WebSearch",
+                    ],
+                    permission_mode="acceptEdits",  # Auto-approve file writes for spec creation
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
                     settings=str(settings_file.resolve()),

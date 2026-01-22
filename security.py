@@ -309,28 +309,6 @@ def get_command_for_validation(cmd: str, segments: list[str]) -> str:
     return ""
 
 
-async def web_tools_auto_approve_hook(input_data, tool_use_id=None, context=None):
-    """
-    Pre-tool-use hook that auto-approves WebFetch and WebSearch tools.
-
-    Workaround for Claude Code bug where these tools are auto-denied in dontAsk mode.
-    See: https://github.com/anthropics/claude-code/issues/11881
-
-    Args:
-        input_data: Dict containing tool_name and tool_input
-        tool_use_id: Optional tool use ID
-        context: Optional context
-
-    Returns:
-        Empty dict to allow (auto-approve)
-    """
-    tool_name = input_data.get("tool_name", "")
-    if tool_name in ("WebFetch", "WebSearch"):
-        # Return empty dict = allow/approve the tool
-        return {}
-    return {}
-
-
 async def bash_security_hook(input_data, tool_use_id=None, context=None):
     """
     Pre-tool-use hook that validates bash commands using an allowlist.
