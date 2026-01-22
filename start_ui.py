@@ -19,6 +19,7 @@ Options:
     --dev    Run in development mode with Vite hot reload
 """
 
+import asyncio
 import os
 import shutil
 import socket
@@ -27,6 +28,10 @@ import sys
 import time
 import webbrowser
 from pathlib import Path
+
+# Fix Windows asyncio subprocess support BEFORE anything else runs
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 ROOT = Path(__file__).parent.absolute()
 VENV_DIR = ROOT / "venv"
@@ -141,13 +146,90 @@ def install_npm_deps() -> bool:
 
 
 def build_frontend() -> bool:
-    """Build the React frontend if dist doesn't exist."""
-    dist_dir = UI_DIR / "dist"
+    """Build the React frontend if dist doesn't exist or is stale.
 
-    if dist_dir.exists():
-        print("  Frontend already built")
+    Staleness is determined by comparing modification times of:
+    - Source files in ui/src/
+    - Config files (package.json, vite.config.ts, etc.)
+    Against the newest file in ui/dist/
+
+    Includes a 2-second tolerance for FAT32 filesystem compatibility.
+    """
+    dist_dir = UI_DIR / "dist"
+    src_dir = UI_DIR / "src"
+
+    # FAT32 has 2-second timestamp precision, so we add tolerance to avoid
+    # false negatives when projects are on USB drives or SD cards
+    TIMESTAMP_TOLERANCE = 2
+
+    # Config files that should trigger a rebuild when changed
+    CONFIG_FILES = [
+        "package.json",
+        "package-lock.json",
+        "vite.config.ts",
+        "tailwind.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "postcss.config.js",
+        "index.html",
+    ]
+
+    # Check if build is needed
+    needs_build = False
+    trigger_file = None
+
+    if not dist_dir.exists():
+        needs_build = True
+        trigger_file = "dist/ directory missing"
+    elif src_dir.exists():
+        # Find the newest file in dist/ directory
+        newest_dist_mtime = 0
+        for dist_file in dist_dir.rglob("*"):
+            try:
+                if dist_file.is_file():
+                    file_mtime = dist_file.stat().st_mtime
+                    if file_mtime > newest_dist_mtime:
+                        newest_dist_mtime = file_mtime
+            except (FileNotFoundError, PermissionError, OSError):
+                # File was deleted or became inaccessible during iteration
+                continue
+
+        if newest_dist_mtime > 0:
+            # Check config files first (these always require rebuild)
+            for config_name in CONFIG_FILES:
+                config_path = UI_DIR / config_name
+                try:
+                    if config_path.exists():
+                        if config_path.stat().st_mtime > newest_dist_mtime + TIMESTAMP_TOLERANCE:
+                            needs_build = True
+                            trigger_file = config_name
+                            break
+                except (FileNotFoundError, PermissionError, OSError):
+                    continue
+
+            # Check source files if no config triggered rebuild
+            if not needs_build:
+                for src_file in src_dir.rglob("*"):
+                    try:
+                        if src_file.is_file():
+                            if src_file.stat().st_mtime > newest_dist_mtime + TIMESTAMP_TOLERANCE:
+                                needs_build = True
+                                trigger_file = str(src_file.relative_to(UI_DIR))
+                                break
+                    except (FileNotFoundError, PermissionError, OSError):
+                        # File was deleted or became inaccessible during iteration
+                        continue
+        else:
+            # No files found in dist, need to rebuild
+            needs_build = True
+            trigger_file = "dist/ directory is empty"
+
+    if not needs_build:
+        print("  Frontend already built (up to date)")
         return True
 
+    if trigger_file:
+        print(f"  Rebuild triggered by: {trigger_file}")
     print("  Building React frontend...")
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
     return run_command([npm_cmd, "run", "build"], cwd=UI_DIR)
@@ -182,17 +264,24 @@ def start_dev_server(port: int) -> tuple:
 
 
 def start_production_server(port: int):
-    """Start FastAPI server in production mode."""
+    """Start FastAPI server in production mode with hot reload."""
     venv_python = get_venv_python()
 
-    print(f"\n  Starting server at http://127.0.0.1:{port}")
+    print(f"\n  Starting server at http://127.0.0.1:{port} (with hot reload)")
 
+    # Set PYTHONASYNCIODEBUG to help with Windows subprocess issues
+    env = os.environ.copy()
+
+    # NOTE: --reload is NOT used because on Windows it breaks asyncio subprocess
+    # support (uvicorn's reload worker doesn't inherit the ProactorEventLoop policy).
+    # This affects Claude SDK which uses asyncio.create_subprocess_exec.
+    # For development with hot reload, use: python start_ui.py --dev
     return subprocess.Popen([
         str(venv_python), "-m", "uvicorn",
         "server.main:app",
         "--host", "127.0.0.1",
-        "--port", str(port)
-    ], cwd=str(ROOT))
+        "--port", str(port),
+    ], cwd=str(ROOT), env=env)
 
 
 def main() -> None:

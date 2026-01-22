@@ -119,7 +119,7 @@ export interface FeatureUpdate {
 }
 
 // Agent types
-export type AgentStatus = 'stopped' | 'running' | 'paused' | 'crashed'
+export type AgentStatus = 'stopped' | 'running' | 'paused' | 'crashed' | 'loading'
 
 export interface AgentStatusResponse {
   status: AgentStatus
@@ -127,8 +127,10 @@ export interface AgentStatusResponse {
   started_at: string | null
   yolo_mode: boolean
   model: string | null  // Model being used by running agent
-  parallel_mode: boolean
+  parallel_mode: boolean  // DEPRECATED: Always true now (unified orchestrator)
   max_concurrency: number | null
+  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
+  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
 }
 
 export interface AgentActionResponse {
@@ -171,11 +173,19 @@ export interface TerminalInfo {
 }
 
 // Agent mascot names for multi-agent UI
-export const AGENT_MASCOTS = ['Spark', 'Fizz', 'Octo', 'Hoot', 'Buzz'] as const
+export const AGENT_MASCOTS = [
+  'Spark', 'Fizz', 'Octo', 'Hoot', 'Buzz',    // Original 5
+  'Pixel', 'Byte', 'Nova', 'Chip', 'Bolt',    // Tech-inspired
+  'Dash', 'Zap', 'Gizmo', 'Turbo', 'Blip',    // Energetic
+  'Neon', 'Widget', 'Zippy', 'Quirk', 'Flux', // Playful
+] as const
 export type AgentMascot = typeof AGENT_MASCOTS[number]
 
 // Agent state for Mission Control
 export type AgentState = 'idle' | 'thinking' | 'working' | 'testing' | 'success' | 'error' | 'struggling'
+
+// Agent type (coding vs testing)
+export type AgentType = 'coding' | 'testing'
 
 // Individual log entry for an agent
 export interface AgentLogEntry {
@@ -188,6 +198,7 @@ export interface AgentLogEntry {
 export interface ActiveAgent {
   agentIndex: number
   agentName: AgentMascot
+  agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
   state: AgentState
@@ -226,6 +237,7 @@ export interface WSAgentUpdateMessage {
   type: 'agent_update'
   agentIndex: number
   agentName: AgentMascot
+  agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
   state: AgentState
@@ -467,9 +479,63 @@ export interface Settings {
   yolo_mode: boolean
   model: string
   glm_mode: boolean
+  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
+  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
 }
 
 export interface SettingsUpdate {
   yolo_mode?: boolean
   model?: string
+  testing_agent_ratio?: number
+  count_testing_in_concurrency?: boolean
+}
+
+// ============================================================================
+// Schedule Types
+// ============================================================================
+
+export interface Schedule {
+  id: number
+  project_name: string
+  start_time: string      // "HH:MM" in UTC
+  duration_minutes: number
+  days_of_week: number    // Bitfield: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+  enabled: boolean
+  yolo_mode: boolean
+  model: string | null
+  max_concurrency: number // 1-5 concurrent agents
+  crash_count: number
+  created_at: string
+}
+
+export interface ScheduleCreate {
+  start_time: string      // "HH:MM" format (local time, will be stored as UTC)
+  duration_minutes: number
+  days_of_week: number
+  enabled: boolean
+  yolo_mode: boolean
+  model: string | null
+  max_concurrency: number // 1-5 concurrent agents
+}
+
+export interface ScheduleUpdate {
+  start_time?: string
+  duration_minutes?: number
+  days_of_week?: number
+  enabled?: boolean
+  yolo_mode?: boolean
+  model?: string | null
+  max_concurrency?: number
+}
+
+export interface ScheduleListResponse {
+  schedules: Schedule[]
+}
+
+export interface NextRunResponse {
+  has_schedules: boolean
+  next_start: string | null  // ISO datetime in UTC
+  next_end: string | null    // ISO datetime in UTC (latest end if overlapping)
+  is_currently_running: boolean
+  active_schedule_count: number
 }
