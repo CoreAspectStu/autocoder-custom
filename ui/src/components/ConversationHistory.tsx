@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { MessageSquare, Trash2, Loader2 } from 'lucide-react'
+import { MessageSquare, Trash2, Loader2, AlertCircle } from 'lucide-react'
 import { useConversations, useDeleteConversation } from '../hooks/useConversations'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { AssistantConversation } from '../lib/types'
@@ -50,9 +50,17 @@ export function ConversationHistory({
   onSelectConversation,
 }: ConversationHistoryProps) {
   const [conversationToDelete, setConversationToDelete] = useState<AssistantConversation | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { data: conversations, isLoading } = useConversations(projectName)
   const deleteConversation = useDeleteConversation(projectName)
+
+  // Clear error when dropdown closes
+  useEffect(() => {
+    if (!isOpen) {
+      setDeleteError(null)
+    }
+  }, [isOpen])
 
   const handleDeleteClick = (e: React.MouseEvent, conversation: AssistantConversation) => {
     e.stopPropagation()
@@ -63,16 +71,18 @@ export function ConversationHistory({
     if (!conversationToDelete) return
 
     try {
+      setDeleteError(null)
       await deleteConversation.mutateAsync(conversationToDelete.id)
       setConversationToDelete(null)
-    } catch (error) {
-      console.error('Failed to delete conversation:', error)
-      setConversationToDelete(null)
+    } catch {
+      // Keep dialog open and show error to user
+      setDeleteError('Failed to delete conversation. Please try again.')
     }
   }
 
   const handleCancelDelete = () => {
     setConversationToDelete(null)
+    setDeleteError(null)
   }
 
   const handleSelectConversation = (conversationId: number) => {
@@ -183,7 +193,19 @@ export function ConversationHistory({
       <ConfirmDialog
         isOpen={conversationToDelete !== null}
         title="Delete Conversation"
-        message={`Are you sure you want to delete "${conversationToDelete?.title || 'this conversation'}"? This action cannot be undone.`}
+        message={
+          deleteError ? (
+            <div className="space-y-3">
+              <p>{`Are you sure you want to delete "${conversationToDelete?.title || 'this conversation'}"? This action cannot be undone.`}</p>
+              <div className="flex items-center gap-2 p-2 bg-[var(--color-neo-danger)]/10 border border-[var(--color-neo-danger)] rounded text-sm text-[var(--color-neo-danger)]">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            </div>
+          ) : (
+            `Are you sure you want to delete "${conversationToDelete?.title || 'this conversation'}"? This action cannot be undone.`
+          )
+        }
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"

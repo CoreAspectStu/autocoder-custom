@@ -78,22 +78,13 @@ export function AssistantChat({
 
   // Start or resume the chat session when component mounts or conversationId changes
   useEffect(() => {
-    console.log('[AssistantChat] useEffect running:', {
-      conversationId,
-      isLoadingConversation,
-      lastRef: lastConversationIdRef.current,
-      hasStarted: hasStartedRef.current
-    })
-
     // Skip if we're loading conversation details
     if (isLoadingConversation) {
-      console.log('[AssistantChat] Skipping - loading conversation')
       return
     }
 
     // Only start if conversationId has actually changed
     if (lastConversationIdRef.current === conversationId && hasStartedRef.current) {
-      console.log('[AssistantChat] Skipping - same conversationId')
       return
     }
 
@@ -101,23 +92,15 @@ export function AssistantChat({
     const isSwitching = lastConversationIdRef.current !== undefined &&
                         lastConversationIdRef.current !== conversationId
 
-    console.log('[AssistantChat] Processing conversation change:', {
-      from: lastConversationIdRef.current,
-      to: conversationId,
-      isSwitching
-    })
-
     lastConversationIdRef.current = conversationId
     hasStartedRef.current = true
 
     // Clear existing messages when switching conversations
     if (isSwitching) {
-      console.log('[AssistantChat] Clearing messages for conversation switch')
       clearMessages()
     }
 
     // Start the session with the conversation ID (or null for new)
-    console.log('[AssistantChat] Starting session with conversationId:', conversationId)
     start(conversationId)
   }, [conversationId, isLoadingConversation, start, clearMessages])
 
@@ -129,7 +112,6 @@ export function AssistantChat({
 
   // Handle selecting a conversation from history
   const handleSelectConversation = useCallback((id: number) => {
-    console.log('[AssistantChat] handleSelectConversation called with id:', id)
     setShowHistory(false)
     onSelectConversation?.(id)
   }, [onSelectConversation])

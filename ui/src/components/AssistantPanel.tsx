@@ -62,13 +62,6 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
     timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
   }))
 
-  console.log('[AssistantPanel] State:', {
-    conversationId,
-    isLoadingConversation,
-    conversationDetailId: conversationDetail?.id,
-    initialMessagesCount: initialMessages?.length ?? 0
-  })
-
   // Persist conversation ID changes to localStorage
   useEffect(() => {
     setStoredConversationId(projectName, conversationId)
@@ -86,7 +79,6 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
 
   // Handle selecting a conversation from history
   const handleSelectConversation = useCallback((id: number) => {
-    console.log('[AssistantPanel] handleSelectConversation called with id:', id)
     setConversationId(id)
   }, [])
 
