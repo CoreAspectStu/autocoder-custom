@@ -221,3 +221,22 @@ def print_progress_summary(project_dir: Path) -> None:
         send_progress_webhook(passing, total, project_dir)
     else:
         print("\nProgress: No features in database yet")
+
+
+def is_project_complete(project_dir: Path) -> bool:
+    """
+    Check if all features are passing (project is 100% complete).
+
+    This is used to auto-stop the agent loop when there's no more work to do.
+
+    Args:
+        project_dir: Directory containing the project
+
+    Returns:
+        True if all features are passing, False otherwise.
+        Returns False if there are no features (initializer hasn't run).
+    """
+    passing, in_progress, total = count_passing_tests(project_dir)
+    if total == 0:
+        return False
+    return passing == total

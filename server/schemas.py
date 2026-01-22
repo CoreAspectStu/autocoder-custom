@@ -368,6 +368,8 @@ class SettingsResponse(BaseModel):
     yolo_mode: bool = False
     model: str = DEFAULT_MODEL
     glm_mode: bool = False  # True if GLM API is configured via .env
+    auth_method: Literal["claude_login", "api_key"] = "claude_login"  # Authentication method
+    api_key_configured: bool = False  # True if API key is set (don't expose actual key)
 
 
 class ModelsResponse(BaseModel):
@@ -380,6 +382,8 @@ class SettingsUpdate(BaseModel):
     """Request schema for updating global settings."""
     yolo_mode: bool | None = None
     model: str | None = None
+    auth_method: Literal["claude_login", "api_key"] | None = None
+    api_key: str | None = None  # Only set when changing API key
 
     @field_validator('model')
     @classmethod
@@ -421,6 +425,7 @@ class DevServerConfigResponse(BaseModel):
     detected_command: str | None = None
     custom_command: str | None = None
     effective_command: str | None = None
+    assigned_port: int | None = None
 
 
 class DevServerConfigUpdate(BaseModel):

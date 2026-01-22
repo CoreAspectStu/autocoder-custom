@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 TMUX_SESSION_PREFIX="autocoder"
-UI_SESSION_BASE="${TMUX_SESSION_PREFIX}-ui"
+UI_SESSION="${TMUX_SESSION_PREFIX}-ui"
 AGENT_SESSION="${TMUX_SESSION_PREFIX}-agent"
 DISPLAY_NUM=99
 XVFB_PID_FILE="/tmp/autocoder-xvfb.pid"

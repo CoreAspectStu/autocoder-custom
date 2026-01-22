@@ -3,24 +3,31 @@
 # Apply Remote Access Patches
 # ===========================
 # Re-applies our customizations after upstream updates.
-# Run this if `git pull` overwrites server/main.py or server/routers/__init__.py
+# Run this after `git pull` to restore custom functionality.
 #
-# Usage: ./patches/apply-remote-access.sh
+# Patches applied:
+# 1. Status router integration (status.py)
+# 2. Port assignment system (4000-4099 range)
+#
+# Usage: custom/patches/apply-remote-access.sh
 #
 
 set -e
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/../.."  # Go to project root
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[OK]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[SKIP]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 
-echo "Applying remote access patches..."
+echo -e "${CYAN}Applying AutoCoder custom patches...${NC}"
 echo ""
 
 # 1. Check if status.py exists
@@ -68,6 +75,35 @@ if [ -x "remote-start.sh" ]; then
     log_info "remote-start.sh exists and is executable"
 else
     log_warn "remote-start.sh missing or not executable"
+fi
+
+# 6. Apply port assignment patch
+log_step "Applying port assignment patch (4000-4099 range)..."
+PATCH_FILE="custom/patches/port-assignment.patch"
+if [ ! -f "$PATCH_FILE" ]; then
+    log_error "Patch file not found: $PATCH_FILE"
+    exit 1
+fi
+
+# Check if already applied by looking for the key changes
+if grep -q "assigned_port" server/schemas.py 2>/dev/null && \
+   grep -q "DEVSERVER_PORT_MIN = 4000" server/services/project_config.py 2>/dev/null; then
+    log_warn "Port assignment patch already applied"
+else
+    # Apply the patch
+    if git apply --check "$PATCH_FILE" 2>/dev/null; then
+        git apply "$PATCH_FILE"
+        log_info "Applied port assignment patch"
+    else
+        log_error "Patch failed to apply cleanly - manual merge required"
+        log_error "Check: $PATCH_FILE"
+        echo ""
+        echo "Files that need manual review:"
+        echo "  - server/services/project_config.py"
+        echo "  - server/schemas.py"
+        echo "  - server/routers/devserver.py"
+        exit 1
+    fi
 fi
 
 echo ""

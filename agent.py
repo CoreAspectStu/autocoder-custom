@@ -23,7 +23,7 @@ if sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True)
 
 from client import create_client
-from progress import has_features, print_progress_summary, print_session_header
+from progress import has_features, is_project_complete, print_progress_summary, print_session_header
 from prompts import (
     copy_spec_to_project,
     get_coding_prompt,
@@ -177,6 +177,16 @@ async def run_autonomous_agent(
         if max_iterations and iteration > max_iterations:
             print(f"\nReached max iterations ({max_iterations})")
             print("To continue, run the script again without --max-iterations")
+            break
+
+        # Check if project is 100% complete (all features passing)
+        # Skip this check on first iteration to allow initializer to run
+        if iteration > 1 and is_project_complete(project_dir):
+            print("\n" + "=" * 70)
+            print("  🎉 PROJECT COMPLETE! 🎉")
+            print("=" * 70)
+            print("\nAll features are passing. No more work to do.")
+            print_progress_summary(project_dir)
             break
 
         # Print session header

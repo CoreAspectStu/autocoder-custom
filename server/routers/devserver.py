@@ -226,6 +226,7 @@ async def get_devserver_config(project_name: str) -> DevServerConfigResponse:
         detected_command=config["detected_command"],
         custom_command=config["custom_command"],
         effective_command=config["effective_command"],
+        assigned_port=config["assigned_port"],
     )
 
 
@@ -277,4 +278,5 @@ async def update_devserver_config(
         detected_command=config["detected_command"],
         custom_command=config["custom_command"],
         effective_command=config["effective_command"],
+        assigned_port=config["assigned_port"],
     )

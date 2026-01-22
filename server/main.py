@@ -24,10 +24,12 @@ from fastapi.staticfiles import StaticFiles
 from .routers import (
     agent_router,
     assistant_chat_router,
+    devlayer_router,
     devserver_router,
     expand_project_router,
     features_router,
     filesystem_router,
+    messages_router,
     projects_router,
     settings_router,
     spec_creation_router,
@@ -119,6 +121,8 @@ app.include_router(assistant_chat_router)
 app.include_router(settings_router)
 app.include_router(terminal_router)
 app.include_router(status_router)
+app.include_router(messages_router)
+app.include_router(devlayer_router)
 
 
 # ============================================================================

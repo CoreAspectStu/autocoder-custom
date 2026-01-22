@@ -18,6 +18,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from .schemas import AGENT_MASCOTS
 from .services.dev_server_manager import get_devserver_manager
 from .services.process_manager import get_manager
+from .routers.messages import get_message_store
 
 # Lazy imports
 _count_passing_tests = None
@@ -421,6 +422,40 @@ async def project_websocket(websocket: WebSocket, project_name: str):
     devserver_manager.add_output_callback(on_dev_output)
     devserver_manager.add_status_callback(on_dev_status_change)
 
+    # Get message store and register callbacks for agent requests
+    msg_store = get_message_store()
+
+    async def on_message_event(event_type: str, data: dict):
+        """Handle message store events - broadcast to this WebSocket."""
+        try:
+            if event_type == "request":
+                # Agent is requesting input from human
+                await websocket.send_json({
+                    "type": "agent_request",
+                    "request_id": data.get("id"),
+                    "request_type": data.get("type"),
+                    "message": data.get("message"),
+                    "created_at": data.get("created_at"),
+                })
+            elif event_type == "message":
+                # New message (from human or agent)
+                await websocket.send_json({
+                    "type": "new_message",
+                    "message": data,
+                })
+            elif event_type == "response":
+                # Human responded to an agent request
+                await websocket.send_json({
+                    "type": "request_response",
+                    "request_id": data.get("id"),
+                    "response": data.get("response"),
+                })
+        except Exception:
+            pass  # Connection may be closed
+
+    # Register message store callback
+    msg_store.add_callback(project_name, on_message_event)
+
     # Start progress polling task
     poll_task = asyncio.create_task(poll_progress(websocket, project_name, project_dir))
 
@@ -461,6 +496,20 @@ async def project_websocket(websocket: WebSocket, project_name: str):
                 if message.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
 
+                # Handle human messages from Chrome extension
+                elif message.get("type") == "human_message":
+                    msg_store = get_message_store()
+                    await msg_store.add_message(project_name, {
+                        "type": message.get("message_type", "guidance"),
+                        "content": message.get("content", ""),
+                        "context": message.get("context"),
+                        "direction": "sent",
+                    })
+                    await websocket.send_json({
+                        "type": "human_response_ack",
+                        "success": True,
+                    })
+
             except WebSocketDisconnect:
                 break
             except json.JSONDecodeError:
@@ -484,6 +533,9 @@ async def project_websocket(websocket: WebSocket, project_name: str):
         # Unregister dev server callbacks
         devserver_manager.remove_output_callback(on_dev_output)
         devserver_manager.remove_status_callback(on_dev_status_change)
+
+        # Unregister message store callback
+        msg_store.remove_callback(project_name, on_message_event)
 
         # Disconnect from manager
         await manager.disconnect(websocket, project_name)

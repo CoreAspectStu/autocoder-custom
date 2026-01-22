@@ -37,8 +37,8 @@ autocoder/
 │   │   ├── remote-server-setup.md    # Complete setup instructions
 │   │   └── ports-4000-4099.txt       # SSH config port mappings
 │   └── patches/                       # Patch system for upstream updates
-│       ├── apply-remote-access.sh    # Auto-apply script
-│       ├── remote-access.patch       # Git patch file
+│       ├── apply-remote-access.sh    # Auto-apply script (all patches)
+│       ├── port-assignment.patch     # Port assignment system (4000-4099)
 │       └── README.md                  # Patch documentation
 │
 ├── remote-start.sh                    # [CUSTOM] Main launcher script
@@ -63,23 +63,30 @@ autocoder/
 
 | File | Location | Purpose | Lines |
 |------|----------|---------|-------|
-| `remote-start.sh` | `/` | tmux/Xvfb session manager | 317 |
+| `remote-start.sh` | `/` | tmux/Xvfb session manager with doctor command | 430 |
 | `apply-remote-access.sh` | `custom/patches/` | Auto-applies patches after git pull | 77 |
 
-### Server Routes
+### Server Routes & Services
 
 | File | Location | Purpose | Lines |
 |------|----------|---------|-------|
-| `status.py` | `server/routers/` | Status page with port detection | 287 |
+| `status.py` | `server/routers/` | [MODIFIED] Enhanced dashboard with health metrics, agent status, spec modal, **auth settings panel** | ~1250 |
+| `settings.py` | `server/routers/` | [MODIFIED] Extended with auth_method and api_key handling | ~120 |
+| `devserver.py` | `server/routers/` | [MODIFIED] Returns assigned_port in config | 282 |
+| `project_config.py` | `server/services/` | [MODIFIED] Automatic port assignment (4000-4099) | 604 |
+| `schemas.py` | `server/` | [MODIFIED] Added assigned_port, auth_method, api_key_configured fields | ~450 |
+| `auth_config.py` | `custom/` | [NEW] Utility for managing auth settings in .env file | 145 |
 
 ### Documentation
 
 | File | Location | Purpose | Words |
 |------|----------|---------|-------|
 | `custom/README.md` | `custom/` | This file - master index | - |
+| `auth-settings-customization.md` | `custom/docs/` | Auth settings feature documentation and reapply guide | ~3200 |
 | `remote-quickstart.md` | `custom/docs/` | Quick reference cheat sheet | ~300 |
 | `remote-setup.md` | `custom/docs/` | Complete user guide | ~2000 |
 | `remote-server-setup.md` | `custom/docs/` | Full setup instructions | ~3500 |
+| `future-improvements.md` | `custom/docs/` | Strategic improvements from party-mode | ~600 |
 | `ports-4000-4099.txt` | `custom/docs/` | SSH tunnel config | - |
 | `patches/README.md` | `custom/patches/` | Patch system docs | ~300 |
 | `docs/README.md` | `docs/` | Documentation index | ~150 |
@@ -110,18 +117,77 @@ autocoder/
 ./remote-start.sh status          # Check what's running
 ```
 
-### 2. Status Page
-**Problem Solved:** See all projects and their running dev servers at a glance
+### 2. Enhanced Status Dashboard
+**Problem Solved:** See all projects, health metrics, and dev server status at a glance
 
 **Access:** `http://localhost:8888/status` (after starting UI)
 
 **Features:**
-- Lists all registered projects
-- Detects which ports are listening
-- Shows dev server URLs
-- Real-time port detection
+- **Summary Stats Dashboard:** Running servers, active agents, idle projects, total count
+- **Project Cards:** Expandable cards with modern UI design
+- **Health Indicators:** Color-coded status (green/yellow/red/gray) based on feature completion
+- **Feature Progress:** Progress bars showing test completion percentage from features.db
+- **Agent Status:** Detects running agents via tmux sessions
+- **Quick Actions:**
+  - View Spec (opens modal with formatted spec - XML tags converted to readable headings)
+  - Open App (dev server URL if running)
+  - View Logs (agent tmux session logs)
+- **Port Information:** Banner showing 4000-4099 port convention
+- **Real-time Updates:** Auto-refresh every 5 seconds
+- **Project Metadata:** Project type, assigned port, spec status
+- **Authentication Settings:** Toggle between Claude Login and API Key authentication (see #3 below)
 
-### 3. Patch System
+### 3. Authentication Settings Panel
+**Problem Solved:** Switching between Claude Login and API Key authentication requires manual .env editing
+
+**Access:** `http://localhost:8888/status` (top panel)
+
+**Features:**
+- **Radio Toggle:** Switch between "Claude Login" and "API Key" methods
+- **Secure Input:** Password-masked API key field
+- **Auto-save to .env:** Updates `ANTHROPIC_AUTH_TOKEN` in .env file
+- **Visual Feedback:** Success/error messages with status indicators
+- **Key Privacy:** API keys never exposed in API responses, masked in UI
+- **Instant Apply:** Changes saved immediately, take effect on next agent start
+
+**How It Works:**
+1. Select authentication method (Claude Login or API Key)
+2. If API Key selected, enter your Anthropic API key
+3. Click "Save Authentication Settings"
+4. Settings written to `.env` file
+5. Restart any running agents for changes to apply
+
+**Documentation:** See `custom/docs/auth-settings-customization.md` for full reapply guide
+
+### 4. Automatic Port Assignment
+**Problem Solved:** Dev servers use framework defaults (3000, 5173) incompatible with SSH tunnels
+
+**How It Works:**
+- Projects automatically assigned ports in 4000-4099 range
+- Port stored in `.autocoder/config.json` per project
+- Conflict detection across all projects
+- Templates use `{port}` placeholder (e.g., `npm run dev -- --port {port}`)
+
+**Modified Files:**
+- `server/services/project_config.py` - Port assignment logic
+- `server/schemas.py` - Added `assigned_port` field
+- `server/routers/devserver.py` - Returns assigned port in config
+- `server/routers/status.py` - Displays assigned port (source of truth)
+
+**Port Detection Priority:**
+1. AutoCoder assigned port (`.autocoder/config.json`) - **SOURCE OF TRUTH**
+2. Config files (package.json, vite.config.js) - fallback
+3. Framework defaults (3000, 5173) - last resort
+
+**Example:**
+```bash
+# QR project gets assigned port 4000 (instead of hardcoded 3006)
+# Status page shows: QR → port 4000
+# Command becomes: npm run dev -- --port 4000
+# SSH tunnel: ssh -L 4000:localhost:4000 stu@server
+```
+
+### 5. Patch System
 **Problem Solved:** Survive upstream updates without losing custom code
 
 **How It Works:**
@@ -129,15 +195,16 @@ autocoder/
 - Auto-patches core files to integrate status router
 - Documented in `custom/patches/README.md`
 
-### 4. Comprehensive Documentation
+### 6. Comprehensive Documentation
 **Problem Solved:** Multiple learning paths for different needs
 
 **Levels:**
 - Quick reference card (`custom/docs/remote-quickstart.md`)
 - User guide (`custom/docs/remote-setup.md`)
 - Full setup guide (`custom/docs/remote-server-setup.md`)
+- Auth settings reapply guide (`custom/docs/auth-settings-customization.md`)
 
-### 5. Claude Code Integration
+### 7. Claude Code Integration
 **Problem Solved:** Quick access from anywhere
 
 **Commands:**
@@ -148,7 +215,35 @@ autocoder/
 
 ## 📝 Changelog
 
+### 2026-01-22 (Latest)
+- ✅ **Authentication Settings Panel** - Web UI for switching between Claude Login and API Key authentication
+  - Added auth settings panel to `/status` page with radio buttons and password input
+  - Created `custom/auth_config.py` utility for managing .env file updates
+  - Extended `server/schemas.py` with auth_method and api_key_configured fields
+  - Modified `server/routers/settings.py` to handle auth method switching
+  - API keys stored securely in `.env` file, never exposed in responses
+  - Comprehensive documentation in `custom/docs/auth-settings-customization.md`
+  - Full reapply guide for surviving upstream updates
+
 ### 2026-01-20
+- ✅ **Enhanced Status Dashboard** - Complete redesign with card-based UI, health indicators, progress bars, agent status, and quick actions
+  - Added `get_project_health()` to read features.db for test completion stats
+  - Added `get_agent_status()` to detect running agents via tmux
+  - Summary stats dashboard (running/agents/idle/total)
+  - Color-coded health indicators based on feature completion
+  - Expandable project cards with progressive disclosure
+  - Quick action buttons with modal UI for viewing specs
+  - **Spec Modal**: View Spec button opens modal with spec content and project details (project type, port, features, completion %)
+  - **XML Formatting**: Spec content automatically parsed and formatted - XML tags (e.g., `<project_name>`) converted to readable headings ("Project Name:")
+  - Hierarchical formatting with proper indentation for nested XML sections
+  - Removed non-functional "Open Editor" button
+  - Real-time updates every 5 seconds
+- ✅ **Automatic port assignment (4000-4099 range)** - Dev servers now automatically assigned ports from SSH-friendly range
+- ✅ Added TL;DR section to `custom/README.md`
+- ✅ Implemented `doctor` command in `remote-start.sh` (7-step health check)
+- ✅ Improved port detection in `status.py` (lsof-based with socket fallback)
+- ✅ Enhanced help command with doctor reference
+- ✅ Documented future improvements in `custom/docs/future-improvements.md`
 - ✅ Created `custom/` directory structure
 - ✅ Moved `docs/remote-*.md` to `custom/docs/`
 - ✅ Moved `patches/` to `custom/patches/`
@@ -361,11 +456,12 @@ custom/patches/apply-remote-access.sh
 
 ## 📊 Statistics
 
-- **Total Custom Files:** 12
-- **Lines of Code (Scripts):** ~600
-- **Lines of Code (Router):** 287
-- **Documentation Words:** ~6000
-- **Last Updated:** 2026-01-20
+- **Total Custom/Modified Files:** 18
+- **Lines of Code (Scripts):** ~507
+- **Lines of Code (Routes/Services):** ~2611 (status.py ~1250, auth_config.py 145)
+- **Documentation Words:** ~9800 (added ~3200 for auth settings)
+- **Patch Size:** 334 lines
+- **Last Updated:** 2026-01-22
 
 ---
 

@@ -23,13 +23,15 @@ import { DevServerControl } from './components/DevServerControl'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
+import { DevLayer } from './components/DevLayer'
 import { getDependencyGraph } from './lib/api'
-import { Loader2, Settings, Moon, Sun } from 'lucide-react'
+import { Loader2, Settings, Moon, Sun, Radio } from 'lucide-react'
 import type { Feature } from './lib/types'
 
 const STORAGE_KEY = 'autocoder-selected-project'
 const DARK_MODE_KEY = 'autocoder-dark-mode'
 const VIEW_MODE_KEY = 'autocoder-view-mode'
+const DEVLAYER_MODE_KEY = 'autocoder-devlayer-mode'
 
 function App() {
   // Initialize selected project from localStorage
@@ -64,6 +66,13 @@ function App() {
       return (stored === 'graph' ? 'graph' : 'kanban') as ViewMode
     } catch {
       return 'kanban'
+    }
+  })
+  const [devLayerMode, setDevLayerMode] = useState(() => {
+    try {
+      return localStorage.getItem(DEVLAYER_MODE_KEY) === 'true'
+    } catch {
+      return false
     }
   })
 
@@ -104,6 +113,15 @@ function App() {
       // localStorage not available
     }
   }, [viewMode])
+
+  // Persist devlayer mode to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(DEVLAYER_MODE_KEY, String(devLayerMode))
+    } catch {
+      // localStorage not available
+    }
+  }, [devLayerMode])
 
   // Play sounds when features move between columns
   useFeatureSound(features)
@@ -199,9 +217,15 @@ function App() {
       }
 
       // G : Toggle between Kanban and Graph view (when project selected)
-      if ((e.key === 'g' || e.key === 'G') && selectedProject) {
+      if ((e.key === 'g' || e.key === 'G') && selectedProject && !devLayerMode) {
         e.preventDefault()
         setViewMode(prev => prev === 'kanban' ? 'graph' : 'kanban')
+      }
+
+      // L : Toggle DevLayer mode
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault()
+        setDevLayerMode(prev => !prev)
       }
 
       // ? : Show keyboard shortcuts help
@@ -232,7 +256,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, debugActiveTab, assistantOpen, features, showSettings, showKeyboardHelp, isSpecCreating, viewMode])
+  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, debugActiveTab, assistantOpen, features, showSettings, showKeyboardHelp, isSpecCreating, viewMode, devLayerMode])
 
   // Combine WebSocket progress with feature data
   const progress = wsState.progress.total > 0 ? wsState.progress : {
@@ -304,6 +328,16 @@ function App() {
                 </>
               )}
 
+              {/* DevLayer toggle - always visible */}
+              <button
+                onClick={() => setDevLayerMode(!devLayerMode)}
+                className={`neo-btn text-sm py-2 px-3 ${devLayerMode ? 'bg-purple-500 text-white border-purple-700' : ''}`}
+                title="Toggle DevLayer (L)"
+                aria-label="Toggle DevLayer"
+              >
+                <Radio size={18} />
+              </button>
+
               {/* Dark mode toggle - always visible */}
               <button
                 onClick={() => setDarkMode(!darkMode)}
@@ -323,7 +357,15 @@ function App() {
         className="max-w-7xl mx-auto px-4 py-8"
         style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
       >
-        {!selectedProject ? (
+        {devLayerMode ? (
+          <div className="neo-card" style={{ height: 'calc(100vh - 180px)' }}>
+            <DevLayer
+              projects={projects ?? []}
+              selectedProject={selectedProject}
+              onSelectProject={handleSelectProject}
+            />
+          </div>
+        ) : !selectedProject ? (
           <div className="neo-empty-state mt-12">
             <h2 className="font-display text-2xl font-bold mb-2">
               Welcome to AutoCoder

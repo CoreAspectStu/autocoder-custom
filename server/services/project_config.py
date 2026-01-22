@@ -61,21 +61,27 @@ class ProjectConfig(TypedDict):
     detected_command: str | None
     custom_command: str | None
     effective_command: str | None
+    assigned_port: int | None
 
 
 # =============================================================================
 # Project Type Definitions
 # =============================================================================
 
-# Mapping of project types to their default dev commands
+# Port range for remote dev servers (SSH tunnel friendly)
+DEVSERVER_PORT_MIN = 4000
+DEVSERVER_PORT_MAX = 4099
+
+# Mapping of project types to their default dev command templates
+# {port} placeholder will be replaced with assigned port
 PROJECT_TYPE_COMMANDS: dict[str, str] = {
-    "nodejs-vite": "npm run dev",
-    "nodejs-cra": "npm start",
-    "python-poetry": "poetry run python -m uvicorn main:app --reload",
-    "python-django": "python manage.py runserver",
-    "python-fastapi": "python -m uvicorn main:app --reload",
-    "rust": "cargo run",
-    "go": "go run .",
+    "nodejs-vite": "npm run dev -- --port {port}",
+    "nodejs-cra": "PORT={port} npm start",
+    "python-poetry": "poetry run python -m uvicorn main:app --reload --port {port}",
+    "python-django": "python manage.py runserver {port}",
+    "python-fastapi": "python -m uvicorn main:app --reload --port {port}",
+    "rust": "cargo run",  # Port depends on app implementation
+    "go": "go run .",      # Port depends on app implementation
 }
 
 
@@ -296,22 +302,133 @@ def detect_project_type(project_dir: Path) -> str | None:
 
 
 # =============================================================================
+# Port Assignment Functions
+# =============================================================================
+
+
+def get_all_assigned_ports() -> set[int]:
+    """
+    Scan all .autocoder/config.json files to find assigned ports.
+
+    This helps prevent port conflicts when assigning new ports.
+
+    Returns:
+        Set of all currently assigned ports across all projects.
+    """
+    import sys
+    from pathlib import Path
+
+    # Add root to path for registry import
+    _root = Path(__file__).parent.parent.parent
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+    try:
+        from registry import list_registered_projects
+
+        assigned_ports = set()
+        projects = list_registered_projects()
+
+        for name, info in projects.items():
+            project_path = Path(info.get("path", ""))
+            if not project_path.exists():
+                continue
+
+            config = _load_config(project_path)
+            port = config.get("assigned_port")
+            if isinstance(port, int) and DEVSERVER_PORT_MIN <= port <= DEVSERVER_PORT_MAX:
+                assigned_ports.add(port)
+
+        return assigned_ports
+    except Exception as e:
+        logger.warning("Failed to get assigned ports: %s", e)
+        return set()
+
+
+def get_next_available_port(exclude_ports: set[int] | None = None) -> int:
+    """
+    Find the next available port in the DEVSERVER_PORT range.
+
+    Args:
+        exclude_ports: Optional set of ports to exclude from selection.
+
+    Returns:
+        Next available port number in range 4000-4099.
+
+    Raises:
+        RuntimeError: If no ports are available in the range.
+    """
+    if exclude_ports is None:
+        exclude_ports = set()
+
+    # Combine with all currently assigned ports
+    assigned = get_all_assigned_ports()
+    exclude_ports = exclude_ports | assigned
+
+    for port in range(DEVSERVER_PORT_MIN, DEVSERVER_PORT_MAX + 1):
+        if port not in exclude_ports:
+            return port
+
+    raise RuntimeError(f"No available ports in range {DEVSERVER_PORT_MIN}-{DEVSERVER_PORT_MAX}")
+
+
+def get_assigned_port(project_dir: Path) -> int:
+    """
+    Get or assign a port for this project.
+
+    If the project already has an assigned port in config, return it.
+    Otherwise, assign the next available port and save it to config.
+
+    Args:
+        project_dir: Path to the project directory.
+
+    Returns:
+        The assigned port number for this project.
+
+    Raises:
+        RuntimeError: If no ports are available.
+    """
+    project_dir = Path(project_dir).resolve()
+
+    # Check if port is already assigned
+    config = _load_config(project_dir)
+    existing_port = config.get("assigned_port")
+
+    if isinstance(existing_port, int) and DEVSERVER_PORT_MIN <= existing_port <= DEVSERVER_PORT_MAX:
+        logger.debug("Using existing port %d for %s", existing_port, project_dir.name)
+        return existing_port
+
+    # Assign new port
+    new_port = get_next_available_port()
+    config["assigned_port"] = new_port
+
+    try:
+        _save_config(project_dir, config)
+        logger.info("Assigned port %d to project %s", new_port, project_dir.name)
+    except OSError as e:
+        logger.error("Failed to save port assignment for %s: %s", project_dir.name, e)
+        # Still return the port even if save failed
+
+    return new_port
+
+
+# =============================================================================
 # Dev Command Functions
 # =============================================================================
 
 
 def get_default_dev_command(project_dir: Path) -> str | None:
     """
-    Get the auto-detected dev command for a project.
+    Get the auto-detected dev command for a project with assigned port.
 
     This returns the default command based on detected project type,
-    ignoring any custom command that may be configured.
+    with {port} placeholder replaced with the project's assigned port.
 
     Args:
         project_dir: Path to the project directory.
 
     Returns:
-        Default dev command string for the detected project type,
+        Default dev command string for the detected project type with port,
         or None if no project type is detected.
     """
     project_type = detect_project_type(project_dir)
@@ -319,7 +436,21 @@ def get_default_dev_command(project_dir: Path) -> str | None:
     if project_type is None:
         return None
 
-    return PROJECT_TYPE_COMMANDS.get(project_type)
+    command_template = PROJECT_TYPE_COMMANDS.get(project_type)
+    if not command_template:
+        return None
+
+    # If command has {port} placeholder, replace it with assigned port
+    if "{port}" in command_template:
+        try:
+            assigned_port = get_assigned_port(project_dir)
+            return command_template.format(port=assigned_port)
+        except RuntimeError as e:
+            logger.error("Failed to assign port for %s: %s", project_dir, e)
+            # Return command without port replacement
+            return command_template
+
+    return command_template
 
 
 def get_dev_command(project_dir: Path) -> str | None:
@@ -437,23 +568,29 @@ def get_project_config(project_dir: Path) -> ProjectConfig:
         - detected_command: The default command for detected type (or None)
         - custom_command: The user-configured custom command (or None)
         - effective_command: The command that would actually be used (or None)
+        - assigned_port: The assigned port for this project (or None)
 
     Raises:
         ValueError: If project_dir is not a valid directory.
     """
     project_dir = _validate_project_dir(project_dir)
 
-    # Detect project type and get default command
+    # Detect project type and get default command (with port)
     detected_type = detect_project_type(project_dir)
-    detected_command = PROJECT_TYPE_COMMANDS.get(detected_type) if detected_type else None
+    detected_command = get_default_dev_command(project_dir) if detected_type else None
 
-    # Load custom command from config
+    # Load custom command and assigned port from config
     config = _load_config(project_dir)
     custom_command = config.get("dev_command")
+    assigned_port = config.get("assigned_port")
 
     # Validate custom_command is a string
     if not isinstance(custom_command, str):
         custom_command = None
+
+    # Validate assigned_port is an int in valid range
+    if not isinstance(assigned_port, int) or not (DEVSERVER_PORT_MIN <= assigned_port <= DEVSERVER_PORT_MAX):
+        assigned_port = None
 
     # Determine effective command
     effective_command = custom_command if custom_command else detected_command
@@ -463,4 +600,5 @@ def get_project_config(project_dir: Path) -> ProjectConfig:
         detected_command=detected_command,
         custom_command=custom_command,
         effective_command=effective_command,
+        assigned_port=assigned_port,
     )
