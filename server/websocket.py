@@ -199,13 +199,23 @@ class AgentTracker:
         return None
 
     async def _handle_testing_agent_start(self, line: str) -> dict | None:
-        """Handle testing agent start message from orchestrator."""
+        """Handle testing agent start message from orchestrator.
+
+        Reuses existing testing agent entry if present to avoid ghost agents in UI.
+        """
         async with self._lock:
-            agent_index = self._next_agent_index
-            self._next_agent_index += 1
+            # Reuse existing testing agent entry if present
+            existing = self.active_agents.get(self.TESTING_AGENT_KEY)
+            if existing:
+                agent_index = existing['agent_index']
+                agent_name = existing['name']
+            else:
+                agent_index = self._next_agent_index
+                self._next_agent_index += 1
+                agent_name = AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)]
 
             self.active_agents[self.TESTING_AGENT_KEY] = {
-                'name': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
+                'name': agent_name,
                 'agent_index': agent_index,
                 'agent_type': 'testing',
                 'state': 'testing',
@@ -216,7 +226,7 @@ class AgentTracker:
             return {
                 'type': 'agent_update',
                 'agentIndex': agent_index,
-                'agentName': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
+                'agentName': agent_name,
                 'agentType': 'testing',
                 'featureId': 0,
                 'featureName': 'Regression Testing',
@@ -251,16 +261,31 @@ class AgentTracker:
 
             return result
 
-    def get_agent_info(self, feature_id: int) -> tuple[int | None, str | None]:
+    async def get_agent_info(self, feature_id: int) -> tuple[int | None, str | None]:
         """Get agent index and name for a feature ID.
+
+        Thread-safe method that acquires the lock before reading state.
 
         Returns:
             Tuple of (agentIndex, agentName) or (None, None) if not tracked.
         """
-        agent = self.active_agents.get(feature_id)
-        if agent:
-            return agent['agent_index'], agent['name']
-        return None, None
+        async with self._lock:
+            agent = self.active_agents.get(feature_id)
+            if agent:
+                return agent['agent_index'], agent['name']
+            return None, None
+
+    async def reset(self):
+        """Reset tracker state when orchestrator stops or crashes.
+
+        Clears all active agents and resets the index counter to prevent
+        ghost agents accumulating across start/stop cycles.
+
+        Must be called with await since it acquires the async lock.
+        """
+        async with self._lock:
+            self.active_agents.clear()
+            self._next_agent_index = 0
 
     async def _handle_agent_start(self, feature_id: int, line: str, agent_type: str = "coding") -> dict | None:
         """Handle agent start message from orchestrator."""
@@ -482,7 +507,7 @@ async def project_websocket(websocket: WebSocket, project_name: str):
             match = FEATURE_ID_PATTERN.match(line)
             if match:
                 feature_id = int(match.group(1))
-                agent_index, _ = agent_tracker.get_agent_info(feature_id)
+                agent_index, _ = await agent_tracker.get_agent_info(feature_id)
 
             # Send the raw log line with optional feature/agent attribution
             log_msg = {
@@ -512,6 +537,9 @@ async def project_websocket(websocket: WebSocket, project_name: str):
                 "type": "agent_status",
                 "status": status,
             })
+            # Reset tracker when agent stops OR crashes to prevent ghost agents on restart
+            if status in ("stopped", "crashed"):
+                await agent_tracker.reset()
         except Exception:
             pass  # Connection may be closed
 

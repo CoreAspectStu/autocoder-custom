@@ -149,13 +149,6 @@ Authentication:
         help="Testing agents per coding agent (0-3, default: 1). Set to 0 to disable testing agents.",
     )
 
-    parser.add_argument(
-        "--count-testing",
-        action="store_true",
-        default=False,
-        help="Count testing agents toward concurrency limit (default: false)",
-    )
-
     return parser.parse_args()
 
 
@@ -222,7 +215,6 @@ def main() -> None:
                     model=args.model,
                     yolo_mode=args.yolo,
                     testing_agent_ratio=args.testing_ratio,
-                    count_testing_in_concurrency=args.count_testing,
                 )
             )
     except KeyboardInterrupt:

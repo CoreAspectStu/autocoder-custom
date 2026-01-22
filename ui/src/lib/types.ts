@@ -129,8 +129,7 @@ export interface AgentStatusResponse {
   model: string | null  // Model being used by running agent
   parallel_mode: boolean  // DEPRECATED: Always true now (unified orchestrator)
   max_concurrency: number | null
-  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
-  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
+  testing_agent_ratio: number  // Regression testing agents (0-3)
 }
 
 export interface AgentActionResponse {
@@ -479,15 +478,13 @@ export interface Settings {
   yolo_mode: boolean
   model: string
   glm_mode: boolean
-  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
-  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
+  testing_agent_ratio: number  // Regression testing agents (0-3)
 }
 
 export interface SettingsUpdate {
   yolo_mode?: boolean
   model?: string
   testing_agent_ratio?: number
-  count_testing_in_concurrency?: boolean
 }
 
 // ============================================================================

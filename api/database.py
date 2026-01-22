@@ -50,6 +50,10 @@ class Feature(Base):
     # Dependencies: list of feature IDs that must be completed before this feature
     # NULL/empty = no dependencies (backwards compatible)
     dependencies = Column(JSON, nullable=True, default=None)
+    # Regression testing: prevent concurrent testing of the same feature
+    testing_in_progress = Column(Boolean, nullable=False, default=False, index=True)
+    # Last time this feature was tested (for session-based regression tracking)
+    last_tested_at = Column(DateTime, nullable=True, default=None)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -65,6 +69,9 @@ class Feature(Base):
             "in_progress": self.in_progress if self.in_progress is not None else False,
             # Dependencies: NULL/empty treated as empty list for backwards compat
             "dependencies": self.dependencies if self.dependencies else [],
+            # Regression testing fields
+            "testing_in_progress": self.testing_in_progress if self.testing_in_progress is not None else False,
+            "last_tested_at": self.last_tested_at.isoformat() if self.last_tested_at else None,
         }
 
     def get_dependencies_safe(self) -> list[int]:
@@ -225,6 +232,26 @@ def _migrate_add_dependencies_column(engine) -> None:
             conn.commit()
 
 
+def _migrate_add_testing_columns(engine) -> None:
+    """Add testing_in_progress and last_tested_at columns for regression testing.
+
+    These columns support atomic claiming of features for regression testing
+    and tracking when features were last tested in a session.
+    """
+    with engine.connect() as conn:
+        # Check existing columns
+        result = conn.execute(text("PRAGMA table_info(features)"))
+        columns = [row[1] for row in result.fetchall()]
+
+        if "testing_in_progress" not in columns:
+            conn.execute(text("ALTER TABLE features ADD COLUMN testing_in_progress BOOLEAN DEFAULT 0"))
+            conn.commit()
+
+        if "last_tested_at" not in columns:
+            conn.execute(text("ALTER TABLE features ADD COLUMN last_tested_at DATETIME DEFAULT NULL"))
+            conn.commit()
+
+
 def _is_network_path(path: Path) -> bool:
     """Detect if path is on a network filesystem.
 
@@ -341,6 +368,7 @@ def create_database(project_dir: Path) -> tuple:
     _migrate_add_in_progress_column(engine)
     _migrate_fix_null_boolean_fields(engine)
     _migrate_add_dependencies_column(engine)
+    _migrate_add_testing_columns(engine)
 
     # Migrate to add schedules tables
     _migrate_add_schedules_tables(engine)

@@ -26,12 +26,14 @@ import sys
 import threading
 import time as _time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.sql.expression import func
 
 # Add parent directory to path so we can import from api module
@@ -224,112 +226,119 @@ def feature_get_next() -> str:
 
 
 # Maximum retry attempts for feature claiming under contention
-MAX_CLAIM_RETRIES = 10
+MAX_CLAIM_RETRIES = 5
 
 
-def _feature_claim_next_internal(attempt: int = 0) -> str:
-    """Internal implementation of feature claiming with retry tracking.
+def _feature_claim_next_internal() -> str:
+    """Internal implementation of feature claiming with iterative retry.
 
-    Args:
-        attempt: Current retry attempt (0-indexed)
+    Uses an iterative loop instead of recursion to avoid double session.close()
+    issues and deep call stacks under contention.
 
     Returns:
         JSON with claimed feature details, or error message if no feature available.
     """
-    if attempt >= MAX_CLAIM_RETRIES:
-        return json.dumps({
-            "error": "Failed to claim feature after maximum retries",
-            "hint": "High contention detected - try again or reduce parallel agents"
-        })
+    for attempt in range(MAX_CLAIM_RETRIES):
+        session = get_session()
+        try:
+            # Use a lock to prevent concurrent claims within this process
+            with _priority_lock:
+                all_features = session.query(Feature).all()
+                all_feature_ids = {f.id for f in all_features}
+                passing_ids = {f.id for f in all_features if f.passes}
 
-    session = get_session()
-    try:
-        # Use a lock to prevent concurrent claims within this process
-        with _priority_lock:
-            all_features = session.query(Feature).all()
-            all_feature_ids = {f.id for f in all_features}
-            passing_ids = {f.id for f in all_features if f.passes}
+                # Get pending, non-in-progress features
+                pending = [f for f in all_features if not f.passes and not f.in_progress]
 
-            # Get pending, non-in-progress features
-            pending = [f for f in all_features if not f.passes and not f.in_progress]
+                # Sort by scheduling score (higher = first), then priority, then id
+                all_dicts = [f.to_dict() for f in all_features]
+                scores = compute_scheduling_scores(all_dicts)
+                pending.sort(key=lambda f: (-scores.get(f.id, 0), f.priority, f.id))
 
-            # Sort by scheduling score (higher = first), then priority, then id
-            all_dicts = [f.to_dict() for f in all_features]
-            scores = compute_scheduling_scores(all_dicts)
-            pending.sort(key=lambda f: (-scores.get(f.id, 0), f.priority, f.id))
+                if not pending:
+                    if any(f.in_progress for f in all_features if not f.passes):
+                        return json.dumps({"error": "All pending features are in progress by other agents"})
+                    return json.dumps({"error": "All features are passing! No more work to do."})
 
-            if not pending:
-                if any(f.in_progress for f in all_features if not f.passes):
-                    return json.dumps({"error": "All pending features are in progress by other agents"})
-                return json.dumps({"error": "All features are passing! No more work to do."})
-
-            # Find first feature with satisfied dependencies
-            candidate_id = None
-            for feature in pending:
-                deps = feature.dependencies or []
-                # Filter out orphaned dependencies (IDs that no longer exist)
-                valid_deps = [d for d in deps if d in all_feature_ids]
-                if all(dep_id in passing_ids for dep_id in valid_deps):
-                    candidate_id = feature.id
-                    break
-
-            if candidate_id is None:
-                # All pending features are blocked by unmet dependencies
-                blocking_info = []
-                for feature in pending[:3]:
+                # Find first feature with satisfied dependencies
+                candidate_id = None
+                for feature in pending:
                     deps = feature.dependencies or []
+                    # Filter out orphaned dependencies (IDs that no longer exist)
                     valid_deps = [d for d in deps if d in all_feature_ids]
-                    orphaned = [d for d in deps if d not in all_feature_ids]
-                    unmet = [d for d in valid_deps if d not in passing_ids]
-                    info = f"#{feature.id} '{feature.name}'"
-                    if unmet:
-                        info += f" blocked by: {unmet}"
-                    if orphaned:
-                        info += f" (orphaned deps ignored: {orphaned})"
-                    blocking_info.append(info)
+                    if all(dep_id in passing_ids for dep_id in valid_deps):
+                        candidate_id = feature.id
+                        break
 
-                return json.dumps({
-                    "error": "All pending features are blocked by unmet dependencies",
-                    "blocked_features": len(pending),
-                    "examples": blocking_info,
-                    "hint": "Complete the blocking dependencies first, or remove invalid dependencies"
-                }, indent=2)
+                if candidate_id is None:
+                    # All pending features are blocked by unmet dependencies
+                    blocking_info = []
+                    for feature in pending[:3]:
+                        deps = feature.dependencies or []
+                        valid_deps = [d for d in deps if d in all_feature_ids]
+                        orphaned = [d for d in deps if d not in all_feature_ids]
+                        unmet = [d for d in valid_deps if d not in passing_ids]
+                        info = f"#{feature.id} '{feature.name}'"
+                        if unmet:
+                            info += f" blocked by: {unmet}"
+                        if orphaned:
+                            info += f" (orphaned deps ignored: {orphaned})"
+                        blocking_info.append(info)
 
-            # Atomic claim: UPDATE only if still claimable
-            # This prevents race conditions even across processes
-            result = session.execute(
-                text("""
-                    UPDATE features
-                    SET in_progress = 1
-                    WHERE id = :feature_id
-                      AND in_progress = 0
-                      AND passes = 0
-                """),
-                {"feature_id": candidate_id}
-            )
-            session.commit()
+                    return json.dumps({
+                        "error": "All pending features are blocked by unmet dependencies",
+                        "blocked_features": len(pending),
+                        "examples": blocking_info,
+                        "hint": "Complete the blocking dependencies first, or remove invalid dependencies"
+                    }, indent=2)
 
-            # Check if we actually claimed it
-            if result.rowcount == 0:
-                # Another process claimed it first - retry with backoff
-                session.close()
-                # Exponential backoff with jitter: base 0.1s, 0.2s, 0.4s, ... up to 1.0s
-                # Jitter of up to 30% prevents synchronized retries under high contention
-                backoff = min(0.1 * (2 ** attempt), 1.0)
-                jitter = random.uniform(0, backoff * 0.3)
-                _time.sleep(backoff + jitter)
-                return _feature_claim_next_internal(attempt + 1)
+                # Atomic claim: UPDATE only if still claimable
+                # This prevents race conditions even across processes
+                result = session.execute(
+                    text("""
+                        UPDATE features
+                        SET in_progress = 1
+                        WHERE id = :feature_id
+                          AND in_progress = 0
+                          AND passes = 0
+                    """),
+                    {"feature_id": candidate_id}
+                )
+                session.commit()
 
-            # Fetch the claimed feature
-            session.expire_all()  # Clear cache to get fresh data
-            claimed_feature = session.query(Feature).filter(Feature.id == candidate_id).first()
-            return json.dumps(claimed_feature.to_dict(), indent=2)
+                # Check if we actually claimed it
+                if result.rowcount == 0:
+                    # Another process claimed it first - will retry after backoff
+                    pass  # Fall through to finally block, then retry loop
+                else:
+                    # Successfully claimed - fetch and return
+                    session.expire_all()  # Clear cache to get fresh data
+                    claimed_feature = session.query(Feature).filter(Feature.id == candidate_id).first()
+                    return json.dumps(claimed_feature.to_dict(), indent=2)
 
-    except Exception as e:
-        session.rollback()
-        return json.dumps({"error": f"Failed to claim feature: {str(e)}"})
-    finally:
-        session.close()
+        except OperationalError:
+            # Transient database error (e.g., SQLITE_BUSY) - rollback and retry
+            session.rollback()
+            # Fall through to backoff and retry
+        except Exception as e:
+            # Non-transient error - fail immediately
+            session.rollback()
+            return json.dumps({"error": f"Failed to claim feature: {str(e)}"})
+        finally:
+            session.close()
+
+        # Exponential backoff with jitter before next attempt
+        # Base 0.1s, 0.2s, 0.4s, 0.8s, 1.0s (capped)
+        # Jitter of up to 30% prevents synchronized retries under high contention
+        backoff = min(0.1 * (2 ** attempt), 1.0)
+        jitter = random.uniform(0, backoff * 0.3)
+        _time.sleep(backoff + jitter)
+
+    # Exhausted all retries
+    return json.dumps({
+        "error": "Failed to claim feature after maximum retries",
+        "hint": "High contention detected - try again or reduce parallel agents"
+    })
 
 
 @mcp.tool()
@@ -346,11 +355,12 @@ def feature_claim_next() -> str:
     3. All dependency IDs actually exist (orphaned dependencies are ignored)
 
     On success, the feature's in_progress flag is set to True.
+    Uses exponential backoff retry (up to 5 attempts) under contention.
 
     Returns:
         JSON with claimed feature details, or error message if no feature available.
     """
-    return _feature_claim_next_internal(attempt=0)
+    return _feature_claim_next_internal()
 
 
 @mcp.tool()
@@ -389,6 +399,156 @@ def feature_get_for_regression(
         session.close()
 
 
+def _feature_claim_for_testing_internal() -> str:
+    """Internal implementation of testing feature claim with iterative retry.
+
+    Uses an iterative loop instead of recursion to avoid double session.close()
+    issues and deep call stacks under contention.
+
+    Returns:
+        JSON with claimed feature details, or message if no features available.
+    """
+    for attempt in range(MAX_CLAIM_RETRIES):
+        session = get_session()
+        try:
+            # Use lock to prevent concurrent claims within this process
+            with _priority_lock:
+                # Find a candidate feature
+                candidate = (
+                    session.query(Feature)
+                    .filter(Feature.passes == True)
+                    .filter(Feature.in_progress == False)
+                    .filter(Feature.testing_in_progress == False)
+                    .order_by(func.random())
+                    .first()
+                )
+
+                if not candidate:
+                    return json.dumps({
+                        "message": "No features available for testing",
+                        "hint": "All passing features are either being coded or tested"
+                    })
+
+                # Atomic claim using UPDATE with WHERE clause
+                # This prevents race conditions even across processes
+                result = session.execute(
+                    text("""
+                        UPDATE features
+                        SET testing_in_progress = 1
+                        WHERE id = :feature_id
+                          AND passes = 1
+                          AND in_progress = 0
+                          AND testing_in_progress = 0
+                    """),
+                    {"feature_id": candidate.id}
+                )
+                session.commit()
+
+                # Check if we actually claimed it
+                if result.rowcount == 0:
+                    # Another process claimed it first - will retry after backoff
+                    pass  # Fall through to finally block, then retry loop
+                else:
+                    # Successfully claimed - fetch and return
+                    session.expire_all()
+                    claimed = session.query(Feature).filter(Feature.id == candidate.id).first()
+                    return json.dumps(claimed.to_dict(), indent=2)
+
+        except OperationalError:
+            # Transient database error (e.g., SQLITE_BUSY) - rollback and retry
+            session.rollback()
+            # Fall through to backoff and retry
+        except Exception as e:
+            # Non-transient error - fail immediately
+            session.rollback()
+            return json.dumps({"error": f"Failed to claim feature: {str(e)}"})
+        finally:
+            session.close()
+
+        # Exponential backoff with jitter before next attempt
+        backoff = min(0.1 * (2 ** attempt), 1.0)
+        jitter = random.uniform(0, backoff * 0.3)
+        _time.sleep(backoff + jitter)
+
+    # Exhausted all retries
+    return json.dumps({
+        "error": "Failed to claim feature after maximum retries",
+        "hint": "High contention detected - try again or reduce testing agents"
+    })
+
+
+@mcp.tool()
+def feature_claim_for_testing() -> str:
+    """Atomically claim a passing feature for regression testing.
+
+    Returns a random passing feature that is:
+    - Currently passing (passes=True)
+    - Not being worked on by coding agents (in_progress=False)
+    - Not already being tested (testing_in_progress=False)
+
+    The feature's testing_in_progress flag is set to True atomically to prevent
+    other testing agents from claiming the same feature. Uses exponential backoff
+    retry (up to 5 attempts) under contention.
+
+    After testing, you MUST call feature_release_testing() to release the claim.
+
+    Returns:
+        JSON with feature details if available, or message if no features available.
+    """
+    return _feature_claim_for_testing_internal()
+
+
+@mcp.tool()
+def feature_release_testing(
+    feature_id: Annotated[int, Field(description="The ID of the feature to release", ge=1)],
+    tested_ok: Annotated[bool, Field(description="True if the feature passed testing, False if regression found")] = True
+) -> str:
+    """Release a feature after regression testing completes.
+
+    Clears the testing_in_progress flag and updates last_tested_at timestamp.
+
+    This should be called after testing is complete, whether the feature
+    passed or failed. If tested_ok=False, the feature was marked as failing
+    by a previous call to feature_mark_failing.
+
+    Args:
+        feature_id: The ID of the feature that was being tested
+        tested_ok: True if testing passed, False if a regression was found
+
+    Returns:
+        JSON with release confirmation or error message.
+    """
+    session = get_session()
+    try:
+        feature = session.query(Feature).filter(Feature.id == feature_id).first()
+
+        if feature is None:
+            return json.dumps({"error": f"Feature with ID {feature_id} not found"})
+
+        if not feature.testing_in_progress:
+            return json.dumps({
+                "warning": f"Feature {feature_id} was not being tested",
+                "feature": feature.to_dict()
+            })
+
+        # Clear testing flag and update timestamp
+        feature.testing_in_progress = False
+        feature.last_tested_at = datetime.now(timezone.utc)
+        session.commit()
+        session.refresh(feature)
+
+        status = "passed" if tested_ok else "failed (regression detected)"
+        return json.dumps({
+            "message": f"Feature #{feature_id} testing {status}",
+            "feature": feature.to_dict()
+        }, indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to release testing claim: {str(e)}"})
+    finally:
+        session.close()
+
+
 @mcp.tool()
 def feature_mark_passing(
     feature_id: Annotated[int, Field(description="The ID of the feature to mark as passing", ge=1)]
@@ -417,6 +577,9 @@ def feature_mark_passing(
         session.refresh(feature)
 
         return json.dumps(feature.to_dict(), indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to mark feature passing: {str(e)}"})
     finally:
         session.close()
 
@@ -459,6 +622,9 @@ def feature_mark_failing(
             "message": f"Feature #{feature_id} marked as failing - regression detected",
             "feature": feature.to_dict()
         }, indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to mark feature failing: {str(e)}"})
     finally:
         session.close()
 
@@ -515,6 +681,9 @@ def feature_skip(
             "new_priority": new_priority,
             "message": f"Feature '{feature.name}' moved to end of queue"
         }, indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to skip feature: {str(e)}"})
     finally:
         session.close()
 
@@ -552,6 +721,9 @@ def feature_mark_in_progress(
         session.refresh(feature)
 
         return json.dumps(feature.to_dict(), indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to mark feature in-progress: {str(e)}"})
     finally:
         session.close()
 
@@ -583,6 +755,9 @@ def feature_clear_in_progress(
         session.refresh(feature)
 
         return json.dumps(feature.to_dict(), indent=2)
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to clear in-progress status: {str(e)}"})
     finally:
         session.close()
 
@@ -807,6 +982,9 @@ def feature_add_dependency(
             "feature_id": feature_id,
             "dependencies": feature.dependencies
         })
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to add dependency: {str(e)}"})
     finally:
         session.close()
 
@@ -844,6 +1022,9 @@ def feature_remove_dependency(
             "feature_id": feature_id,
             "dependencies": feature.dependencies or []
         })
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to remove dependency: {str(e)}"})
     finally:
         session.close()
 
@@ -1040,6 +1221,9 @@ def feature_set_dependencies(
             "feature_id": feature_id,
             "dependencies": feature.dependencies or []
         })
+    except Exception as e:
+        session.rollback()
+        return json.dumps({"error": f"Failed to set dependencies: {str(e)}"})
     finally:
         session.close()
 

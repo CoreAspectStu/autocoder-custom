@@ -211,7 +211,6 @@ export async function startAgent(
     parallelMode?: boolean
     maxConcurrency?: number
     testingAgentRatio?: number
-    countTestingInConcurrency?: boolean
   } = {}
 ): Promise<AgentActionResponse> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/agent/start`, {
@@ -221,7 +220,6 @@ export async function startAgent(
       parallel_mode: options.parallelMode ?? false,
       max_concurrency: options.maxConcurrency,
       testing_agent_ratio: options.testingAgentRatio,
-      count_testing_in_concurrency: options.countTestingInConcurrency,
     }),
   })
 }

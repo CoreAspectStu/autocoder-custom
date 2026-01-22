@@ -112,8 +112,8 @@ export function useProjectWebSocket(projectName: string | null) {
               setState(prev => ({
                 ...prev,
                 agentStatus: message.status,
-                // Clear active agents when process stops to prevent stale UI
-                ...(message.status === 'stopped' && { activeAgents: [], recentActivity: [] }),
+                // Clear active agents when process stops OR crashes to prevent stale UI
+                ...((message.status === 'stopped' || message.status === 'crashed') && { activeAgents: [], recentActivity: [] }),
               }))
               break
 
