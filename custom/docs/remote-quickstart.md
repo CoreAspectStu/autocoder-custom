@@ -4,13 +4,14 @@
 
 ```bash
 # 1. SSH to server (tunnels auto-forward ports)
-# 2. Run:
-cd ~/projects/autocoder
-./remote-start.sh ui
+# 2. Run (with resource guardrails):
+autocoder-ui
 
 # 3. Open http://localhost:8889
 # 4. Close terminal - it keeps running
 ```
+
+**Why `autocoder-ui`?** Wraps startup with systemd resource limits (2 cores, 8GB RAM, 250 processes) to prevent browser automation from consuming all system resources.
 
 ## Port Convention
 
@@ -33,12 +34,13 @@ See `docs/ports-4000-4099.txt` for full SSH config port list.
 
 | Do This | Command |
 |---------|---------|
-| Start UI | `./remote-start.sh ui` |
-| Start agent | `./remote-start.sh agent myproject` |
-| Check status | `./remote-start.sh status` |
-| View logs | `./remote-start.sh logs ui` |
-| Stop all | `./remote-start.sh stop` |
-| Reattach | `./remote-start.sh attach ui` |
+| Start UI (safe) | `autocoder-ui` |
+| Start UI (no limits) | `cd ~/projects/autocoder && ./remote-start.sh ui` |
+| Start agent | `cd ~/projects/autocoder && ./remote-start.sh agent myproject` |
+| Check status | `cd ~/projects/autocoder && ./remote-start.sh status` |
+| View logs | `cd ~/projects/autocoder && ./remote-start.sh logs ui` |
+| Stop all | `cd ~/projects/autocoder && ./remote-start.sh stop` |
+| Reattach | `cd ~/projects/autocoder && ./remote-start.sh attach ui` |
 
 ## Detach from tmux
 

@@ -109,16 +109,20 @@ This is an autonomous coding agent system with a React-based UI. It uses the Cla
 ### Quick Start (Recommended)
 
 ```bash
-# Windows - launches CLI menu
-start.bat
+# Remote server (with resource guardrails) - RECOMMENDED
+autocoder-ui      # Limits: 2 cores, 8GB RAM, 250 processes
 
-# macOS/Linux
-./start.sh
+# Local development
+./start.sh        # CLI menu (Linux/macOS)
+./start_ui.sh     # Web UI (Linux/macOS)
+start.bat         # CLI menu (Windows)
+start_ui.bat      # Web UI (Windows)
 
-# Launch Web UI (serves pre-built React app)
-start_ui.bat      # Windows
-./start_ui.sh     # macOS/Linux
+# Remote without guardrails (not recommended - can consume all system resources)
+./remote-start.sh ui
 ```
+
+**Why use `autocoder-ui`?** The wrapper script uses systemd to limit resources and prevent browser automation processes from consuming all system CPU/RAM, which can cause system instability.
 
 ### Python Backend (Manual)
 

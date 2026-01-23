@@ -70,6 +70,7 @@ autocoder/
 │   ├── docs/                          # Remote server documentation
 │   │   ├── UPDATE-GUIDE.md           # ⚡ Upstream update process (READ FIRST!)
 │   │   ├── UPDATE-CHECKLIST.md       # Quick update reference card
+│   │   ├── resource-guardrails.md    # Resource limits for preventing runaway processes
 │   │   ├── remote-quickstart.md      # Quick reference card
 │   │   ├── remote-setup.md           # User guide
 │   │   ├── remote-server-setup.md    # Complete setup instructions
