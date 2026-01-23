@@ -10,6 +10,8 @@ import type {
   ActiveAgent,
   AgentMascot,
   AgentLogEntry,
+  OrchestratorStatus,
+  OrchestratorEvent,
 } from '../lib/types'
 
 // Activity item for the feed
@@ -48,6 +50,8 @@ interface WebSocketState {
   // Celebration queue to handle rapid successes without race conditions
   celebrationQueue: CelebrationTrigger[]
   celebration: CelebrationTrigger | null
+  // Orchestrator state for Mission Control
+  orchestratorStatus: OrchestratorStatus | null
 }
 
 const MAX_LOGS = 100 // Keep last 100 log lines
@@ -68,6 +72,7 @@ export function useProjectWebSocket(projectName: string | null) {
     agentLogs: new Map(),
     celebrationQueue: [],
     celebration: null,
+    orchestratorStatus: null,
   })
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -112,8 +117,12 @@ export function useProjectWebSocket(projectName: string | null) {
               setState(prev => ({
                 ...prev,
                 agentStatus: message.status,
-                // Clear active agents when process stops OR crashes to prevent stale UI
-                ...((message.status === 'stopped' || message.status === 'crashed') && { activeAgents: [], recentActivity: [] }),
+                // Clear active agents and orchestrator status when process stops OR crashes to prevent stale UI
+                ...((message.status === 'stopped' || message.status === 'crashed') && {
+                  activeAgents: [],
+                  recentActivity: [],
+                  orchestratorStatus: null,
+                }),
               }))
               break
 
@@ -261,6 +270,33 @@ export function useProjectWebSocket(projectName: string | null) {
               })
               break
 
+            case 'orchestrator_update':
+              setState(prev => {
+                const newEvent: OrchestratorEvent = {
+                  eventType: message.eventType,
+                  message: message.message,
+                  timestamp: message.timestamp,
+                  featureId: message.featureId,
+                  featureName: message.featureName,
+                }
+
+                return {
+                  ...prev,
+                  orchestratorStatus: {
+                    state: message.state,
+                    message: message.message,
+                    codingAgents: message.codingAgents ?? prev.orchestratorStatus?.codingAgents ?? 0,
+                    testingAgents: message.testingAgents ?? prev.orchestratorStatus?.testingAgents ?? 0,
+                    maxConcurrency: message.maxConcurrency ?? prev.orchestratorStatus?.maxConcurrency ?? 3,
+                    readyCount: message.readyCount ?? prev.orchestratorStatus?.readyCount ?? 0,
+                    blockedCount: message.blockedCount ?? prev.orchestratorStatus?.blockedCount ?? 0,
+                    timestamp: message.timestamp,
+                    recentEvents: [newEvent, ...(prev.orchestratorStatus?.recentEvents ?? []).slice(0, 4)],
+                  },
+                }
+              })
+              break
+
             case 'dev_log':
               setState(prev => ({
                 ...prev,
@@ -346,6 +382,7 @@ export function useProjectWebSocket(projectName: string | null) {
       agentLogs: new Map(),
       celebrationQueue: [],
       celebration: null,
+      orchestratorStatus: null,
     })
 
     if (!projectName) {

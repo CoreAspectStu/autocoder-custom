@@ -54,6 +54,21 @@ THOUGHT_PATTERNS = [
     (re.compile(r'(?:FAIL|failed|error)', re.I), 'struggling'),
 ]
 
+# Orchestrator event patterns for Mission Control observability
+ORCHESTRATOR_PATTERNS = {
+    'init_start': re.compile(r'Running initializer agent'),
+    'init_complete': re.compile(r'INITIALIZATION COMPLETE'),
+    'capacity_check': re.compile(r'\[DEBUG\] Spawning loop: (\d+) ready, (\d+) slots'),
+    'at_capacity': re.compile(r'At max capacity|at max testing agents|At max total agents'),
+    'feature_start': re.compile(r'Starting feature \d+/\d+: #(\d+) - (.+)'),
+    'coding_spawn': re.compile(r'Started coding agent for feature #(\d+)'),
+    'testing_spawn': re.compile(r'Started testing agent for feature #(\d+)'),
+    'coding_complete': re.compile(r'Feature #(\d+) (completed|failed)'),
+    'testing_complete': re.compile(r'Feature #(\d+) testing (completed|failed)'),
+    'all_complete': re.compile(r'All features complete'),
+    'blocked_features': re.compile(r'(\d+) blocked by dependencies'),
+}
+
 
 class AgentTracker:
     """Tracks active agents and their states for multi-agent mode.
@@ -250,6 +265,194 @@ class AgentTracker:
             return result
 
 
+class OrchestratorTracker:
+    """Tracks orchestrator state for Mission Control observability.
+
+    Parses orchestrator stdout for key events and emits orchestrator_update
+    WebSocket messages showing what decisions the orchestrator is making.
+    """
+
+    def __init__(self):
+        self.state = 'idle'
+        self.coding_agents = 0
+        self.testing_agents = 0
+        self.max_concurrency = 3  # Default, will be updated from output
+        self.ready_count = 0
+        self.blocked_count = 0
+        self.recent_events: list[dict] = []
+        self._lock = asyncio.Lock()
+
+    async def process_line(self, line: str) -> dict | None:
+        """
+        Process an output line and return an orchestrator_update message if relevant.
+
+        Returns None if no update should be emitted.
+        """
+        async with self._lock:
+            update = None
+
+            # Check for initializer start
+            if ORCHESTRATOR_PATTERNS['init_start'].search(line):
+                self.state = 'initializing'
+                update = self._create_update(
+                    'init_start',
+                    'Initializing project features...'
+                )
+
+            # Check for initializer complete
+            elif ORCHESTRATOR_PATTERNS['init_complete'].search(line):
+                self.state = 'scheduling'
+                update = self._create_update(
+                    'init_complete',
+                    'Initialization complete, preparing to schedule features'
+                )
+
+            # Check for capacity status
+            elif match := ORCHESTRATOR_PATTERNS['capacity_check'].search(line):
+                self.ready_count = int(match.group(1))
+                slots = int(match.group(2))
+                self.state = 'scheduling' if self.ready_count > 0 else 'monitoring'
+                update = self._create_update(
+                    'capacity_check',
+                    f'{self.ready_count} features ready, {slots} slots available'
+                )
+
+            # Check for at capacity
+            elif ORCHESTRATOR_PATTERNS['at_capacity'].search(line):
+                self.state = 'monitoring'
+                update = self._create_update(
+                    'at_capacity',
+                    'At maximum capacity, monitoring active agents'
+                )
+
+            # Check for feature start
+            elif match := ORCHESTRATOR_PATTERNS['feature_start'].search(line):
+                feature_id = int(match.group(1))
+                feature_name = match.group(2).strip()
+                self.state = 'spawning'
+                update = self._create_update(
+                    'feature_start',
+                    f'Preparing Feature #{feature_id}: {feature_name}',
+                    feature_id=feature_id,
+                    feature_name=feature_name
+                )
+
+            # Check for coding agent spawn
+            elif match := ORCHESTRATOR_PATTERNS['coding_spawn'].search(line):
+                feature_id = int(match.group(1))
+                self.coding_agents += 1
+                self.state = 'spawning'
+                update = self._create_update(
+                    'coding_spawn',
+                    f'Spawned coding agent for Feature #{feature_id}',
+                    feature_id=feature_id
+                )
+
+            # Check for testing agent spawn
+            elif match := ORCHESTRATOR_PATTERNS['testing_spawn'].search(line):
+                feature_id = int(match.group(1))
+                self.testing_agents += 1
+                self.state = 'spawning'
+                update = self._create_update(
+                    'testing_spawn',
+                    f'Spawned testing agent for Feature #{feature_id}',
+                    feature_id=feature_id
+                )
+
+            # Check for coding agent complete
+            elif match := ORCHESTRATOR_PATTERNS['coding_complete'].search(line):
+                # Only match if "testing" is not in the line
+                if 'testing' not in line.lower():
+                    feature_id = int(match.group(1))
+                    self.coding_agents = max(0, self.coding_agents - 1)
+                    self.state = 'monitoring'
+                    update = self._create_update(
+                        'coding_complete',
+                        f'Coding agent finished Feature #{feature_id}',
+                        feature_id=feature_id
+                    )
+
+            # Check for testing agent complete
+            elif match := ORCHESTRATOR_PATTERNS['testing_complete'].search(line):
+                feature_id = int(match.group(1))
+                self.testing_agents = max(0, self.testing_agents - 1)
+                self.state = 'monitoring'
+                update = self._create_update(
+                    'testing_complete',
+                    f'Testing agent finished Feature #{feature_id}',
+                    feature_id=feature_id
+                )
+
+            # Check for blocked features count
+            elif match := ORCHESTRATOR_PATTERNS['blocked_features'].search(line):
+                self.blocked_count = int(match.group(1))
+
+            # Check for all complete
+            elif ORCHESTRATOR_PATTERNS['all_complete'].search(line):
+                self.state = 'complete'
+                self.coding_agents = 0
+                self.testing_agents = 0
+                update = self._create_update(
+                    'all_complete',
+                    'All features complete!'
+                )
+
+            return update
+
+    def _create_update(
+        self,
+        event_type: str,
+        message: str,
+        feature_id: int | None = None,
+        feature_name: str | None = None
+    ) -> dict:
+        """Create an orchestrator_update WebSocket message."""
+        timestamp = datetime.now().isoformat()
+
+        # Add to recent events (keep last 5)
+        event = {
+            'eventType': event_type,
+            'message': message,
+            'timestamp': timestamp,
+        }
+        if feature_id is not None:
+            event['featureId'] = feature_id
+        if feature_name is not None:
+            event['featureName'] = feature_name
+
+        self.recent_events = [event] + self.recent_events[:4]
+
+        update = {
+            'type': 'orchestrator_update',
+            'eventType': event_type,
+            'state': self.state,
+            'message': message,
+            'timestamp': timestamp,
+            'codingAgents': self.coding_agents,
+            'testingAgents': self.testing_agents,
+            'maxConcurrency': self.max_concurrency,
+            'readyCount': self.ready_count,
+            'blockedCount': self.blocked_count,
+        }
+
+        if feature_id is not None:
+            update['featureId'] = feature_id
+        if feature_name is not None:
+            update['featureName'] = feature_name
+
+        return update
+
+    async def reset(self):
+        """Reset tracker state when orchestrator stops or crashes."""
+        async with self._lock:
+            self.state = 'idle'
+            self.coding_agents = 0
+            self.testing_agents = 0
+            self.ready_count = 0
+            self.blocked_count = 0
+            self.recent_events.clear()
+
+
 def _get_project_path(project_name: str) -> Path:
     """Get project path from registry."""
     import sys
@@ -400,6 +603,9 @@ async def project_websocket(websocket: WebSocket, project_name: str):
     # Create agent tracker for multi-agent mode
     agent_tracker = AgentTracker()
 
+    # Create orchestrator tracker for observability
+    orchestrator_tracker = OrchestratorTracker()
+
     async def on_output(line: str):
         """Handle agent output - broadcast to this WebSocket."""
         try:
@@ -429,6 +635,11 @@ async def project_websocket(websocket: WebSocket, project_name: str):
             agent_update = await agent_tracker.process_line(line)
             if agent_update:
                 await websocket.send_json(agent_update)
+
+            # Also check for orchestrator events and emit orchestrator_update messages
+            orch_update = await orchestrator_tracker.process_line(line)
+            if orch_update:
+                await websocket.send_json(orch_update)
         except Exception:
             pass  # Connection may be closed
 
@@ -439,9 +650,10 @@ async def project_websocket(websocket: WebSocket, project_name: str):
                 "type": "agent_status",
                 "status": status,
             })
-            # Reset tracker when agent stops OR crashes to prevent ghost agents on restart
+            # Reset trackers when agent stops OR crashes to prevent ghost agents on restart
             if status in ("stopped", "crashed"):
                 await agent_tracker.reset()
+                await orchestrator_tracker.reset()
         except Exception:
             pass  # Connection may be closed
 

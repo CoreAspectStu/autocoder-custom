@@ -206,8 +206,39 @@ export interface ActiveAgent {
   logs?: AgentLogEntry[]  // Per-agent log history
 }
 
+// Orchestrator state for Mission Control
+export type OrchestratorState =
+  | 'idle'
+  | 'initializing'
+  | 'scheduling'
+  | 'spawning'
+  | 'monitoring'
+  | 'complete'
+
+// Orchestrator event for recent activity
+export interface OrchestratorEvent {
+  eventType: string
+  message: string
+  timestamp: string
+  featureId?: number
+  featureName?: string
+}
+
+// Orchestrator status for Mission Control
+export interface OrchestratorStatus {
+  state: OrchestratorState
+  message: string
+  codingAgents: number
+  testingAgents: number
+  maxConcurrency: number
+  readyCount: number
+  blockedCount: number
+  timestamp: string
+  recentEvents: OrchestratorEvent[]
+}
+
 // WebSocket message types
-export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update'
+export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update'
 
 export interface WSProgressMessage {
   type: 'progress'
@@ -265,6 +296,21 @@ export interface WSDevServerStatusMessage {
   url: string | null
 }
 
+export interface WSOrchestratorUpdateMessage {
+  type: 'orchestrator_update'
+  eventType: string
+  state: OrchestratorState
+  message: string
+  timestamp: string
+  codingAgents?: number
+  testingAgents?: number
+  maxConcurrency?: number
+  readyCount?: number
+  blockedCount?: number
+  featureId?: number
+  featureName?: string
+}
+
 export type WSMessage =
   | WSProgressMessage
   | WSFeatureUpdateMessage
@@ -274,6 +320,7 @@ export type WSMessage =
   | WSPongMessage
   | WSDevLogMessage
   | WSDevServerStatusMessage
+  | WSOrchestratorUpdateMessage
 
 // ============================================================================
 // Spec Chat Types
