@@ -73,13 +73,14 @@ ORCHESTRATOR_PATTERNS = {
 class AgentTracker:
     """Tracks active agents and their states for multi-agent mode.
 
-    Both coding and testing agents are now tracked by their feature ID.
-    The agent_type field distinguishes between them.
+    Both coding and testing agents are tracked using a composite key of
+    (feature_id, agent_type) to allow simultaneous tracking of both agent
+    types for the same feature.
     """
 
     def __init__(self):
-        # feature_id -> {name, state, last_thought, agent_index, agent_type}
-        self.active_agents: dict[int, dict] = {}
+        # (feature_id, agent_type) -> {name, state, last_thought, agent_index, agent_type}
+        self.active_agents: dict[tuple[int, str], dict] = {}
         self._next_agent_index = 0
         self._lock = asyncio.Lock()
 
@@ -111,14 +112,14 @@ class AgentTracker:
         if testing_complete_match:
             feature_id = int(testing_complete_match.group(1))
             is_success = testing_complete_match.group(2) == "completed"
-            return await self._handle_agent_complete(feature_id, is_success)
+            return await self._handle_agent_complete(feature_id, is_success, agent_type="testing")
 
         # Coding agent complete: "Feature #X completed/failed" (without "testing" keyword)
         if line.startswith("Feature #") and ("completed" in line or "failed" in line) and "testing" not in line:
             try:
                 feature_id = int(re.search(r'#(\d+)', line).group(1))
                 is_success = "completed" in line
-                return await self._handle_agent_complete(feature_id, is_success)
+                return await self._handle_agent_complete(feature_id, is_success, agent_type="coding")
             except (AttributeError, ValueError):
                 pass
 
@@ -132,11 +133,21 @@ class AgentTracker:
         content = match.group(2)
 
         async with self._lock:
-            # Ensure agent is tracked
-            if feature_id not in self.active_agents:
+            # Check if either coding or testing agent exists for this feature
+            # This prevents creating ghost agents when a testing agent outputs [Feature #X] lines
+            coding_key = (feature_id, 'coding')
+            testing_key = (feature_id, 'testing')
+
+            if coding_key in self.active_agents:
+                key = coding_key
+            elif testing_key in self.active_agents:
+                key = testing_key
+            else:
+                # Neither exists, create a new coding agent entry (implicit tracking)
+                key = coding_key
                 agent_index = self._next_agent_index
                 self._next_agent_index += 1
-                self.active_agents[feature_id] = {
+                self.active_agents[key] = {
                     'name': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
                     'agent_index': agent_index,
                     'agent_type': 'coding',
@@ -145,7 +156,7 @@ class AgentTracker:
                     'last_thought': None,
                 }
 
-            agent = self.active_agents[feature_id]
+            agent = self.active_agents[key]
 
             # Detect state and thought from content
             state = 'working'
@@ -178,16 +189,21 @@ class AgentTracker:
 
         return None
 
-    async def get_agent_info(self, feature_id: int) -> tuple[int | None, str | None]:
-        """Get agent index and name for a feature ID.
+    async def get_agent_info(self, feature_id: int, agent_type: str = "coding") -> tuple[int | None, str | None]:
+        """Get agent index and name for a feature ID and agent type.
 
         Thread-safe method that acquires the lock before reading state.
+
+        Args:
+            feature_id: The feature ID to look up.
+            agent_type: The agent type ("coding" or "testing"). Defaults to "coding".
 
         Returns:
             Tuple of (agentIndex, agentName) or (None, None) if not tracked.
         """
         async with self._lock:
-            agent = self.active_agents.get(feature_id)
+            key = (feature_id, agent_type)
+            agent = self.active_agents.get(key)
             if agent:
                 return agent['agent_index'], agent['name']
             return None, None
@@ -207,6 +223,7 @@ class AgentTracker:
     async def _handle_agent_start(self, feature_id: int, line: str, agent_type: str = "coding") -> dict | None:
         """Handle agent start message from orchestrator."""
         async with self._lock:
+            key = (feature_id, agent_type)  # Composite key for separate tracking
             agent_index = self._next_agent_index
             self._next_agent_index += 1
 
@@ -216,7 +233,7 @@ class AgentTracker:
             if name_match:
                 feature_name = name_match.group(1)
 
-            self.active_agents[feature_id] = {
+            self.active_agents[key] = {
                 'name': AGENT_MASCOTS[agent_index % len(AGENT_MASCOTS)],
                 'agent_index': agent_index,
                 'agent_type': agent_type,
@@ -237,26 +254,33 @@ class AgentTracker:
                 'timestamp': datetime.now().isoformat(),
             }
 
-    async def _handle_agent_complete(self, feature_id: int, is_success: bool) -> dict | None:
-        """Handle agent completion - ALWAYS emits a message, even if agent wasn't tracked."""
+    async def _handle_agent_complete(self, feature_id: int, is_success: bool, agent_type: str = "coding") -> dict | None:
+        """Handle agent completion - ALWAYS emits a message, even if agent wasn't tracked.
+
+        Args:
+            feature_id: The feature ID.
+            is_success: Whether the agent completed successfully.
+            agent_type: The agent type ("coding" or "testing"). Defaults to "coding".
+        """
         async with self._lock:
+            key = (feature_id, agent_type)  # Composite key for correct agent lookup
             state = 'success' if is_success else 'error'
 
-            if feature_id in self.active_agents:
+            if key in self.active_agents:
                 # Normal case: agent was tracked
-                agent = self.active_agents[feature_id]
+                agent = self.active_agents[key]
                 result = {
                     'type': 'agent_update',
                     'agentIndex': agent['agent_index'],
                     'agentName': agent['name'],
-                    'agentType': agent.get('agent_type', 'coding'),
+                    'agentType': agent.get('agent_type', agent_type),
                     'featureId': feature_id,
                     'featureName': agent['feature_name'],
                     'state': state,
                     'thought': 'Completed successfully!' if is_success else 'Failed to complete',
                     'timestamp': datetime.now().isoformat(),
                 }
-                del self.active_agents[feature_id]
+                del self.active_agents[key]
                 return result
             else:
                 # Synthetic completion for untracked agent
@@ -265,7 +289,7 @@ class AgentTracker:
                     'type': 'agent_update',
                     'agentIndex': -1,  # Sentinel for untracked
                     'agentName': 'Unknown',
-                    'agentType': 'coding',
+                    'agentType': agent_type,
                     'featureId': feature_id,
                     'featureName': f'Feature #{feature_id}',
                     'state': state,

@@ -15,7 +15,6 @@ Tools:
 - feature_mark_in_progress: Mark a feature as in-progress
 - feature_claim_and_get: Atomically claim and get feature details
 - feature_clear_in_progress: Clear in-progress status
-- feature_release_testing: Release testing lock on a feature
 - feature_create_bulk: Create multiple features at once
 - feature_create: Create a single feature
 - feature_add_dependency: Add a dependency between features
@@ -33,7 +32,6 @@ import os
 import sys
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -224,57 +222,6 @@ def feature_get_summary(
             "in_progress": feature.in_progress,
             "dependencies": feature.dependencies or []
         })
-    finally:
-        session.close()
-
-
-@mcp.tool()
-def feature_release_testing(
-    feature_id: Annotated[int, Field(description="The ID of the feature to release", ge=1)],
-    tested_ok: Annotated[bool, Field(description="True if the feature passed testing, False if regression found")] = True
-) -> str:
-    """Release a feature after regression testing completes.
-
-    Clears the testing_in_progress flag and updates last_tested_at timestamp.
-
-    This should be called after testing is complete, whether the feature
-    passed or failed. If tested_ok=False, the feature was marked as failing
-    by a previous call to feature_mark_failing.
-
-    Args:
-        feature_id: The ID of the feature that was being tested
-        tested_ok: True if testing passed, False if a regression was found
-
-    Returns:
-        JSON with release confirmation or error message.
-    """
-    session = get_session()
-    try:
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
-        if feature is None:
-            return json.dumps({"error": f"Feature with ID {feature_id} not found"})
-
-        if not feature.testing_in_progress:
-            return json.dumps({
-                "warning": f"Feature {feature_id} was not being tested",
-                "feature": feature.to_dict()
-            })
-
-        # Clear testing flag and update timestamp
-        feature.testing_in_progress = False
-        feature.last_tested_at = datetime.now(timezone.utc)
-        session.commit()
-        session.refresh(feature)
-
-        status = "passed" if tested_ok else "failed (regression detected)"
-        return json.dumps({
-            "message": f"Feature #{feature_id} testing {status}",
-            "feature": feature.to_dict()
-        })
-    except Exception as e:
-        session.rollback()
-        return json.dumps({"error": f"Failed to release testing claim: {str(e)}"})
     finally:
         session.close()
 

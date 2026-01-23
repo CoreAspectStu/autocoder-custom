@@ -93,12 +93,11 @@ def get_testing_prompt(project_dir: Path | None = None, testing_feature_id: int 
 
 **You are assigned to regression test Feature #{testing_feature_id}.**
 
-The orchestrator has already claimed this feature for you.
-
 ### Your workflow:
 1. Call `feature_get_by_id` with ID {testing_feature_id} to get the feature details
 2. Verify the feature through the UI using browser automation
-3. When done, call `feature_release_testing` with feature_id={testing_feature_id}
+3. If regression found, call `feature_mark_failing` with feature_id={testing_feature_id}
+4. Exit when done (no cleanup needed)
 
 ---
 
