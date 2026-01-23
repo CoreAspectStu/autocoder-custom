@@ -35,12 +35,15 @@ See `docs/ports-4000-4099.txt` for full SSH config port list.
 | Do This | Command |
 |---------|---------|
 | Start UI (safe) | `autocoder-ui` |
-| Start UI (no limits) | `cd ~/projects/autocoder && ./remote-start.sh ui` |
-| Start agent | `cd ~/projects/autocoder && ./remote-start.sh agent myproject` |
-| Check status | `cd ~/projects/autocoder && ./remote-start.sh status` |
-| View logs | `cd ~/projects/autocoder && ./remote-start.sh logs ui` |
-| Stop all | `cd ~/projects/autocoder && ./remote-start.sh stop` |
-| Reattach | `cd ~/projects/autocoder && ./remote-start.sh attach ui` |
+| Start UI (no limits) | `autocoder ui` |
+| Start agent | `autocoder agent myproject` |
+| Check status | `autocoder status` |
+| Health check | `autocoder-health` |
+| View logs | `autocoder logs ui` |
+| Stop all | `autocoder stop` |
+| Reattach | `autocoder attach ui` |
+
+**Note:** `autocoder` is a convenience wrapper for `./remote-start.sh` that works from any directory.
 
 ## Detach from tmux
 

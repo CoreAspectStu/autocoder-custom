@@ -112,17 +112,25 @@ This is an autonomous coding agent system with a React-based UI. It uses the Cla
 # Remote server (with resource guardrails) - RECOMMENDED
 autocoder-ui      # Limits: 2 cores, 8GB RAM, 250 processes
 
+# Remote server (convenience wrapper - no guardrails)
+autocoder ui      # Works from any directory
+autocoder status  # Check running sessions
+autocoder stop    # Stop all sessions
+autocoder logs ui # View logs
+
 # Local development
 ./start.sh        # CLI menu (Linux/macOS)
 ./start_ui.sh     # Web UI (Linux/macOS)
 start.bat         # CLI menu (Windows)
 start_ui.bat      # Web UI (Windows)
 
-# Remote without guardrails (not recommended - can consume all system resources)
+# Direct (requires cd to project directory)
 ./remote-start.sh ui
 ```
 
 **Why use `autocoder-ui`?** The wrapper script uses systemd to limit resources and prevent browser automation processes from consuming all system CPU/RAM, which can cause system instability.
+
+**Convenience wrapper:** `autocoder` is a shortcut to `./remote-start.sh` that works from any directory (see `~/bin/autocoder`).
 
 ### Python Backend (Manual)
 

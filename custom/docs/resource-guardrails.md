@@ -46,23 +46,24 @@ exec systemd-run --user --scope \
 autocoder-ui
 
 # Check status
-cd ~/projects/autocoder
-./remote-start.sh status
+autocoder status
 
 # Stop
-./remote-start.sh stop
+autocoder stop
 
 # View logs
-./remote-start.sh logs ui
+autocoder logs ui
 ```
+
+**Convenience wrapper:** The `autocoder` command is a shortcut to `./remote-start.sh` that works from any directory.
 
 ### When to Bypass Guardrails
 
 Only bypass if you're actively debugging resource issues or need more resources for large projects:
 
 ```bash
-cd ~/projects/autocoder
-./remote-start.sh ui
+# Without guardrails
+autocoder ui
 ```
 
 ### Adjusting Limits
