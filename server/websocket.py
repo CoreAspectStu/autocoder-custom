@@ -238,31 +238,41 @@ class AgentTracker:
             }
 
     async def _handle_agent_complete(self, feature_id: int, is_success: bool) -> dict | None:
-        """Handle agent completion message from orchestrator."""
+        """Handle agent completion - ALWAYS emits a message, even if agent wasn't tracked."""
         async with self._lock:
-            if feature_id not in self.active_agents:
-                return None
-
-            agent = self.active_agents[feature_id]
             state = 'success' if is_success else 'error'
-            agent_type = agent.get('agent_type', 'coding')
 
-            result = {
-                'type': 'agent_update',
-                'agentIndex': agent['agent_index'],
-                'agentName': agent['name'],
-                'agentType': agent_type,
-                'featureId': feature_id,
-                'featureName': agent['feature_name'],
-                'state': state,
-                'thought': 'Completed successfully!' if is_success else 'Failed to complete',
-                'timestamp': datetime.now().isoformat(),
-            }
-
-            # Remove from active agents
-            del self.active_agents[feature_id]
-
-            return result
+            if feature_id in self.active_agents:
+                # Normal case: agent was tracked
+                agent = self.active_agents[feature_id]
+                result = {
+                    'type': 'agent_update',
+                    'agentIndex': agent['agent_index'],
+                    'agentName': agent['name'],
+                    'agentType': agent.get('agent_type', 'coding'),
+                    'featureId': feature_id,
+                    'featureName': agent['feature_name'],
+                    'state': state,
+                    'thought': 'Completed successfully!' if is_success else 'Failed to complete',
+                    'timestamp': datetime.now().isoformat(),
+                }
+                del self.active_agents[feature_id]
+                return result
+            else:
+                # Synthetic completion for untracked agent
+                # This ensures UI always receives completion messages
+                return {
+                    'type': 'agent_update',
+                    'agentIndex': -1,  # Sentinel for untracked
+                    'agentName': 'Unknown',
+                    'agentType': 'coding',
+                    'featureId': feature_id,
+                    'featureName': f'Feature #{feature_id}',
+                    'state': state,
+                    'thought': 'Completed successfully!' if is_success else 'Failed to complete',
+                    'timestamp': datetime.now().isoformat(),
+                    'synthetic': True,
+                }
 
 
 class OrchestratorTracker:

@@ -195,8 +195,8 @@ export interface AgentLogEntry {
 
 // Agent update from backend
 export interface ActiveAgent {
-  agentIndex: number
-  agentName: AgentMascot
+  agentIndex: number  // -1 for synthetic completions
+  agentName: AgentMascot | 'Unknown'
   agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
@@ -265,14 +265,15 @@ export interface WSLogMessage {
 
 export interface WSAgentUpdateMessage {
   type: 'agent_update'
-  agentIndex: number
-  agentName: AgentMascot
+  agentIndex: number  // -1 for synthetic completions (untracked agents)
+  agentName: AgentMascot | 'Unknown'
   agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
   state: AgentState
   thought?: string
   timestamp: string
+  synthetic?: boolean  // True for synthetic completions from untracked agents
 }
 
 export interface WSAgentStatusMessage {

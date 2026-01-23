@@ -24,7 +24,7 @@ interface ActivityItem {
 
 // Celebration trigger for overlay
 interface CelebrationTrigger {
-  agentName: AgentMascot
+  agentName: AgentMascot | 'Unknown'
   featureName: string
   featureId: number
 }
@@ -190,9 +190,18 @@ export function useProjectWebSocket(projectName: string | null) {
                 if (message.state === 'success' || message.state === 'error') {
                   // Remove agent from active list on completion (success or failure)
                   // But keep the logs in agentLogs map for debugging
-                  newAgents = prev.activeAgents.filter(
-                    a => a.agentIndex !== message.agentIndex
-                  )
+                  if (message.agentIndex === -1) {
+                    // Synthetic completion: remove by featureId
+                    // This handles agents that weren't tracked but still completed
+                    newAgents = prev.activeAgents.filter(
+                      a => a.featureId !== message.featureId
+                    )
+                  } else {
+                    // Normal completion: remove by agentIndex
+                    newAgents = prev.activeAgents.filter(
+                      a => a.agentIndex !== message.agentIndex
+                    )
+                  }
                 } else if (existingAgentIdx >= 0) {
                   // Update existing agent
                   newAgents = [...prev.activeAgents]
@@ -410,6 +419,27 @@ export function useProjectWebSocket(projectName: string | null) {
       }
     }
   }, [projectName, connect, sendPing])
+
+  // Defense-in-depth: cleanup stale agents for users who leave UI open for hours
+  // This catches edge cases where completion messages are missed
+  useEffect(() => {
+    const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes
+
+    const cleanup = setInterval(() => {
+      setState(prev => {
+        const now = Date.now()
+        const fresh = prev.activeAgents.filter(a =>
+          now - new Date(a.timestamp).getTime() < STALE_THRESHOLD_MS
+        )
+        if (fresh.length !== prev.activeAgents.length) {
+          return { ...prev, activeAgents: fresh }
+        }
+        return prev
+      })
+    }, 60000) // Check every minute
+
+    return () => clearInterval(cleanup)
+  }, [])
 
   // Clear logs function
   const clearLogs = useCallback(() => {
