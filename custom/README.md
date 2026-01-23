@@ -33,12 +33,31 @@ This guide documents the exact process for safely updating while preserving all 
 
 **Quick summary:**
 1. Create backup branch: `git branch backup-$(date +%Y-%m-%d)`
-2. Pull upstream: `git pull origin master`
+2. Pull upstream: `git pull upstream master --no-rebase`
 3. Resolve conflicts (guide shows patterns)
 4. Install new deps: `pip install -r requirements.txt`
 5. Test everything works
+6. Push to fork: `git push origin master`
 
 **Last successful update:** 2026-01-22 (merged 28 commits, zero issues)
+
+---
+
+## 🔄 Git Remotes & Workflow
+
+This is a **custom fork** backed up to GitHub:
+
+- **origin:** `git@github.com:CoreAspectStu/autocoder-custom.git` (YOUR fork - push here)
+- **upstream:** `https://github.com/leonvanzyl/autocoder` (vanilla AutoCoder - pull from here)
+
+**After making changes, back them up:**
+```bash
+git add <files>
+git commit -m "Description"
+git push origin master
+```
+
+**To get upstream updates, see:** [`docs/UPDATE-GUIDE.md`](docs/UPDATE-GUIDE.md)
 
 ---
 

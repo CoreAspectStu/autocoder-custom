@@ -42,6 +42,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 🔄 Git Workflow & Backup
+
+**IMPORTANT:** This is a CUSTOM FORK with custom work that must be preserved.
+
+### Remote Setup
+
+- `origin` → https://github.com/CoreAspectStu/autocoder-custom (YOUR fork - push custom changes here)
+- `upstream` → https://github.com/leonvanzyl/autocoder (upstream - pull updates from here)
+
+### Daily Workflow: Saving Your Changes
+
+**After making ANY changes to the codebase:**
+
+```bash
+cd ~/projects/autocoder
+
+# 1. Check what changed
+git status
+
+# 2. Stage your changes
+git add <files>
+
+# 3. Commit with descriptive message
+git commit -m "Description of changes"
+
+# 4. Push to YOUR fork (backup to GitHub)
+git push origin master
+```
+
+**IMPORTANT:** Push to `origin` (your fork) regularly to back up custom work!
+
+### Getting Upstream Updates
+
+**When you need the latest features from upstream:**
+
+```bash
+# 1. READ THE UPDATE GUIDE FIRST!
+cat custom/docs/UPDATE-GUIDE.md
+
+# 2. Create backup branch
+git branch backup-$(date +%Y-%m-%d)
+
+# 3. Pull from upstream (not origin!)
+git pull upstream master --no-rebase
+
+# 4. Resolve any conflicts (see UPDATE-GUIDE.md)
+
+# 5. Push merged changes to your fork
+git push origin master
+```
+
+**Never run `git pull origin master`** - origin is YOUR fork, not upstream!
+
+---
+
 ## Project Overview
 
 This is an autonomous coding agent system with a React-based UI. It uses the Claude Agent SDK to build complete applications over multiple sessions using a two-agent pattern:
