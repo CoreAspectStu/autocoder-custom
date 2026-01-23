@@ -25,6 +25,23 @@ This directory tracks all custom modifications made to the vanilla AutoCoder pro
 
 ---
 
+## ⚡ **UPDATING AUTOCODER FROM UPSTREAM?**
+
+**🚨 READ THIS FIRST:** [`docs/UPDATE-GUIDE.md`](docs/UPDATE-GUIDE.md)
+
+This guide documents the exact process for safely updating while preserving all custom work. **IMPORTANT:** Tell Claude to read this file before starting any update process.
+
+**Quick summary:**
+1. Create backup branch: `git branch backup-$(date +%Y-%m-%d)`
+2. Pull upstream: `git pull origin master`
+3. Resolve conflicts (guide shows patterns)
+4. Install new deps: `pip install -r requirements.txt`
+5. Test everything works
+
+**Last successful update:** 2026-01-22 (merged 28 commits, zero issues)
+
+---
+
 ## 📁 Directory Structure
 
 ```
@@ -32,18 +49,23 @@ autocoder/
 ├── custom/                            # This directory - tracks all customizations
 │   ├── README.md                      # This file - master index
 │   ├── docs/                          # Remote server documentation
+│   │   ├── UPDATE-GUIDE.md           # ⚡ Upstream update process (READ FIRST!)
+│   │   ├── UPDATE-CHECKLIST.md       # Quick update reference card
 │   │   ├── remote-quickstart.md      # Quick reference card
 │   │   ├── remote-setup.md           # User guide
 │   │   ├── remote-server-setup.md    # Complete setup instructions
+│   │   ├── auth-settings-customization.md  # Auth system (deprecated)
+│   │   ├── future-improvements.md    # Feature wishlist
 │   │   └── ports-4000-4099.txt       # SSH config port mappings
-│   └── patches/                       # Patch system for upstream updates
-│       ├── apply-remote-access.sh    # Auto-apply script (all patches)
-│       ├── port-assignment.patch     # Port assignment system (4000-4099)
-│       └── README.md                  # Patch documentation
+│   ├── patches/                       # Patch system for upstream updates
+│   │   ├── apply-remote-access.sh    # Auto-apply script (all patches)
+│   │   ├── port-assignment.patch     # Port assignment system (4000-4099)
+│   │   └── README.md                  # Patch documentation
+│   └── auth_config.py                 # [DEPRECATED] Auth utilities (unused)
 │
 ├── remote-start.sh                    # [CUSTOM] Main launcher script
 ├── server/routers/
-│   └── status.py                      # [CUSTOM] Status page router
+│   └── status.py                      # [CUSTOM] Enhanced dashboard (1132 lines)
 └── docs/
     └── README.md                      # [CUSTOM] Documentation index
 ```
@@ -70,21 +92,23 @@ autocoder/
 
 | File | Location | Purpose | Lines |
 |------|----------|---------|-------|
-| `status.py` | `server/routers/` | [MODIFIED] Enhanced dashboard with health metrics, agent status, spec modal, **auth settings panel** | ~1250 |
-| `settings.py` | `server/routers/` | [MODIFIED] Extended with auth_method and api_key handling | ~120 |
-| `devserver.py` | `server/routers/` | [MODIFIED] Returns assigned_port in config | 282 |
-| `project_config.py` | `server/services/` | [MODIFIED] Automatic port assignment (4000-4099) | 604 |
-| `schemas.py` | `server/` | [MODIFIED] Added assigned_port, auth_method, api_key_configured fields | ~450 |
-| `auth_config.py` | `custom/` | [NEW] Utility for managing auth settings in .env file | 145 |
+| `status.py` | `server/routers/` | [CUSTOM] Enhanced dashboard with health metrics, agent status, spec modal with XML formatting | 1132 |
+
+**Note:** After 2026-01-22 update, auth customizations were removed in favor of upstream's simplified approach. Port assignment system was also deprecated by upstream.
 
 ### Documentation
 
 | File | Location | Purpose | Words |
 |------|----------|---------|-------|
-| `custom/README.md` | `custom/` | This file - master index | - |
-| `auth-settings-customization.md` | `custom/docs/` | Auth settings feature documentation and reapply guide | ~3200 |
+| `custom/README.md` | `custom/` | This file - master index | ~7000 |
+| `UPDATE-GUIDE.md` | `custom/docs/` | **⚡ CRITICAL** Upstream update process | ~2500 |
+| `UPDATE-CHECKLIST.md` | `custom/docs/` | Quick update reference card | ~400 |
 | `remote-quickstart.md` | `custom/docs/` | Quick reference cheat sheet | ~300 |
 | `remote-setup.md` | `custom/docs/` | Complete user guide | ~2000 |
+| `remote-server-setup.md` | `custom/docs/` | Detailed server setup guide | ~3000 |
+| `auth-settings-customization.md` | `custom/docs/` | [DEPRECATED] Auth settings (removed 2026-01-22) | ~3200 |
+| `future-improvements.md` | `custom/docs/` | Feature wishlist from brainstorming | ~800 |
+| `ports-4000-4099.txt` | `custom/docs/` | SSH tunnel port mappings | ~100 |
 | `remote-server-setup.md` | `custom/docs/` | Full setup instructions | ~3500 |
 | `future-improvements.md` | `custom/docs/` | Strategic improvements from party-mode | ~600 |
 | `ports-4000-4099.txt` | `custom/docs/` | SSH tunnel config | - |
