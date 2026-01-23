@@ -4,7 +4,7 @@ Located in `~/bin/`, these wrapper scripts make AutoCoder commands easier to use
 
 ## `autocoder-ui` (Resource-Limited Start)
 
-**Purpose:** Start the AutoCoder Web UI with systemd resource limits to prevent runaway browser processes.
+**Purpose:** Starts the UI inside a systemd user scope so runaway sub-agents/Playwright/Claude can't melt the box.
 
 **Location:** `~/bin/autocoder-ui`
 

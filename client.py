@@ -16,6 +16,7 @@ from claude_agent_sdk.types import HookMatcher
 from dotenv import load_dotenv
 
 from security import bash_security_hook
+from api.quota_budget import get_quota_budget
 
 # Load environment variables from .env file if present
 load_dotenv()
@@ -118,6 +119,62 @@ BUILTIN_TOOLS = [
     "WebFetch",
     "WebSearch",
 ]
+
+
+class QuotaTrackingClient:
+    """
+    Wrapper for ClaudeSDKClient that tracks API quota usage.
+
+    Transparently logs every API call to the quota budget tracker.
+    """
+
+    def __init__(self, wrapped_client: ClaudeSDKClient, model: str, project_name: str):
+        """
+        Initialize quota tracking wrapper.
+
+        Args:
+            wrapped_client: The ClaudeSDKClient to wrap
+            model: Model being used (for quota tracking)
+            project_name: Project name (for quota tracking)
+        """
+        self._client = wrapped_client
+        self._model = model
+        self._project_name = project_name
+        self._quota_budget = get_quota_budget()
+
+    async def query(self, message: str):
+        """
+        Send query and track quota usage.
+
+        Args:
+            message: The prompt to send
+        """
+        # Track quota BEFORE sending (preventive tracking)
+        self._quota_budget.track_usage(
+            model=self._model,
+            prompts_used=1,
+            project_name=self._project_name,
+        )
+
+        # Delegate to wrapped client
+        return await self._client.query(message)
+
+    def receive_response(self):
+        """Delegate receive_response to wrapped client."""
+        return self._client.receive_response()
+
+    async def __aenter__(self):
+        """Support async context manager protocol."""
+        await self._client.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Support async context manager protocol."""
+        return await self._client.__aexit__(exc_type, exc_val, exc_tb)
+
+    def __getattr__(self, name):
+        """Delegate all other attributes to wrapped client."""
+        return getattr(self._client, name)
 
 
 def create_client(
@@ -261,7 +318,8 @@ def create_client(
         if "ANTHROPIC_BASE_URL" in sdk_env:
             print(f"   - GLM Mode: Using {sdk_env['ANTHROPIC_BASE_URL']}")
 
-    return ClaudeSDKClient(
+    # Create the base Claude SDK client
+    base_client = ClaudeSDKClient(
         options=ClaudeAgentOptions(
             model=model,
             cli_path=system_cli,  # Use system CLI to avoid bundled Bun crash (exit code 3)
@@ -281,3 +339,8 @@ def create_client(
             env=sdk_env,  # Pass API configuration overrides to CLI subprocess
         )
     )
+
+    # Wrap with quota tracking
+    project_name = project_dir.name
+    print(f"   - Quota tracking enabled: {project_name}")
+    return QuotaTrackingClient(base_client, model, project_name)

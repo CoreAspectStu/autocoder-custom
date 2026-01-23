@@ -128,7 +128,7 @@ start_ui.bat      # Web UI (Windows)
 ./remote-start.sh ui
 ```
 
-**Why use `autocoder-ui`?** The wrapper script uses systemd to limit resources and prevent browser automation processes from consuming all system CPU/RAM, which can cause system instability.
+**Why use `autocoder-ui`?** Starts the UI inside a systemd user scope so runaway sub-agents/Playwright/Claude can't melt the box (limits: 2 cores, 8GB RAM, 250 processes).
 
 **Convenience wrapper:** `autocoder` is a shortcut to `./remote-start.sh` that works from any directory (see `~/bin/autocoder`).
 

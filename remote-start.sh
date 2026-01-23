@@ -1,429 +1,171 @@
-#!/bin/bash
-#
-# AutoCoder Remote Launcher
-# =========================
-# Run AutoCoder on a headless server via SSH with persistent sessions.
-#
-# Usage:
-#   ./remote-start.sh ui          Start the Web UI (port 8888)
-#   ./remote-start.sh agent <project>  Start agent for a project
-#   ./remote-start.sh status      Show running sessions
-#   ./remote-start.sh stop        Stop all AutoCoder sessions
-#   ./remote-start.sh logs <name> Tail logs from a session
-#   ./remote-start.sh attach <name> Attach to a session
-#
-# SSH Tunnel (run from your local machine):
-#   ssh -L 8888:localhost:8888 -L 5173:localhost:5173 user@server
-#
-# Then open http://localhost:8888 in your local browser.
-
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-
-# Configuration
 TMUX_SESSION_PREFIX="autocoder"
 UI_SESSION="${TMUX_SESSION_PREFIX}-ui"
-AGENT_SESSION="${TMUX_SESSION_PREFIX}-agent"
 DISPLAY_NUM=99
 XVFB_PID_FILE="/tmp/autocoder-xvfb.pid"
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
+LOG_DIR="$SCRIPT_DIR/logs"
+UI_LOG="$LOG_DIR/autocoder-ui.log"
 
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+FOREGROUND="${AUTOCODER_FOREGROUND:-0}"
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
+# Parse flags
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --foreground) FOREGROUND="1" ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+set -- "${ARGS[@]:-}"
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+die() { echo "ERROR: $*" >&2; exit 1; }
 
-check_deps() {
-    local missing=()
-    for cmd in tmux xvfb-run python3; do
-        if ! command -v "$cmd" &>/dev/null; then
-            missing+=("$cmd")
-        fi
-    done
-
-    if [ ${#missing[@]} -ne 0 ]; then
-        log_error "Missing dependencies: ${missing[*]}"
-        log_info "Install with: sudo apt-get install tmux xvfb python3"
-        exit 1
-    fi
+ensure_deps() {
+  command -v tmux >/dev/null 2>&1 || die "tmux missing (sudo apt-get install -y tmux)"
+  command -v python3 >/dev/null 2>&1 || die "python3 missing"
 }
 
 start_xvfb() {
-    # Check if Xvfb is already running
-    if [ -f "$XVFB_PID_FILE" ]; then
-        local pid=$(cat "$XVFB_PID_FILE")
-        if kill -0 "$pid" 2>/dev/null; then
-            log_info "Xvfb already running (PID: $pid, DISPLAY=:$DISPLAY_NUM)"
-            export DISPLAY=":$DISPLAY_NUM"
-            return 0
-        fi
-        rm -f "$XVFB_PID_FILE"
-    fi
+  mkdir -p "$LOG_DIR"
 
-    # Start Xvfb
-    log_info "Starting Xvfb on display :$DISPLAY_NUM"
-    Xvfb ":$DISPLAY_NUM" -screen 0 1920x1080x24 &>/dev/null &
-    echo $! > "$XVFB_PID_FILE"
-    sleep 1
-
-    if kill -0 "$(cat "$XVFB_PID_FILE")" 2>/dev/null; then
-        log_info "Xvfb started (PID: $(cat "$XVFB_PID_FILE"))"
-        export DISPLAY=":$DISPLAY_NUM"
-    else
-        log_error "Failed to start Xvfb"
-        exit 1
+  if [[ -f "$XVFB_PID_FILE" ]]; then
+    pid="$(cat "$XVFB_PID_FILE" 2>/dev/null || true)"
+    if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
+      export DISPLAY=":${DISPLAY_NUM}"
+      return 0
     fi
+    rm -f "$XVFB_PID_FILE"
+  fi
+
+  if pgrep -af "Xvfb :${DISPLAY_NUM}\b" >/dev/null 2>&1; then
+    export DISPLAY=":${DISPLAY_NUM}"
+    return 0
+  fi
+
+  nohup Xvfb ":${DISPLAY_NUM}" -screen 0 1920x1080x24 >"$LOG_DIR/xvfb.log" 2>&1 &
+  echo "$!" > "$XVFB_PID_FILE"
+  export DISPLAY=":${DISPLAY_NUM}"
 }
 
 stop_xvfb() {
-    if [ -f "$XVFB_PID_FILE" ]; then
-        local pid=$(cat "$XVFB_PID_FILE")
-        if kill -0 "$pid" 2>/dev/null; then
-            log_info "Stopping Xvfb (PID: $pid)"
-            kill "$pid" 2>/dev/null || true
-        fi
-        rm -f "$XVFB_PID_FILE"
+  if [[ -f "$XVFB_PID_FILE" ]]; then
+    pid="$(cat "$XVFB_PID_FILE" 2>/dev/null || true)"
+    if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$pid" 2>/dev/null || true
     fi
+    rm -f "$XVFB_PID_FILE"
+  else
+    pkill -f "Xvfb :${DISPLAY_NUM}\b" 2>/dev/null || true
+  fi
 }
 
-session_exists() {
-    tmux has-session -t "$1" 2>/dev/null
+ui_cmd() {
+  # Your known-good UI command (from your tmux output)
+  echo "uvicorn server.main:app --host 127.0.0.1 --port 8888"
 }
 
-# ============================================================================
-# Commands
-# ============================================================================
+stop_all() {
+  ensure_deps
 
-cmd_ui() {
-    check_deps
-
-    if session_exists "$UI_SESSION"; then
-        log_warn "UI session already running"
-        log_info "Attach with: ./remote-start.sh attach ui"
-        log_info "Or stop with: ./remote-start.sh stop"
-        return 1
-    fi
-
-    # Start Xvfb for Playwright browser support
-    start_xvfb
-
-    log_info "Starting AutoCoder Web UI in tmux session: $UI_SESSION"
-
-    # Create .env if it doesn't exist
-    if [ ! -f "$SCRIPT_DIR/.env" ]; then
-        cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env" 2>/dev/null || true
-    fi
-
-    # Create tmux session and start UI on fixed port 8888
-    tmux new-session -d -s "$UI_SESSION" -c "$SCRIPT_DIR"
-    tmux send-keys -t "$UI_SESSION" "export DISPLAY=:$DISPLAY_NUM" Enter
-    tmux send-keys -t "$UI_SESSION" "export PLAYWRIGHT_HEADLESS=false" Enter
-    tmux send-keys -t "$UI_SESSION" "source venv/bin/activate && python -m uvicorn server.main:app --host 127.0.0.1 --port 8888 2>&1 | tee autocoder-ui.log" Enter
-
-    log_info "UI started in background tmux session"
-    echo ""
-    echo -e "${CYAN}========================================${NC}"
-    echo -e "${CYAN}  SSH Tunnel Commands (run locally)${NC}"
-    echo -e "${CYAN}========================================${NC}"
-    echo ""
-    echo "  ssh -L 8888:localhost:8888 stu@$(hostname -I | awk '{print $1}')"
-    echo ""
-    echo "  Then open: http://localhost:8888"
-    echo ""
-    echo -e "${CYAN}========================================${NC}"
-    echo ""
-    log_info "View logs: ./remote-start.sh logs ui"
-    log_info "Attach:    ./remote-start.sh attach ui"
-}
-
-cmd_agent() {
-    local project="$1"
-
-    if [ -z "$project" ]; then
-        log_error "Project name required"
-        echo "Usage: ./remote-start.sh agent <project-name-or-path>"
-        exit 1
-    fi
-
-    check_deps
-
-    local session_name="${AGENT_SESSION}-${project//\//-}"
-
-    if session_exists "$session_name"; then
-        log_warn "Agent session for '$project' already running"
-        log_info "Attach with: ./remote-start.sh attach agent-${project//\//-}"
-        return 1
-    fi
-
-    # Start Xvfb
-    start_xvfb
-
-    log_info "Starting agent for project: $project"
-
-    # Create tmux session
-    tmux new-session -d -s "$session_name" -c "$SCRIPT_DIR"
-    tmux send-keys -t "$session_name" "export DISPLAY=:$DISPLAY_NUM" Enter
-    tmux send-keys -t "$session_name" "export PLAYWRIGHT_HEADLESS=false" Enter
-    tmux send-keys -t "$session_name" "source venv/bin/activate && python autonomous_agent_demo.py --project-dir '$project' 2>&1 | tee 'agent-${project//\//-}.log'" Enter
-
-    log_info "Agent started in tmux session: $session_name"
-    log_info "View logs: ./remote-start.sh logs agent-${project//\//-}"
-}
-
-cmd_status() {
-    echo ""
-    echo -e "${CYAN}AutoCoder Sessions:${NC}"
-    echo "-------------------"
-
-    local found=0
-    for session in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${TMUX_SESSION_PREFIX}"); do
-        echo "  - $session (running)"
-        found=1
+  # Kill tmux autocoder sessions
+  if tmux ls >/dev/null 2>&1; then
+    tmux ls | awk -F: '{print $1}' | grep -E "^${TMUX_SESSION_PREFIX}-" | while read -r s; do
+      tmux kill-session -t "$s" 2>/dev/null || true
     done
+  fi
 
-    if [ $found -eq 0 ]; then
-        echo "  No active sessions"
-    fi
+  # Kill any process holding 8888 (psmisc provides fuser)
+  command -v fuser >/dev/null 2>&1 && fuser -k 8888/tcp 2>/dev/null || true
 
-    echo ""
-    echo -e "${CYAN}Xvfb Status:${NC}"
-    if [ -f "$XVFB_PID_FILE" ] && kill -0 "$(cat "$XVFB_PID_FILE")" 2>/dev/null; then
-        echo "  Running (PID: $(cat "$XVFB_PID_FILE"), DISPLAY=:$DISPLAY_NUM)"
-    else
-        echo "  Not running"
-    fi
-    echo ""
+  # Best-effort cleanup
+  pkill -f "playwright_chromiumdev_profile-" 2>/dev/null || true
+  pkill -f "@playwright/mcp" 2>/dev/null || true
+  pkill -f "^claude$" 2>/dev/null || true
+
+  stop_xvfb
+  echo "Stopped."
 }
 
-cmd_stop() {
-    log_info "Stopping all AutoCoder sessions..."
-
-    for session in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${TMUX_SESSION_PREFIX}"); do
-        log_info "Killing session: $session"
-        tmux kill-session -t "$session" 2>/dev/null || true
-    done
-
-    stop_xvfb
-
-    log_info "All sessions stopped"
+status() {
+  ensure_deps
+  tmux ls 2>/dev/null || echo "(no tmux sessions)"
+  ss -ltnp 2>/dev/null | grep ':8888' || echo "(8888 not listening)"
 }
 
-cmd_logs() {
-    local name="$1"
-    local session_name
-
-    if [ "$name" = "ui" ]; then
-        session_name="$UI_SESSION"
-    elif [[ "$name" == agent-* ]]; then
-        session_name="${TMUX_SESSION_PREFIX}-$name"
-    else
-        session_name="${AGENT_SESSION}-$name"
-    fi
-
-    if ! session_exists "$session_name"; then
-        log_error "Session '$session_name' not found"
-        cmd_status
-        exit 1
-    fi
-
-    log_info "Attaching to $session_name (Ctrl+B, D to detach)"
-    sleep 1
-    tmux attach-session -t "$session_name"
+logs() {
+  name="${1:-}"; [[ -n "$name" ]] || die "logs needs: ui"
+  [[ "$name" == "ui" ]] || die "only supported: logs ui"
+  [[ -f "$UI_LOG" ]] || die "no log file: $UI_LOG"
+  exec tail -n 200 -F "$UI_LOG"
 }
 
-cmd_attach() {
-    cmd_logs "$@"
+attach() {
+  name="${1:-}"; [[ -n "$name" ]] || die "attach needs: ui"
+  [[ "$name" == "ui" ]] || die "only supported: attach ui"
+  tmux has-session -t "$UI_SESSION" 2>/dev/null || die "session not running: $UI_SESSION"
+  exec tmux attach -t "$UI_SESSION"
 }
 
-cmd_doctor() {
-    echo ""
-    echo -e "${CYAN}AutoCoder System Health Check${NC}"
-    echo "=============================="
-    echo ""
+start_ui() {
+  ensure_deps
+  mkdir -p "$LOG_DIR"
+  start_xvfb
 
-    local all_good=true
+  export PLAYWRIGHT_HEADLESS=false
 
-    # Check dependencies
-    echo -e "${CYAN}[1/7] Checking dependencies...${NC}"
-    local missing=()
-    for cmd in tmux xvfb-run python3 Xvfb; do
-        if command -v "$cmd" &>/dev/null; then
-            echo "  ✓ $cmd found"
-        else
-            echo -e "  ${RED}✗ $cmd missing${NC}"
-            missing+=("$cmd")
-            all_good=false
-        fi
-    done
+  if [[ -f "$SCRIPT_DIR/venv/bin/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/venv/bin/activate"
+  fi
 
-    if [ ${#missing[@]} -ne 0 ]; then
-        echo -e "${YELLOW}  Install with: sudo apt-get install tmux xvfb python3${NC}"
-    fi
-    echo ""
+  CMD="$(ui_cmd)"
 
-    # Check Xvfb status
-    echo -e "${CYAN}[2/7] Checking Xvfb...${NC}"
-    if [ -f "$XVFB_PID_FILE" ] && kill -0 "$(cat "$XVFB_PID_FILE")" 2>/dev/null; then
-        echo "  ✓ Xvfb running (PID: $(cat "$XVFB_PID_FILE"), DISPLAY=:$DISPLAY_NUM)"
-    else
-        echo -e "  ${YELLOW}⚠ Xvfb not running (will start automatically)${NC}"
-    fi
-    echo ""
+  if [[ "$FOREGROUND" == "1" ]]; then
+    exec "$SCRIPT_DIR/venv/bin/python" -m $CMD 2>&1 | tee -a "$UI_LOG"
+  fi
 
-    # Check tmux sessions
-    echo -e "${CYAN}[3/7] Checking tmux sessions...${NC}"
-    local session_count=$(tmux list-sessions 2>/dev/null | grep -c "^${TMUX_SESSION_PREFIX}" || echo 0)
-    if [ "$session_count" -gt 0 ]; then
-        echo "  ✓ Found $session_count active session(s)"
-        tmux list-sessions 2>/dev/null | grep "^${TMUX_SESSION_PREFIX}" | sed 's/^/    /'
-    else
-        echo "  ℹ No active sessions"
-    fi
-    echo ""
+  # Detached mode via tmux
+  tmux has-session -t "$UI_SESSION" 2>/dev/null || \
+    tmux new-session -d -s "$UI_SESSION" -c "$SCRIPT_DIR" \
+      "bash -lc 'export DISPLAY=:$DISPLAY_NUM; export PLAYWRIGHT_HEADLESS=false; \
+      if [ -f venv/bin/activate ]; then source venv/bin/activate; fi; \
+      $CMD 2>&1 | tee -a \"$UI_LOG\"'"
 
-    # Check Python environment
-    echo -e "${CYAN}[4/7] Checking Python environment...${NC}"
-    if [ -d "$SCRIPT_DIR/venv" ]; then
-        echo "  ✓ Virtual environment found"
-        if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
-            local py_version=$("$SCRIPT_DIR/venv/bin/python" --version 2>&1)
-            echo "    $py_version"
-        fi
-    else
-        echo -e "  ${YELLOW}⚠ Virtual environment not found${NC}"
-        echo "    Run: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
-        all_good=false
-    fi
-    echo ""
-
-    # Check port availability
-    echo -e "${CYAN}[5/7] Checking port availability...${NC}"
-    if lsof -i:8888 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo "  ✓ Port 8888 in use (UI likely running)"
-        local pid=$(lsof -i:8888 -sTCP:LISTEN -t 2>/dev/null | head -1)
-        echo "    PID: $pid"
-    else
-        echo "  ℹ Port 8888 available"
-    fi
-    echo ""
-
-    # Check disk space
-    echo -e "${CYAN}[6/7] Checking disk space...${NC}"
-    local disk_usage=$(df "$SCRIPT_DIR" | tail -1 | awk '{print $5}' | sed 's/%//')
-    if [ "$disk_usage" -lt 80 ]; then
-        echo "  ✓ Disk usage: ${disk_usage}%"
-    elif [ "$disk_usage" -lt 90 ]; then
-        echo -e "  ${YELLOW}⚠ Disk usage: ${disk_usage}%${NC}"
-    else
-        echo -e "  ${RED}✗ Disk usage: ${disk_usage}% (critically low)${NC}"
-        all_good=false
-    fi
-    echo ""
-
-    # Check log files
-    echo -e "${CYAN}[7/7] Checking log files...${NC}"
-    if [ -f "$SCRIPT_DIR/autocoder-ui.log" ]; then
-        local log_size=$(du -h "$SCRIPT_DIR/autocoder-ui.log" | cut -f1)
-        echo "  ✓ autocoder-ui.log ($log_size)"
-        local error_count=$(grep -c -i "error" "$SCRIPT_DIR/autocoder-ui.log" 2>/dev/null || echo "0")
-        if [ "$error_count" -gt 0 ] 2>/dev/null; then
-            echo -e "    ${YELLOW}⚠ Found $error_count error(s) in log${NC}"
-        fi
-    else
-        echo "  ℹ No log files yet"
-    fi
-    echo ""
-
-    # Summary
-    echo "=============================="
-    if [ "$all_good" = true ]; then
-        echo -e "${GREEN}✓ System healthy - ready to start${NC}"
-    else
-        echo -e "${YELLOW}⚠ Issues detected - review above${NC}"
-    fi
-    echo ""
+  echo "UI session: $UI_SESSION"
+  echo "Logs: $UI_LOG"
+  echo "Attach: tmux attach -t $UI_SESSION"
 }
 
-cmd_help() {
-    echo ""
-    echo -e "${CYAN}AutoCoder Remote Launcher${NC}"
-    echo "========================="
-    echo ""
-    echo "Commands:"
-    echo "  ui              Start the Web UI (port 8888)"
-    echo "  agent <project> Start agent for a specific project"
-    echo "  status          Show running sessions"
-    echo "  doctor          Check system health and dependencies"
-    echo "  stop            Stop all AutoCoder sessions"
-    echo "  logs <name>     View logs (use 'ui' or project name)"
-    echo "  attach <name>   Attach to session (Ctrl+B, D to detach)"
-    echo ""
-    echo "SSH Tunnel (run from your LOCAL machine):"
-    echo ""
-    echo "  # Basic tunnel for Web UI"
-    echo "  ssh -L 8888:localhost:8888 stu@$(hostname -I | awk '{print $1}')"
-    echo ""
-    echo "  # Full tunnel (UI + Vite dev + typical app ports)"
-    echo "  ssh -L 8888:localhost:8888 \\"
-    echo "      -L 5173:localhost:5173 \\"
-    echo "      -L 3000:localhost:3000 \\"
-    echo "      stu@$(hostname -I | awk '{print $1}')"
-    echo ""
-    echo "Then open http://localhost:8888 in your browser."
-    echo ""
+usage() {
+  cat <<USAGE
+Usage:
+  ./remote-start.sh ui [--foreground]
+  ./remote-start.sh status
+  ./remote-start.sh stop
+  ./remote-start.sh logs ui
+  ./remote-start.sh attach ui
+USAGE
 }
 
-# ============================================================================
-# Main
-# ============================================================================
+main() {
+  cmd="${1:-}"; shift || true
+  case "$cmd" in
+    ui) start_ui ;;
+    status) status ;;
+    stop) stop_all ;;
+    logs) logs "${1:-}" ;;
+    attach) attach "${1:-}" ;;
+    ""|-h|--help|help) usage ;;
+    *) usage; die "unknown command: $cmd" ;;
+  esac
+}
 
-case "${1:-help}" in
-    ui)
-        cmd_ui
-        ;;
-    agent)
-        cmd_agent "$2"
-        ;;
-    status)
-        cmd_status
-        ;;
-    doctor)
-        cmd_doctor
-        ;;
-    stop)
-        cmd_stop
-        ;;
-    logs)
-        cmd_logs "$2"
-        ;;
-    attach)
-        cmd_attach "$2"
-        ;;
-    help|--help|-h)
-        cmd_help
-        ;;
-    *)
-        log_error "Unknown command: $1"
-        cmd_help
-        exit 1
-        ;;
-esac
+main "$@"

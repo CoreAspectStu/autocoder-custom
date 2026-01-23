@@ -50,6 +50,9 @@ class Feature(Base):
     # Dependencies: list of feature IDs that must be completed before this feature
     # NULL/empty = no dependencies (backwards compatible)
     dependencies = Column(JSON, nullable=True, default=None)
+    # Complexity score for model routing (1=simple/Haiku, 2=medium/Sonnet, 3=complex/Sonnet)
+    # Default 2 (medium) for backwards compatibility
+    complexity_score = Column(Integer, nullable=False, default=2, index=True)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -65,6 +68,8 @@ class Feature(Base):
             "in_progress": self.in_progress if self.in_progress is not None else False,
             # Dependencies: NULL/empty treated as empty list for backwards compat
             "dependencies": self.dependencies if self.dependencies else [],
+            # Complexity score: default 2 (medium) if not set
+            "complexity_score": self.complexity_score if self.complexity_score is not None else 2,
         }
 
     def get_dependencies_safe(self) -> list[int]:
@@ -225,6 +230,43 @@ def _migrate_add_dependencies_column(engine) -> None:
             conn.commit()
 
 
+def _migrate_add_complexity_score_column(engine) -> None:
+    """Add complexity_score column to existing databases that don't have it.
+
+    Complexity scores:
+    - 1 = Simple (UI, docs, simple tests) → Haiku
+    - 2 = Medium (API, database, standard features) → Sonnet (default)
+    - 3 = Complex (algorithms, architecture, complex logic) → Sonnet
+
+    Auto-assigns scores based on category for existing features.
+    """
+    with engine.connect() as conn:
+        # Check if column exists
+        result = conn.execute(text("PRAGMA table_info(features)"))
+        columns = [row[1] for row in result.fetchall()]
+
+        if "complexity_score" not in columns:
+            # Add column with default value 2 (medium)
+            conn.execute(text("ALTER TABLE features ADD COLUMN complexity_score INTEGER DEFAULT 2"))
+
+            # Auto-assign complexity scores based on category patterns
+            # Simple (1): UI, styling, docs, simple tests
+            simple_patterns = ['ui', 'style', 'css', 'doc', 'readme', 'comment', 'typo', 'formatting']
+            for pattern in simple_patterns:
+                conn.execute(
+                    text(f"UPDATE features SET complexity_score = 1 WHERE LOWER(category) LIKE '%{pattern}%' AND complexity_score = 2")
+                )
+
+            # Complex (3): algorithms, architecture, security, performance
+            complex_patterns = ['algorithm', 'architect', 'security', 'auth', 'performance', 'optimiz', 'complex']
+            for pattern in complex_patterns:
+                conn.execute(
+                    text(f"UPDATE features SET complexity_score = 3 WHERE LOWER(category) LIKE '%{pattern}%' AND complexity_score = 2")
+                )
+
+            conn.commit()
+
+
 def _is_network_path(path: Path) -> bool:
     """Detect if path is on a network filesystem.
 
@@ -341,6 +383,7 @@ def create_database(project_dir: Path) -> tuple:
     _migrate_add_in_progress_column(engine)
     _migrate_fix_null_boolean_fields(engine)
     _migrate_add_dependencies_column(engine)
+    _migrate_add_complexity_score_column(engine)
 
     # Migrate to add schedules tables
     _migrate_add_schedules_tables(engine)

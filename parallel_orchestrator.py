@@ -31,6 +31,7 @@ import psutil
 
 from api.database import Feature, create_database
 from api.dependency_resolver import are_dependencies_satisfied, compute_scheduling_scores
+from api.quota_budget import get_quota_budget
 from progress import has_features
 
 # Root directory of autocoder (where this script and autonomous_agent_demo.py live)
@@ -105,6 +106,14 @@ DEFAULT_CONCURRENCY = 3
 POLL_INTERVAL = 5  # seconds between checking for ready features
 MAX_FEATURE_RETRIES = 3  # Maximum times to retry a failed feature
 INITIALIZER_TIMEOUT = 1800  # 30 minutes timeout for initializer
+
+# Model routing based on complexity
+# Haiku is ~4x cheaper than Sonnet for simple tasks
+MODEL_ROUTING = {
+    1: "claude-3-5-haiku-20241022",  # Simple: UI, docs, simple tests
+    2: "claude-sonnet-4-5-20250929",  # Medium: Standard features (default)
+    3: "claude-sonnet-4-5-20250929",  # Complex: Algorithms, architecture
+}
 
 
 def _kill_process_tree(proc: subprocess.Popen, timeout: float = 5.0) -> None:
@@ -212,9 +221,77 @@ class ParallelOrchestrator:
         # Database session for this orchestrator
         self._engine, self._session_maker = create_database(project_dir)
 
+        # Quota budget tracker for API quota management
+        self._quota_budget = get_quota_budget()
+
     def get_session(self):
         """Get a new database session."""
         return self._session_maker()
+
+    def get_safe_concurrency(self, prompts_per_agent: int = 20) -> int:
+        """
+        Calculate safe concurrency based on remaining API quota.
+
+        Args:
+            prompts_per_agent: Estimated prompts per agent (default: 20)
+
+        Returns:
+            Safe number of concurrent agents (minimum 0, maximum self.max_concurrency)
+        """
+        quota_based = self._quota_budget.calculate_safe_concurrency(prompts_per_agent)
+        safe_concurrency = min(quota_based, self.max_concurrency)
+
+        # Log quota-based throttling
+        if quota_based < self.max_concurrency:
+            stats = self._quota_budget.get_stats()
+            print(
+                f"[QUOTA] API quota at {stats['percentage']:.1f}% - "
+                f"throttling concurrency from {self.max_concurrency} to {safe_concurrency} agents",
+                flush=True
+            )
+            debug_log.log("QUOTA", "Dynamic concurrency throttling",
+                quota_used=stats['used'],
+                quota_remaining=stats['remaining'],
+                quota_percentage=stats['percentage'],
+                max_concurrency=self.max_concurrency,
+                safe_concurrency=safe_concurrency)
+
+        return safe_concurrency
+
+    def get_model_for_feature(self, feature_id: int) -> str:
+        """
+        Determine which model to use based on feature complexity.
+
+        Args:
+            feature_id: ID of the feature
+
+        Returns:
+            Model name (haiku for simple, sonnet for medium/complex)
+        """
+        session = self.get_session()
+        try:
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            if not feature:
+                return self.model or MODEL_ROUTING[2]  # Default to Sonnet
+
+            complexity = getattr(feature, 'complexity_score', 2)  # Default 2 if not set
+            model = MODEL_ROUTING.get(complexity, MODEL_ROUTING[2])
+
+            # Log model selection
+            if complexity == 1:
+                print(f"[MODEL] Feature #{feature_id} (complexity={complexity}) → Haiku (cost-optimized)", flush=True)
+            else:
+                print(f"[MODEL] Feature #{feature_id} (complexity={complexity}) → Sonnet", flush=True)
+
+            debug_log.log("MODEL", f"Model selection for feature #{feature_id}",
+                feature_name=feature.name,
+                category=feature.category,
+                complexity_score=complexity,
+                model_selected=model)
+
+            return model
+        finally:
+            session.close()
 
     def get_resumable_features(self) -> list[dict]:
         """Get features that were left in_progress from a previous session.
@@ -430,6 +507,14 @@ class ParallelOrchestrator:
         # Create abort event
         abort_event = threading.Event()
 
+        # Determine model based on feature complexity (unless user overrode)
+        # User-specified model (self.model) takes precedence over auto-routing
+        if self.model:
+            selected_model = self.model
+            print(f"[MODEL] Using user-specified model: {selected_model}", flush=True)
+        else:
+            selected_model = self.get_model_for_feature(feature_id)
+
         # Start subprocess for this feature
         cmd = [
             sys.executable,
@@ -440,8 +525,8 @@ class ParallelOrchestrator:
             "--agent-type", "coding",
             "--feature-id", str(feature_id),
         ]
-        if self.model:
-            cmd.extend(["--model", self.model])
+        if selected_model:
+            cmd.extend(["--model", selected_model])
         if self.yolo_mode:
             cmd.append("--yolo")
 
@@ -891,7 +976,8 @@ class ParallelOrchestrator:
                     print("\nAll features complete!", flush=True)
                     break
 
-                # Check capacity
+                # Check capacity (quota-aware)
+                safe_concurrency = self.get_safe_concurrency()
                 with self._lock:
                     current = len(self.running_coding_agents)
                     current_testing = len(self.running_testing_agents)
@@ -902,17 +988,20 @@ class ParallelOrchestrator:
                     current_testing=current_testing,
                     running_coding_ids=running_ids,
                     max_concurrency=self.max_concurrency,
-                    at_capacity=(current >= self.max_concurrency))
+                    safe_concurrency=safe_concurrency,
+                    at_capacity=(current >= safe_concurrency))
 
-                if current >= self.max_concurrency:
-                    debug_log.log("CAPACITY", "At max capacity, sleeping...")
+                if current >= safe_concurrency:
+                    if safe_concurrency < self.max_concurrency:
+                        print(f"[QUOTA] At safe capacity ({safe_concurrency}/{self.max_concurrency} agents) due to API quota limits", flush=True)
+                    debug_log.log("CAPACITY", "At safe capacity, sleeping...")
                     await asyncio.sleep(POLL_INTERVAL)
                     continue
 
                 # Priority 1: Resume features from previous session
                 resumable = self.get_resumable_features()
                 if resumable:
-                    slots = self.max_concurrency - current
+                    slots = safe_concurrency - current
                     for feature in resumable[:slots]:
                         print(f"Resuming feature #{feature['id']}: {feature['name']}", flush=True)
                         self.start_feature(feature["id"], resume=True)
@@ -946,9 +1035,9 @@ class ParallelOrchestrator:
                         await asyncio.sleep(POLL_INTERVAL * 2)
                         continue
 
-                # Start features up to capacity
-                slots = self.max_concurrency - current
-                print(f"[DEBUG] Spawning loop: {len(ready)} ready, {slots} slots available, max_concurrency={self.max_concurrency}", flush=True)
+                # Start features up to safe capacity (quota-aware)
+                slots = safe_concurrency - current
+                print(f"[DEBUG] Spawning loop: {len(ready)} ready, {slots} slots available, safe_concurrency={safe_concurrency}/{self.max_concurrency}", flush=True)
                 print(f"[DEBUG] Will attempt to start {min(len(ready), slots)} features", flush=True)
                 features_to_start = ready[:slots]
                 print(f"[DEBUG] Features to start: {[f['id'] for f in features_to_start]}", flush=True)

@@ -11,7 +11,7 @@ autocoder-ui
 # 4. Close terminal - it keeps running
 ```
 
-**Why `autocoder-ui`?** Wraps startup with systemd resource limits (2 cores, 8GB RAM, 250 processes) to prevent browser automation from consuming all system resources.
+**Why `autocoder-ui`?** Starts the UI inside a systemd user scope so runaway sub-agents/Playwright/Claude can't melt the box.
 
 ## Port Convention
 
