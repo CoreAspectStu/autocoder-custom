@@ -109,11 +109,11 @@ The orchestrator has already claimed this feature for you.
 
 
 def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, yolo_mode: bool = False) -> str:
-    """
-    Load the coding prompt with single-feature focus instructions prepended.
+    """Prepend single-feature assignment header to base coding prompt.
 
-    When the orchestrator assigns a specific feature to a coding agent,
-    this prompt ensures the agent works ONLY on that feature.
+    Used in parallel mode to assign a specific feature to an agent.
+    The base prompt already contains the full workflow - this just
+    identifies which feature to work on.
 
     Args:
         feature_id: The specific feature ID to work on
@@ -122,38 +122,20 @@ def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, 
                    handled by separate testing agents, not YOLO prompts.
 
     Returns:
-        The prompt with single-feature instructions prepended
+        The prompt with single-feature header prepended
     """
-    # Always use the standard coding prompt
-    # (Testing/regression is handled by separate testing agents)
     base_prompt = get_coding_prompt(project_dir)
 
-    # Prepend single-feature instructions
-    single_feature_header = f"""## ASSIGNED FEATURE
+    # Minimal header - the base prompt already contains the full workflow
+    single_feature_header = f"""## ASSIGNED FEATURE: #{feature_id}
 
-**You are assigned to work on Feature #{feature_id} ONLY.**
-
-This session is part of a parallel execution where multiple agents work on different features simultaneously.
-
-### Your workflow:
-
-1. **Get feature details** using `feature_get_by_id` with ID {feature_id}
-2. **Mark as in-progress** using `feature_mark_in_progress` with ID {feature_id}
-   - If you get "already in-progress" error, that's OK - continue with implementation
-3. **Implement the feature** following the steps from the feature details
-4. **Test your implementation** to verify it works correctly
-5. **Mark as passing** using `feature_mark_passing` with ID {feature_id}
-6. **Commit your changes** and end the session
-
-### Important rules:
-
-- **Do NOT** work on any other features - other agents are handling them
-- If blocked, use `feature_skip` and document the blocker in claude-progress.txt
+Work ONLY on this feature. Other agents are handling other features.
+Use `feature_claim_and_get` with ID {feature_id} to claim it and get details.
+If blocked, use `feature_skip` and document the blocker.
 
 ---
 
 """
-
     return single_feature_header + base_prompt
 
 

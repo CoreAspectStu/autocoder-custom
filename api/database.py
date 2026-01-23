@@ -21,6 +21,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -38,6 +39,12 @@ class Feature(Base):
     """Feature model representing a test case/feature to implement."""
 
     __tablename__ = "features"
+
+    # Composite index for common status query pattern (passes, in_progress)
+    # Used by feature_get_stats, get_ready_features, and other status queries
+    __table_args__ = (
+        Index('ix_feature_status', 'passes', 'in_progress'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     priority = Column(Integer, nullable=False, default=999, index=True)
