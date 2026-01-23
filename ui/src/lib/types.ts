@@ -129,8 +129,7 @@ export interface AgentStatusResponse {
   model: string | null  // Model being used by running agent
   parallel_mode: boolean  // DEPRECATED: Always true now (unified orchestrator)
   max_concurrency: number | null
-  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
-  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
+  testing_agent_ratio: number  // Regression testing agents (0-3)
 }
 
 export interface AgentActionResponse {
@@ -196,8 +195,8 @@ export interface AgentLogEntry {
 
 // Agent update from backend
 export interface ActiveAgent {
-  agentIndex: number
-  agentName: AgentMascot
+  agentIndex: number  // -1 for synthetic completions
+  agentName: AgentMascot | 'Unknown'
   agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
@@ -207,8 +206,39 @@ export interface ActiveAgent {
   logs?: AgentLogEntry[]  // Per-agent log history
 }
 
+// Orchestrator state for Mission Control
+export type OrchestratorState =
+  | 'idle'
+  | 'initializing'
+  | 'scheduling'
+  | 'spawning'
+  | 'monitoring'
+  | 'complete'
+
+// Orchestrator event for recent activity
+export interface OrchestratorEvent {
+  eventType: string
+  message: string
+  timestamp: string
+  featureId?: number
+  featureName?: string
+}
+
+// Orchestrator status for Mission Control
+export interface OrchestratorStatus {
+  state: OrchestratorState
+  message: string
+  codingAgents: number
+  testingAgents: number
+  maxConcurrency: number
+  readyCount: number
+  blockedCount: number
+  timestamp: string
+  recentEvents: OrchestratorEvent[]
+}
+
 // WebSocket message types
-export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update'
+export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update'
 
 export interface WSProgressMessage {
   type: 'progress'
@@ -235,14 +265,15 @@ export interface WSLogMessage {
 
 export interface WSAgentUpdateMessage {
   type: 'agent_update'
-  agentIndex: number
-  agentName: AgentMascot
+  agentIndex: number  // -1 for synthetic completions (untracked agents)
+  agentName: AgentMascot | 'Unknown'
   agentType: AgentType  // "coding" or "testing"
   featureId: number
   featureName: string
   state: AgentState
   thought?: string
   timestamp: string
+  synthetic?: boolean  // True for synthetic completions from untracked agents
 }
 
 export interface WSAgentStatusMessage {
@@ -266,6 +297,21 @@ export interface WSDevServerStatusMessage {
   url: string | null
 }
 
+export interface WSOrchestratorUpdateMessage {
+  type: 'orchestrator_update'
+  eventType: string
+  state: OrchestratorState
+  message: string
+  timestamp: string
+  codingAgents?: number
+  testingAgents?: number
+  maxConcurrency?: number
+  readyCount?: number
+  blockedCount?: number
+  featureId?: number
+  featureName?: string
+}
+
 export type WSMessage =
   | WSProgressMessage
   | WSFeatureUpdateMessage
@@ -275,6 +321,7 @@ export type WSMessage =
   | WSPongMessage
   | WSDevLogMessage
   | WSDevServerStatusMessage
+  | WSOrchestratorUpdateMessage
 
 // ============================================================================
 // Spec Chat Types
@@ -479,15 +526,13 @@ export interface Settings {
   yolo_mode: boolean
   model: string
   glm_mode: boolean
-  testing_agent_ratio: number  // Testing agents per coding agent (0-3)
-  count_testing_in_concurrency: boolean  // Count testing toward concurrency limit
+  testing_agent_ratio: number  // Regression testing agents (0-3)
 }
 
 export interface SettingsUpdate {
   yolo_mode?: boolean
   model?: string
   testing_agent_ratio?: number
-  count_testing_in_concurrency?: boolean
 }
 
 // ============================================================================

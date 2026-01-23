@@ -47,8 +47,9 @@ API_ENV_VARS = [
 # Read-only feature MCP tools
 READONLY_FEATURE_MCP_TOOLS = [
     "mcp__features__feature_get_stats",
-    "mcp__features__feature_get_next",
-    "mcp__features__feature_get_for_regression",
+    "mcp__features__feature_get_by_id",
+    "mcp__features__feature_get_ready",
+    "mcp__features__feature_get_blocked",
 ]
 
 # Feature management tools (create/skip but not mark_passing)
@@ -124,8 +125,9 @@ If the user asks you to modify code, explain that you're a project assistant and
 
 **Feature Management:**
 - **feature_get_stats**: Get feature completion progress
-- **feature_get_next**: See the next pending feature
-- **feature_get_for_regression**: See passing features for testing
+- **feature_get_by_id**: Get details for a specific feature
+- **feature_get_ready**: See features ready for implementation
+- **feature_get_blocked**: See features blocked by dependencies
 - **feature_create**: Create a single feature in the backlog
 - **feature_create_bulk**: Create multiple features at once
 - **feature_skip**: Move a feature to the end of the queue

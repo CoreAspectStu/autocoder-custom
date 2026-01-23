@@ -171,8 +171,7 @@ class AgentStartRequest(BaseModel):
     model: str | None = None  # None means use global settings
     parallel_mode: bool | None = None  # DEPRECATED: Use max_concurrency instead
     max_concurrency: int | None = None  # Max concurrent coding agents (1-5)
-    testing_agent_ratio: int | None = None  # Testing agents per coding agent (0-3)
-    count_testing_in_concurrency: bool | None = None  # Count testing toward limit
+    testing_agent_ratio: int | None = None  # Regression testing agents (0-3)
 
     @field_validator('model')
     @classmethod
@@ -208,8 +207,7 @@ class AgentStatus(BaseModel):
     model: str | None = None  # Model being used by running agent
     parallel_mode: bool = False  # DEPRECATED: Always True now (unified orchestrator)
     max_concurrency: int | None = None
-    testing_agent_ratio: int = 1  # Testing agents per coding agent
-    count_testing_in_concurrency: bool = False  # Count testing toward limit
+    testing_agent_ratio: int = 1  # Regression testing agents (0-3)
 
 
 class AgentActionResponse(BaseModel):
@@ -384,8 +382,7 @@ class SettingsResponse(BaseModel):
     yolo_mode: bool = False
     model: str = DEFAULT_MODEL
     glm_mode: bool = False  # True if GLM API is configured via .env
-    testing_agent_ratio: int = 1  # Testing agents per coding agent (0-3)
-    count_testing_in_concurrency: bool = False  # Count testing toward concurrency
+    testing_agent_ratio: int = 1  # Regression testing agents (0-3)
 
 
 class ModelsResponse(BaseModel):
@@ -399,7 +396,6 @@ class SettingsUpdate(BaseModel):
     yolo_mode: bool | None = None
     model: str | None = None
     testing_agent_ratio: int | None = None  # 0-3
-    count_testing_in_concurrency: bool | None = None
 
     @field_validator('model')
     @classmethod

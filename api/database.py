@@ -21,6 +21,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -38,6 +39,12 @@ class Feature(Base):
     """Feature model representing a test case/feature to implement."""
 
     __tablename__ = "features"
+
+    # Composite index for common status query pattern (passes, in_progress)
+    # Used by feature_get_stats, get_ready_features, and other status queries
+    __table_args__ = (
+        Index('ix_feature_status', 'passes', 'in_progress'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     priority = Column(Integer, nullable=False, default=999, index=True)
@@ -267,6 +274,21 @@ def _migrate_add_complexity_score_column(engine) -> None:
             conn.commit()
 
 
+def _migrate_add_testing_columns(engine) -> None:
+    """Legacy migration - no longer adds testing columns.
+
+    The testing_in_progress and last_tested_at columns were removed from the
+    Feature model as part of simplifying the testing agent architecture.
+    Multiple testing agents can now test the same feature concurrently
+    without coordination.
+
+    This function is kept for backwards compatibility but does nothing.
+    Existing databases with these columns will continue to work - the columns
+    are simply ignored.
+    """
+    pass
+
+
 def _is_network_path(path: Path) -> bool:
     """Detect if path is on a network filesystem.
 
@@ -384,6 +406,7 @@ def create_database(project_dir: Path) -> tuple:
     _migrate_fix_null_boolean_fields(engine)
     _migrate_add_dependencies_column(engine)
     _migrate_add_complexity_score_column(engine)
+    _migrate_add_testing_columns(engine)
 
     # Migrate to add schedules tables
     _migrate_add_schedules_tables(engine)

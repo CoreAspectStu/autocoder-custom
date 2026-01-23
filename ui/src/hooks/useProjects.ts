@@ -128,7 +128,6 @@ export function useStartAgent(projectName: string) {
       parallelMode?: boolean
       maxConcurrency?: number
       testingAgentRatio?: number
-      countTestingInConcurrency?: boolean
     } = {}) => api.startAgent(projectName, options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-status', projectName] })
@@ -239,7 +238,6 @@ const DEFAULT_SETTINGS: Settings = {
   model: 'claude-opus-4-5-20251101',
   glm_mode: false,
   testing_agent_ratio: 1,
-  count_testing_in_concurrency: false,
 }
 
 export function useAvailableModels() {

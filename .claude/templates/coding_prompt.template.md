@@ -29,9 +29,6 @@ Then use MCP tools to check feature status:
 ```
 # 6. Get progress statistics (passing/total counts)
 Use the feature_get_stats tool
-
-# 7. Get the next feature to work on
-Use the feature_get_next tool
 ```
 
 Understanding the `app_spec.txt` is critical - it contains the full requirements
@@ -48,7 +45,7 @@ chmod +x init.sh
 
 Otherwise, start servers manually and document the process.
 
-### STEP 3: CHOOSE ONE FEATURE TO IMPLEMENT
+### STEP 3: GET YOUR ASSIGNED FEATURE
 
 #### TEST-DRIVEN DEVELOPMENT MINDSET (CRITICAL)
 
@@ -63,19 +60,16 @@ Features are **test cases** that drive development. This is test-driven developm
 - WRONG: "Flashcard page doesn't exist yet" → skip feature
 - RIGHT: "Flashcard page doesn't exist yet" → build flashcard page → implement filter → test feature
 
-Get the next feature to implement:
+**Note:** Your feature has been pre-assigned by the orchestrator. Use `feature_get_by_id` with your assigned feature ID to get the details.
+
+Once you've retrieved the feature, **mark it as in-progress** (if not already):
 
 ```
-# Get the highest-priority pending feature
-Use the feature_get_next tool
+# Mark feature as in-progress
+Use the feature_mark_in_progress tool with feature_id={your_assigned_id}
 ```
 
-Once you've retrieved the feature, **immediately mark it as in-progress**:
-
-```
-# Mark feature as in-progress to prevent other sessions from working on it
-Use the feature_mark_in_progress tool with feature_id=42
-```
+If you get "already in-progress" error, that's OK - continue with implementation.
 
 Focus on completing one feature perfectly and completing its testing steps in this session before moving on to other features.
 It's ok if you only complete one feature in this session, as there will be more sessions later that continue to make progress.
@@ -178,48 +172,12 @@ Use browser automation tools:
 - [ ] Loading states appeared during API calls
 - [ ] Error states handle failures gracefully
 
-### STEP 5.6: MOCK DATA DETECTION SWEEP
+### STEP 5.6: MOCK DATA DETECTION (Before marking passing)
 
-**Run this sweep AFTER EVERY FEATURE before marking it as passing:**
-
-#### 1. Code Pattern Search
-
-Search the codebase for forbidden patterns:
-
-```bash
-# Search for mock data patterns
-grep -r "mockData\|fakeData\|sampleData\|dummyData\|testData" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx"
-grep -r "// TODO\|// FIXME\|// STUB\|// MOCK" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx"
-grep -r "hardcoded\|placeholder" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx"
-```
-
-**If ANY matches found related to your feature - FIX THEM before proceeding.**
-
-#### 2. Runtime Verification
-
-For ANY data displayed in UI:
-
-1. Create NEW data with UNIQUE content (e.g., "TEST_12345_DELETE_ME")
-2. Verify that EXACT content appears in the UI
-3. Delete the record
-4. Verify it's GONE from the UI
-5. **If you see data that wasn't created during testing - IT'S MOCK DATA. Fix it.**
-
-#### 3. Database Verification
-
-Check that:
-
-- Database tables contain only data you created during tests
-- Counts/statistics match actual database record counts
-- No seed data is masquerading as user data
-
-#### 4. API Response Verification
-
-For API endpoints used by this feature:
-
-- Call the endpoint directly
-- Verify response contains actual database data
-- Empty database = empty response (not pre-populated mock data)
+1. **Search code:** `grep -r "mockData\|fakeData\|TODO\|STUB" --include="*.ts" --include="*.tsx"`
+2. **Runtime test:** Create unique data (e.g., "TEST_12345") → verify in UI → delete → verify gone
+3. **Check database:** All displayed data must come from real DB queries
+4. If unexplained data appears, it's mock data - fix before marking passing.
 
 ### STEP 6: UPDATE FEATURE STATUS (CAREFULLY!)
 
@@ -279,51 +237,11 @@ Before context fills up:
 
 ---
 
-## TESTING REQUIREMENTS
+## BROWSER AUTOMATION
 
-**ALL testing must use browser automation tools.**
+Use Playwright MCP tools (`browser_*`) for UI verification. Key tools: `navigate`, `click`, `type`, `fill_form`, `take_screenshot`, `console_messages`, `network_requests`. All tools have auto-wait built in.
 
-Available tools:
-
-**Navigation & Screenshots:**
-
-- browser_navigate - Navigate to a URL
-- browser_navigate_back - Go back to previous page
-- browser_take_screenshot - Capture screenshot (use for visual verification)
-- browser_snapshot - Get accessibility tree snapshot (structured page data)
-
-**Element Interaction:**
-
-- browser_click - Click elements (has built-in auto-wait)
-- browser_type - Type text into editable elements
-- browser_fill_form - Fill multiple form fields at once
-- browser_select_option - Select dropdown options
-- browser_hover - Hover over elements
-- browser_drag - Drag and drop between elements
-- browser_press_key - Press keyboard keys
-
-**Debugging & Monitoring:**
-
-- browser_console_messages - Get browser console output (check for errors)
-- browser_network_requests - Monitor API calls and responses
-- browser_evaluate - Execute JavaScript (USE SPARINGLY - debugging only, NOT for bypassing UI)
-
-**Browser Management:**
-
-- browser_close - Close the browser
-- browser_resize - Resize browser window (use to test mobile: 375x667, tablet: 768x1024, desktop: 1280x720)
-- browser_tabs - Manage browser tabs
-- browser_wait_for - Wait for text/element/time
-- browser_handle_dialog - Handle alert/confirm dialogs
-- browser_file_upload - Upload files
-
-**Key Benefits:**
-
-- All interaction tools have **built-in auto-wait** - no manual timeouts needed
-- Use `browser_console_messages` to detect JavaScript errors
-- Use `browser_network_requests` to verify API calls succeed
-
-Test like a human user with mouse and keyboard. Don't take shortcuts by using JavaScript evaluation.
+Test like a human user with mouse and keyboard. Use `browser_console_messages` to detect errors. Don't bypass UI with JavaScript evaluation.
 
 ---
 
@@ -337,10 +255,10 @@ The feature tools exist to reduce token usage. **DO NOT make exploratory queries
 # 1. Get progress stats (passing/in_progress/total counts)
 feature_get_stats
 
-# 2. Get the NEXT feature to work on (one feature only)
-feature_get_next
+# 2. Get your assigned feature details
+feature_get_by_id with feature_id={your_assigned_id}
 
-# 3. Mark a feature as in-progress (call immediately after feature_get_next)
+# 3. Mark a feature as in-progress
 feature_mark_in_progress with feature_id={id}
 
 # 4. Mark a feature as passing (after verification)
@@ -349,7 +267,7 @@ feature_mark_passing with feature_id={id}
 # 5. Mark a feature as failing (if you discover it's broken)
 feature_mark_failing with feature_id={id}
 
-# 6. Skip a feature (moves to end of queue) - ONLY when blocked by dependency
+# 6. Skip a feature (moves to end of queue) - ONLY when blocked by external dependency
 feature_skip with feature_id={id}
 
 # 7. Clear in-progress status (when abandoning a feature)
@@ -361,8 +279,9 @@ feature_clear_in_progress with feature_id={id}
 - Do NOT try to fetch lists of all features
 - Do NOT query features by category
 - Do NOT list all pending features
+- Your feature is pre-assigned by the orchestrator - use `feature_get_by_id` to get details
 
-**You do NOT need to see all features.** The feature_get_next tool tells you exactly what to work on. Trust it.
+**You do NOT need to see all features.** Work on your assigned feature only.
 
 ---
 
@@ -386,26 +305,7 @@ This allows you to fully test email-dependent flows without needing external ema
 
 ---
 
-## IMPORTANT REMINDERS
-
-**Your Goal:** Production-quality application with all tests passing
-
-**This Session's Goal:** Complete at least one feature perfectly
-
-**Priority:** Fix broken tests before implementing new features
-
-**Quality Bar:**
-
-- Zero console errors
-- Polished UI matching the design specified in app_spec.txt
-- All features work end-to-end through the UI
-- Fast, responsive, professional
-- **NO MOCK DATA - all data from real database**
-- **Security enforced - unauthorized access blocked**
-- **All navigation works - no 404s or broken links**
-
-**You have unlimited time.** Take as long as needed to get it right. The most important thing is that you
-leave the code base in a clean state before terminating the session (Step 9).
+**Remember:** One feature per session. Zero console errors. All data from real database. Leave codebase clean before ending session.
 
 ---
 

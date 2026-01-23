@@ -38,7 +38,6 @@ export function AgentControl({ projectName, status }: AgentControlProps) {
     parallelMode: isParallel,
     maxConcurrency: concurrency,  // Always pass concurrency (1-5)
     testingAgentRatio: settings?.testing_agent_ratio,
-    countTestingInConcurrency: settings?.count_testing_in_concurrency,
   })
   const handleStop = () => stopAgent.mutate()
 

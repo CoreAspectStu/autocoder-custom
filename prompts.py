@@ -74,17 +74,45 @@ def get_coding_prompt(project_dir: Path | None = None) -> str:
     return load_prompt("coding_prompt", project_dir)
 
 
-def get_testing_prompt(project_dir: Path | None = None) -> str:
-    """Load the testing agent prompt (project-specific if available)."""
-    return load_prompt("testing_prompt", project_dir)
+def get_testing_prompt(project_dir: Path | None = None, testing_feature_id: int | None = None) -> str:
+    """Load the testing agent prompt (project-specific if available).
+
+    Args:
+        project_dir: Optional project directory for project-specific prompts
+        testing_feature_id: If provided, the pre-assigned feature ID to test.
+            The orchestrator claims the feature before spawning the agent.
+
+    Returns:
+        The testing prompt, with pre-assigned feature instructions if applicable.
+    """
+    base_prompt = load_prompt("testing_prompt", project_dir)
+
+    if testing_feature_id is not None:
+        # Prepend pre-assigned feature instructions
+        pre_assigned_header = f"""## ASSIGNED FEATURE
+
+**You are assigned to regression test Feature #{testing_feature_id}.**
+
+### Your workflow:
+1. Call `feature_get_by_id` with ID {testing_feature_id} to get the feature details
+2. Verify the feature through the UI using browser automation
+3. If regression found, call `feature_mark_failing` with feature_id={testing_feature_id}
+4. Exit when done (no cleanup needed)
+
+---
+
+"""
+        return pre_assigned_header + base_prompt
+
+    return base_prompt
 
 
 def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, yolo_mode: bool = False) -> str:
-    """
-    Load the coding prompt with single-feature focus instructions prepended.
+    """Prepend single-feature assignment header to base coding prompt.
 
-    When the orchestrator assigns a specific feature to a coding agent,
-    this prompt ensures the agent works ONLY on that feature.
+    Used in parallel mode to assign a specific feature to an agent.
+    The base prompt already contains the full workflow - this just
+    identifies which feature to work on.
 
     Args:
         feature_id: The specific feature ID to work on
@@ -93,38 +121,20 @@ def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, 
                    handled by separate testing agents, not YOLO prompts.
 
     Returns:
-        The prompt with single-feature instructions prepended
+        The prompt with single-feature header prepended
     """
-    # Always use the standard coding prompt
-    # (Testing/regression is handled by separate testing agents)
     base_prompt = get_coding_prompt(project_dir)
 
-    # Prepend single-feature instructions
-    single_feature_header = f"""## SINGLE FEATURE MODE
+    # Minimal header - the base prompt already contains the full workflow
+    single_feature_header = f"""## ASSIGNED FEATURE: #{feature_id}
 
-**CRITICAL: You are assigned to work on Feature #{feature_id} ONLY.**
-
-This session is part of a parallel execution where multiple agents work on different features simultaneously. You MUST:
-
-1. **Skip the `feature_get_next` step** - Your feature is already assigned: #{feature_id}
-2. **Immediately mark feature #{feature_id} as in-progress** using `feature_mark_in_progress`
-3. **Focus ONLY on implementing and testing feature #{feature_id}**
-4. **Do NOT work on any other features** - other agents are handling them
-
-When you complete feature #{feature_id}:
-- Mark it as passing with `feature_mark_passing`
-- Commit your changes
-- End the session
-
-If you cannot complete feature #{feature_id} due to a blocker:
-- Use `feature_skip` to move it to the end of the queue
-- Document the blocker in claude-progress.txt
-- End the session
+Work ONLY on this feature. Other agents are handling other features.
+Use `feature_claim_and_get` with ID {feature_id} to claim it and get details.
+If blocked, use `feature_skip` and document the blocker.
 
 ---
 
 """
-
     return single_feature_header + base_prompt
 
 
@@ -180,6 +190,10 @@ def scaffold_project_prompts(project_dir: Path) -> Path:
     project_prompts = get_project_prompts_dir(project_dir)
     project_prompts.mkdir(parents=True, exist_ok=True)
 
+    # Create .autocoder directory for configuration files
+    autocoder_dir = project_dir / ".autocoder"
+    autocoder_dir.mkdir(parents=True, exist_ok=True)
+
     # Define template mappings: (source_template, destination_name)
     templates = [
         ("app_spec.template.txt", "app_spec.txt"),
@@ -201,8 +215,19 @@ def scaffold_project_prompts(project_dir: Path) -> Path:
             except (OSError, PermissionError) as e:
                 print(f"  Warning: Could not copy {dest_name}: {e}")
 
+    # Copy allowed_commands.yaml template to .autocoder/
+    examples_dir = Path(__file__).parent / "examples"
+    allowed_commands_template = examples_dir / "project_allowed_commands.yaml"
+    allowed_commands_dest = autocoder_dir / "allowed_commands.yaml"
+    if allowed_commands_template.exists() and not allowed_commands_dest.exists():
+        try:
+            shutil.copy(allowed_commands_template, allowed_commands_dest)
+            copied_files.append(".autocoder/allowed_commands.yaml")
+        except (OSError, PermissionError) as e:
+            print(f"  Warning: Could not copy allowed_commands.yaml: {e}")
+
     if copied_files:
-        print(f"  Created prompt files: {', '.join(copied_files)}")
+        print(f"  Created project files: {', '.join(copied_files)}")
 
     return project_prompts
 
