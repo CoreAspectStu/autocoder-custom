@@ -32,6 +32,7 @@ import os
 import sys
 import threading
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -250,6 +251,9 @@ def feature_mark_passing(
 
         feature.passes = True
         feature.in_progress = False
+        # Set completion timestamp if not already set
+        if feature.completed_at is None:
+            feature.completed_at = datetime.utcnow()
         session.commit()
 
         return json.dumps({"success": True, "feature_id": feature_id, "name": feature.name})
@@ -548,6 +552,7 @@ def feature_create_bulk(
 
             # Second pass: create all features
             created_features: list[Feature] = []
+            now = datetime.utcnow()
             for i, feature_data in enumerate(features):
                 db_feature = Feature(
                     priority=start_priority + i,
@@ -557,6 +562,7 @@ def feature_create_bulk(
                     steps=feature_data["steps"],
                     passes=False,
                     in_progress=False,
+                    created_at=now,
                 )
                 session.add(db_feature)
                 created_features.append(db_feature)
@@ -624,6 +630,7 @@ def feature_create(
                 steps=steps,
                 passes=False,
                 in_progress=False,
+                created_at=datetime.utcnow(),
             )
             session.add(db_feature)
             session.commit()

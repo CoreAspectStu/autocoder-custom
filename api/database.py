@@ -30,7 +30,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship, sessionmaker
-from sqlalchemy.types import JSON
+from sqlalchemy.types import JSON, DateTime
 
 Base = declarative_base()
 
@@ -60,6 +60,9 @@ class Feature(Base):
     # Complexity score for model routing (1=simple/Haiku, 2=medium/Sonnet, 3=complex/Sonnet)
     # Default 2 (medium) for backwards compatibility
     complexity_score = Column(Integer, nullable=False, default=2, index=True)
+    # Timestamps for analytics and activity tracking
+    created_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -77,6 +80,9 @@ class Feature(Base):
             "dependencies": self.dependencies if self.dependencies else [],
             # Complexity score: default 2 (medium) if not set
             "complexity_score": self.complexity_score if self.complexity_score is not None else 2,
+            # Timestamps for analytics
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 
     def get_dependencies_safe(self) -> list[int]:

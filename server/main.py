@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .routers import (
     agent_router,
+    analytics_router,
     assistant_chat_router,
     devlayer_router,
     devserver_router,
@@ -129,6 +130,7 @@ async def require_localhost(request: Request, call_next):
 app.include_router(projects_router)
 app.include_router(features_router)
 app.include_router(agent_router)
+app.include_router(analytics_router)
 app.include_router(schedules_router)
 app.include_router(devserver_router)
 app.include_router(spec_creation_router)

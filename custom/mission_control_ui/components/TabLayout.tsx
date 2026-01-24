@@ -3,11 +3,12 @@ import { KanbanBoard } from './KanbanBoard'
 import { ChatTab } from './ChatTab'
 import { IssuesTab } from './IssuesTab'
 import { StatusTab } from './StatusTab'
+import { AnalyticsTab } from './AnalyticsTab'
 import type { Feature } from '../lib/types'
 
 const TAB_STORAGE_KEY = 'autocoder-active-tab'
 
-type TabId = 'kanban' | 'chat' | 'issues' | 'status' | 'terminal'
+type TabId = 'kanban' | 'chat' | 'issues' | 'status' | 'analytics'
 
 interface Tab {
   id: TabId
@@ -21,6 +22,7 @@ const TABS: Tab[] = [
   { id: 'chat', label: 'Chat', icon: '💬', shortcut: '2' },
   { id: 'issues', label: 'Issues', icon: '🐛', shortcut: '3' },
   { id: 'status', label: 'Status', icon: '📊', shortcut: '4' },
+  { id: 'analytics', label: 'Analytics', icon: '📈', shortcut: '5' },
 ]
 
 interface TabLayoutProps {
@@ -65,7 +67,7 @@ export function TabLayout({
     }
   }, [activeTab])
 
-  // Keyboard shortcuts: 1-4 to switch tabs
+  // Keyboard shortcuts: 1-5 to switch tabs
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in an input
@@ -74,7 +76,7 @@ export function TabLayout({
       }
 
       const key = e.key
-      if (key >= '1' && key <= '4') {
+      if (key >= '1' && key <= '5') {
         e.preventDefault()
         const tabIndex = parseInt(key) - 1
         setActiveTab(TABS[tabIndex].id)
@@ -133,6 +135,10 @@ export function TabLayout({
 
         {activeTab === 'status' && (
           <StatusTab selectedProject={selectedProject} />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsTab selectedProject={selectedProject} />
         )}
       </div>
     </div>
