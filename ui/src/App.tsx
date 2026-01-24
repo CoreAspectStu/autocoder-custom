@@ -24,7 +24,7 @@ import { DevServerControl } from './components/DevServerControl'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
-import { DevLayer } from './components/DevLayer'
+import { TabLayout } from './components/TabLayout'
 import { getDependencyGraph } from './lib/api'
 import { Loader2, Settings, Moon, Sun, Radio } from 'lucide-react'
 import type { Feature } from './lib/types'
@@ -364,11 +364,15 @@ function App() {
         style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
       >
         {devLayerMode ? (
-          <div className="neo-card" style={{ height: 'calc(100vh - 180px)' }}>
-            <DevLayer
-              projects={projects ?? []}
+          <div style={{ height: 'calc(100vh - 180px)' }}>
+            <TabLayout
               selectedProject={selectedProject}
-              onSelectProject={handleSelectProject}
+              features={features}
+              onFeatureClick={setSelectedFeature}
+              onAddFeature={() => setShowAddFeature(true)}
+              onExpandProject={() => setShowExpandProject(true)}
+              hasSpec={hasSpec}
+              onCreateSpec={() => setShowSpecChat(true)}
             />
           </div>
         ) : !selectedProject ? (
