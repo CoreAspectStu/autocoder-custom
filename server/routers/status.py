@@ -705,6 +705,179 @@ async def status_page():
             color: #6b7280;
         }
 
+        /* Service Controls Section */
+        .service-controls-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .service-controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .service-controls-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a202c;
+            margin: 0;
+        }
+
+        .service-status-badge {
+            padding: 6px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .service-status-badge.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .service-status-badge.inactive {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .service-status-badge.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .service-controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .control-group {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .control-group h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 12px 0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            flex: 1;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #4b5563;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .btn-emergency {
+            background: #dc2626;
+            color: white;
+            font-weight: 600;
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        .btn-emergency:hover {
+            background: #b91c1c;
+            transform: scale(1.02);
+        }
+
+        .service-info {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .limits-display {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .limit-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .limit-label {
+            color: #6b7280;
+        }
+
+        .limit-value {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .emergency-group {
+            border: 2px solid #fee2e2;
+            background: #fef2f2;
+        }
+
+        .emergency-warning {
+            font-size: 12px;
+            color: #991b1b;
+            margin: 0 0 12px 0;
+            line-height: 1.4;
+        }
+
         /* Project Cards */
         .projects {
             display: grid;
@@ -1294,6 +1467,68 @@ async def status_page():
             <div class="resources-grid" id="resources-grid"></div>
         </div>
 
+        <!-- Service Controls -->
+        <div class="service-controls-section" style="margin-top: 24px;">
+            <div class="service-controls-header">
+                <h3>🔧 Service Controls</h3>
+                <div class="service-status-badge" id="service-status-badge">Checking...</div>
+            </div>
+
+            <div class="service-controls-grid">
+                <!-- Control Buttons -->
+                <div class="control-group">
+                    <h4>AutoCoder UI Service</h4>
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="btn-start" onclick="startService()" disabled>
+                            ▶ Start
+                        </button>
+                        <button class="btn btn-danger" id="btn-stop" onclick="stopService()" disabled>
+                            ⏹ Stop
+                        </button>
+                        <button class="btn btn-secondary" id="btn-restart" onclick="restartService()" disabled>
+                            🔄 Restart
+                        </button>
+                    </div>
+                    <div class="service-info" id="service-info">
+                        Last restart: <span id="service-restart-time">-</span>
+                    </div>
+                </div>
+
+                <!-- Resource Limits -->
+                <div class="control-group">
+                    <h4>Resource Limits</h4>
+                    <div class="limits-display">
+                        <div class="limit-item">
+                            <span class="limit-label">CPU:</span>
+                            <span class="limit-value" id="limit-cpu">-</span>
+                        </div>
+                        <div class="limit-item">
+                            <span class="limit-label">Memory:</span>
+                            <span class="limit-value" id="limit-memory">-</span>
+                        </div>
+                        <div class="limit-item">
+                            <span class="limit-label">Processes:</span>
+                            <span class="limit-value" id="limit-processes">-</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="openLimitsModal()">
+                        ⚙️ Adjust Limits
+                    </button>
+                </div>
+
+                <!-- Emergency Stop -->
+                <div class="control-group emergency-group">
+                    <h4>🚨 Emergency</h4>
+                    <p class="emergency-warning">
+                        Immediately kill ALL processes, agents, and browsers
+                    </p>
+                    <button class="btn btn-emergency" onclick="confirmEmergencyStop()">
+                        EMERGENCY STOP
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Port Range Info -->
         <div class="port-info">
             <strong>📡 Port Convention:</strong> Dev servers auto-assigned to <strong>4000-4099</strong> range (SSH tunnel friendly).
@@ -1880,6 +2115,7 @@ async def status_page():
 
             // Always refresh resources (even if project data hasn't changed)
             await refreshResources();
+            await refreshServiceStatus();
         }
 
         // Fetch and render resources
@@ -1986,6 +2222,171 @@ async def status_page():
 
             } catch (e) {
                 console.error('Failed to refresh resources:', e);
+            }
+        }
+
+        // Service Control Functions
+        async function refreshServiceStatus() {
+            try {
+                const resp = await fetch('/api/systemd/status');
+                const data = await resp.json();
+
+                // Update status badge
+                const badge = document.getElementById('service-status-badge');
+                const btnStart = document.getElementById('btn-start');
+                const btnStop = document.getElementById('btn-stop');
+                const btnRestart = document.getElementById('btn-restart');
+
+                if (data.active_state === 'active') {
+                    badge.textContent = '🟢 Running';
+                    badge.className = 'service-status-badge active';
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    btnRestart.disabled = false;
+                } else if (data.active_state === 'inactive') {
+                    badge.textContent = '🔴 Stopped';
+                    badge.className = 'service-status-badge inactive';
+                    btnStart.disabled = false;
+                    btnStop.disabled = true;
+                    btnRestart.disabled = true;
+                } else {
+                    badge.textContent = '⚠️ Failed';
+                    badge.className = 'service-status-badge failed';
+                    btnStart.disabled = false;
+                    btnStop.disabled = true;
+                    btnRestart.disabled = false;
+                }
+
+                // Update restart time
+                if (data.uptime_seconds) {
+                    const uptimeDate = new Date(Date.now() - data.uptime_seconds * 1000);
+                    document.getElementById('service-restart-time').textContent = uptimeDate.toLocaleTimeString();
+                }
+
+                // Update resource limits display
+                document.getElementById('limit-cpu').textContent = `${data.cpu_quota / 100} cores`;
+                document.getElementById('limit-memory').textContent = `${data.memory_limit}GB`;
+                document.getElementById('limit-processes').textContent = data.tasks_max;
+
+            } catch (e) {
+                console.error('Failed to refresh service status:', e);
+            }
+        }
+
+        async function startService() {
+            const btn = document.getElementById('btn-start');
+            btn.disabled = true;
+            btn.textContent = '⏳ Starting...';
+
+            try {
+                const resp = await fetch('/api/systemd/start', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    setTimeout(refreshServiceStatus, 2000);
+                } else {
+                    alert('Failed to start: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = '▶ Start';
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '▶ Start';
+            }
+        }
+
+        async function stopService() {
+            if (!confirm('Stop the AutoCoder UI service? All agents will be stopped.')) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-stop');
+            btn.disabled = true;
+            btn.textContent = '⏳ Stopping...';
+
+            try {
+                const resp = await fetch('/api/systemd/stop', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    setTimeout(refreshServiceStatus, 2000);
+                } else {
+                    alert('Failed to stop: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = '⏹ Stop';
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '⏹ Stop';
+            }
+        }
+
+        async function restartService() {
+            if (!confirm('Restart the AutoCoder UI service? All agents will be stopped.')) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-restart');
+            btn.disabled = true;
+            btn.textContent = '⏳ Restarting...';
+
+            try {
+                const resp = await fetch('/api/systemd/restart', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    setTimeout(refreshServiceStatus, 3000);
+                } else {
+                    alert('Failed to restart: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Restart';
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '🔄 Restart';
+            }
+        }
+
+        function openLimitsModal() {
+            alert('Resource limits modal will be implemented soon.\\n\\nFor now, you can manually edit:\\n~/.config/systemd/user/autocoder-ui.service\\n\\nThen run:\\nsystemctl --user daemon-reload\\nsystemctl --user restart autocoder-ui.service');
+        }
+
+        function confirmEmergencyStop() {
+            const confirmed = prompt(
+                '⚠️ EMERGENCY STOP ⚠️\\n' +
+                'This will IMMEDIATELY kill ALL AutoCoder processes!\\n' +
+                'All work will be LOST!\\n\\n' +
+                'Type "KILL" to confirm:'
+            );
+
+            if (confirmed === 'KILL') {
+                emergencyStop();
+            } else if (confirmed !== null) {
+                alert('Cancelled - you must type "KILL" to confirm');
+            }
+        }
+
+        async function emergencyStop() {
+            try {
+                const resp = await fetch('/api/emergency/stop', { method: 'POST' });
+                const data = await resp.json();
+
+                alert(
+                    '🚨 EMERGENCY STOP EXECUTED 🚨\\n' +
+                    `Processes killed: ${data.killed_count}\\n` +
+                    `Lock files removed: ${data.lock_files_removed}\\n` +
+                    `Agents reset: ${data.agents_reset}\\n\\n` +
+                    'The service needs to be restarted manually.'
+                );
+
+                // Refresh status after a delay
+                setTimeout(refreshServiceStatus, 2000);
+
+            } catch (e) {
+                alert('Error: ' + e.message);
             }
         }
 
