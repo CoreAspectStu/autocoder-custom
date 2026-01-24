@@ -29,6 +29,10 @@ if str(_root) not in sys.path:
 from registry import list_registered_projects
 from server.services.project_config import get_project_config
 
+# Resource monitoring imports
+import psutil
+import os
+
 router = APIRouter(tags=["status"])
 
 
@@ -347,6 +351,145 @@ async def get_project_spec(project_name: str):
     }
 
 
+@router.get("/api/status/resources")
+async def get_resource_stats():
+    """
+    Get system and AutoCoder resource usage statistics.
+
+    Returns CPU, memory, process counts for system, AutoCoder cgroup,
+    and per-process breakdown.
+    """
+    from pathlib import Path
+
+    result = {}
+
+    # System-wide stats
+    cpu_percent = psutil.cpu_percent(interval=0.5)
+    memory = psutil.virtual_memory()
+    load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else (0, 0, 0)
+
+    result["system"] = {
+        "cpu_percent": cpu_percent,
+        "load_1m": float(f"{load_avg[0]:.2f}"),
+        "load_5m": float(f"{load_avg[1]:.2f}"),
+        "load_15m": float(f"{load_avg[2]:.2f}"),
+        "memory_used_gb": round(memory.used / (1024**3), 2),
+        "memory_total_gb": round(memory.total / (1024**3), 2),
+        "memory_percent": memory.percent,
+        "process_count": len(psutil.pids()),
+    }
+
+    # Check if we're running in autocoder-ui.service cgroup
+    in_cgroup = False
+    cgroup_path = Path("/proc/self/cgroup")
+    if cgroup_path.exists():
+        cgroup_content = cgroup_path.read_text()
+        in_cgroup = "autocoder-ui.service" in cgroup_content
+
+    if in_cgroup:
+        # Find AutoCoder processes
+        autocoder_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent', 'memory_info']):
+            try:
+                if proc.info['name'] in ['python', 'python3', 'uvicorn']:
+                    cmdline = ' '.join(proc.info['cmdline'] or [])
+                    if 'autocoder' in cmdline.lower() or 'uvicorn' in cmdline.lower():
+                        autocoder_processes.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if autocoder_processes:
+            total_cpu = sum(p.cpu_percent() for p in autocoder_processes)
+            total_memory = sum(p.memory_info().rss for p in autocoder_processes)
+
+            result["autocoder"] = {
+                "in_cgroup": True,
+                "status": "enforced",
+                "process_count": len(autocoder_processes),
+                "process_limit": 250,
+                "cpu_percent": round(total_cpu, 1),
+                "cpu_limit": 200,  # 200% = 2 cores
+                "memory_gb": round(total_memory / (1024**3), 2),
+                "memory_limit_gb": 32,
+            }
+
+            # Per-process breakdown
+            processes = []
+            for proc in sorted(autocoder_processes, key=lambda p: p.memory_info().rss, reverse=True):
+                try:
+                    cmdline = ' '.join(proc.info['cmdline'] or [])
+
+                    # Classify process type
+                    if 'uvicorn' in cmdline:
+                        proc_type = "web_ui"
+                        proc_icon = "🌐"
+                    elif 'parallel_orchestrator' in cmdline:
+                        proc_type = "orchestrator"
+                        proc_icon = "🎯"
+                    elif 'coding' in cmdline.lower() or 'feature' in cmdline.lower():
+                        proc_type = "coding_agent"
+                        proc_icon = "💻"
+                    elif 'test' in cmdline.lower():
+                        proc_type = "testing_agent"
+                        proc_icon = "🧪"
+                    elif 'playwright' in cmdline.lower():
+                        proc_type = "playwright"
+                        proc_icon = "🎭"
+                    elif 'autonomous_agent_demo' in cmdline and 'parallel' not in cmdline:
+                        proc_type = "agent"
+                        proc_icon = "🤖"
+                    else:
+                        proc_type = "python"
+                        proc_icon = "📦"
+
+                    processes.append({
+                        "pid": proc.pid,
+                        "type": proc_type,
+                        "icon": proc_icon,
+                        "cpu_percent": proc.cpu_percent(),
+                        "memory_mb": round(proc.memory_info().rss / (1024**2), 1),
+                    })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+            result["autocoder"]["processes"] = processes
+        else:
+            result["autocoder"] = {
+                "in_cgroup": True,
+                "status": "idle",
+                "process_count": 0,
+                "process_limit": 250,
+                "cpu_percent": 0,
+                "cpu_limit": 200,
+                "memory_gb": 0,
+                "memory_limit_gb": 32,
+            }
+    else:
+        result["autocoder"] = {
+            "in_cgroup": False,
+            "status": "not_enforced",
+            "warning": "Resource limits NOT enforced - running outside systemd",
+        }
+
+    # Quota status summary
+    try:
+        from api.quota_budget import get_quota_budget
+        quota = get_quota_budget()
+        stats = quota.get_stats()
+
+        result["quota"] = {
+            "used": stats['used'],
+            "limit": stats['limit'],
+            "remaining": stats['remaining'],
+            "percentage": round(stats['percentage'], 1),
+            "window_hours": stats['window_hours'],
+        }
+    except Exception:
+        result["quota"] = {"error": "Quota tracking unavailable"}
+
+    return result
+
+
 @router.get("/status", response_class=HTMLResponse)
 async def status_page():
     """
@@ -440,6 +583,126 @@ async def status_page():
 
         .port-info strong {
             color: #1e40af;
+        }
+
+        /* Resources Section */
+        .resources-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .resources-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .resources-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a202c;
+            margin: 0;
+        }
+
+        .autocoder-status {
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .autocoder-status.enforced {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .autocoder-status.not-enforced {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .resources-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .resource-group {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .resource-group h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 12px 0;
+        }
+
+        .resource-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+        }
+
+        .resource-item:last-child {
+            border-bottom: none;
+        }
+
+        .resource-label {
+            color: #6b7280;
+        }
+
+        .resource-value {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .process-list {
+            margin-top: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .process-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .process-item:last-child {
+            border-bottom: none;
+        }
+
+        .process-icon {
+            font-size: 16px;
+        }
+
+        .process-info {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .process-type {
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .process-stats {
+            color: #6b7280;
         }
 
         /* Project Cards */
@@ -1000,6 +1263,35 @@ async def status_page():
                 <div class="label">Total Projects</div>
                 <div class="value" id="total-count">0</div>
             </div>
+        </div>
+
+        <!-- Resources Stats -->
+        <div class="summary" id="resources" style="margin-top: 24px;">
+            <div class="summary-card">
+                <div class="label">CPU Usage</div>
+                <div class="value" id="cpu-usage">-</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Memory</div>
+                <div class="value" id="memory-usage">-</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Processes</div>
+                <div class="value" id="process-count">-</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">API Quota</div>
+                <div class="value" id="quota-usage">-</div>
+            </div>
+        </div>
+
+        <!-- Resources Details -->
+        <div class="resources-section" id="resources-section" style="display: none;">
+            <div class="resources-header">
+                <h3>🖥️ System Resources</h3>
+                <div class="autocoder-status" id="autocoder-status"></div>
+            </div>
+            <div class="resources-grid" id="resources-grid"></div>
         </div>
 
         <!-- Port Range Info -->
@@ -1584,6 +1876,116 @@ async def status_page():
 
             } catch (e) {
                 console.error('Refresh failed:', e);
+            }
+
+            // Always refresh resources (even if project data hasn't changed)
+            await refreshResources();
+        }
+
+        // Fetch and render resources
+        async function refreshResources() {
+            try {
+                const resp = await fetch('/api/status/resources');
+                const data = await resp.json();
+
+                // Update summary cards
+                document.getElementById('cpu-usage').textContent = data.system.cpu_percent + '%';
+                document.getElementById('memory-usage').textContent =
+                    data.system.memory_used_gb + 'GB';
+                document.getElementById('process-count').textContent = data.system.process_count;
+
+                if (data.quota && !data.quota.error) {
+                    document.getElementById('quota-usage').textContent =
+                        data.quota.remaining + ' left';
+                } else {
+                    document.getElementById('quota-usage').textContent = 'N/A';
+                }
+
+                // Update resources section
+                const resourcesSection = document.getElementById('resources-section');
+                const autocoderStatus = document.getElementById('autocoder-status');
+                const resourcesGrid = document.getElementById('resources-grid');
+
+                if (data.autocoder.in_cgroup) {
+                    resourcesSection.style.display = 'block';
+                    autocoderStatus.textContent = '✅ Limits Enforced';
+                    autocoderStatus.className = 'autocoder-status enforced';
+
+                    // Build resources grid
+                    let html = `
+                        <div class="resource-group">
+                            <h4>🖥️ System</h4>
+                            <div class="resource-item">
+                                <span class="resource-label">CPU Usage</span>
+                                <span class="resource-value">${data.system.cpu_percent}%</span>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Load Average</span>
+                                <span class="resource-value">${data.system.load_1m}, ${data.system.load_5m}, ${data.system.load_15m}</span>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Memory</span>
+                                <span class="resource-value">${data.system.memory_used_gb}GB / ${data.system.memory_total_gb}GB (${data.system.memory_percent}%)</span>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Processes</span>
+                                <span class="resource-value">${data.system.process_count}</span>
+                            </div>
+                        </div>
+
+                        <div class="resource-group">
+                            <h4>🔒 AutoCoder Cgroup</h4>
+                            <div class="resource-item">
+                                <span class="resource-label">Processes</span>
+                                <span class="resource-value">${data.autocoder.process_count} / ${data.autocoder.process_limit}</span>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">CPU</span>
+                                <span class="resource-value">${data.autocoder.cpu_percent}% / ${data.autocoder.cpu_limit}% (2 cores)</span>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Memory</span>
+                                <span class="resource-value">${data.autocoder.memory_gb}GB / ${data.autocoder.memory_limit_gb}GB</span>
+                            </div>
+                        </div>
+                    `;
+
+                    // Add process list if processes exist
+                    if (data.autocoder.processes && data.autocoder.processes.length > 0) {
+                        html += `
+                            <div class="resource-group" style="grid-column: 1 / -1;">
+                                <h4>📋 AutoCoder Processes</h4>
+                                <div class="process-list">
+                                    ${data.autocoder.processes.map(p => `
+                                        <div class="process-item">
+                                            <span class="process-icon">${p.icon}</span>
+                                            <div class="process-info">
+                                                <span class="process-type">${p.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                                <span class="process-stats">PID ${p.pid} • ${p.cpu_percent}% CPU • ${p.memory_mb}MB RAM</span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    resourcesGrid.innerHTML = html;
+                } else {
+                    resourcesSection.style.display = 'block';
+                    autocoderStatus.textContent = '⚠️ Limits Not Enforced';
+                    autocoderStatus.className = 'autocoder-status not-enforced';
+                    resourcesGrid.innerHTML = `
+                        <div class="resource-group" style="grid-column: 1 / -1;">
+                            <div class="resource-item">
+                                <span class="resource-value" style="color: #991b1b;">${data.autocoder.warning}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+            } catch (e) {
+                console.error('Failed to refresh resources:', e);
             }
         }
 
