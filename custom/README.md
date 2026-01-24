@@ -67,6 +67,17 @@ git push origin master
 autocoder/
 ├── custom/                            # This directory - tracks all customizations
 │   ├── README.md                      # This file - master index
+│   ├── mission-control/               # [NEW] Mission Control module (monitoring + human-in-loop)
+│   │   ├── README.md                  # Feature documentation
+│   │   ├── install.py                 # Installation script
+│   │   ├── integration.py             # Client.py integration helper
+│   │   ├── demo.py                    # Demo/test script
+│   │   ├── client/                    # Python client library
+│   │   │   ├── __init__.py
+│   │   │   └── devlayer_client.py    # DevLayer API client
+│   │   └── mcp_server/                # MCP server for agents
+│   │       ├── __init__.py
+│   │       └── mission_control_mcp.py # MCP tools
 │   ├── docs/                          # Remote server documentation
 │   │   ├── UPDATE-GUIDE.md           # ⚡ Upstream update process (READ FIRST!)
 │   │   ├── UPDATE-CHECKLIST.md       # Quick update reference card
@@ -108,12 +119,23 @@ autocoder/
 |------|----------|---------|-------|
 | `remote-start.sh` | `/` | tmux/Xvfb session manager with doctor command | 430 |
 | `apply-remote-access.sh` | `custom/patches/` | Auto-applies patches after git pull | 77 |
+| `install.py` | `custom/mission-control/` | Mission Control installer/uninstaller | 150 |
+| `demo.py` | `custom/mission-control/` | Demo script for DevLayer features | 120 |
 
 ### Server Routes & Services
 
 | File | Location | Purpose | Lines |
 |------|----------|---------|-------|
 | `status.py` | `server/routers/` | [CUSTOM] Enhanced dashboard with health metrics, agent status, spec modal with XML formatting | 1132 |
+| `devlayer.py` | `server/routers/` | [EXISTING] DevLayer API (requests, chat, annotations) | 339 |
+
+### Mission Control Module
+
+| File | Location | Purpose | Lines |
+|------|----------|---------|-------|
+| `devlayer_client.py` | `custom/mission-control/client/` | Python client library for DevLayer | 250 |
+| `mission_control_mcp.py` | `custom/mission-control/mcp_server/` | MCP server exposing DevLayer as agent tools | 170 |
+| `integration.py` | `custom/mission-control/` | Client.py integration helper | 60 |
 
 **Note:** After 2026-01-22 update, auth customizations were removed in favor of upstream's simplified approach. Port assignment system was also deprecated by upstream.
 
@@ -162,10 +184,51 @@ autocoder/
 ./remote-start.sh status          # Check what's running
 ```
 
-### 2. Enhanced Status Dashboard
-**Problem Solved:** See all projects, health metrics, and dev server status at a glance
+### 2. Mission Control (NEW - 2026-01-24)
+**Problem Solved:** Unified monitoring + human-in-the-loop for agents
 
-**Access:** `http://localhost:8888/status` (after starting UI)
+**Access:**
+- Status: `http://localhost:8888/status` (after starting UI)
+- DevLayer: Press `L` in UI to toggle
+
+**Installation:**
+```bash
+python custom/mission-control/install.py
+echo "MISSION_CONTROL_ENABLED=true" >> .env
+autocoder-ui  # restart UI
+```
+
+**Features:**
+- **Status Dashboard** (existing, now part of Mission Control):
+  - Summary stats: Running servers, active agents, idle projects
+  - Project cards with health indicators (green/yellow/red/gray)
+  - Feature progress bars from features.db
+  - Agent status detection via tmux
+  - Quick actions: View Spec, Open App, View Logs
+  - Real-time updates every 5 seconds
+
+- **DevLayer** (NEW - human-in-the-loop):
+  - **Attention Queue:** Agents can ask questions, report blockers, request decisions
+  - **Chat:** Real-time messaging with agents
+  - **Annotations:** Document bugs, ideas, workarounds
+  - **Multi-project Dashboard:** See requests across all projects
+  - **Priority Sorting:** Critical requests show first
+  - **Mute/unmute:** Per-project notification control
+
+**Agent Capabilities (via MCP tools):**
+- `devlayer_ask_question` - Ask human for clarification
+- `devlayer_report_blocker` - Report stuck/blocked state
+- `devlayer_request_decision` - Request human decision
+- `devlayer_request_auth` - Request credentials (API keys, passwords)
+- `devlayer_send_chat` - Send status updates
+- `devlayer_create_annotation` - Document bugs/ideas
+
+**Documentation:** `custom/mission-control/README.md`
+
+**Demo:** `python custom/mission-control/demo.py`
+
+### 3. Enhanced Status Dashboard (Legacy - now part of Mission Control)
+**Note:** This section kept for reference. Status Dashboard is now integrated into Mission Control (see #2 above).
 
 **Features:**
 - **Summary Stats Dashboard:** Running servers, active agents, idle projects, total count
@@ -180,9 +243,9 @@ autocoder/
 - **Port Information:** Banner showing 4000-4099 port convention
 - **Real-time Updates:** Auto-refresh every 5 seconds
 - **Project Metadata:** Project type, assigned port, spec status
-- **Authentication Settings:** Toggle between Claude Login and API Key authentication (see #3 below)
+- **Authentication Settings:** Toggle between Claude Login and API Key authentication (see #4 below)
 
-### 3. Authentication Settings Panel
+### 4. Authentication Settings Panel
 **Problem Solved:** Switching between Claude Login and API Key authentication requires manual .env editing
 
 **Access:** `http://localhost:8888/status` (top panel)
@@ -204,7 +267,7 @@ autocoder/
 
 **Documentation:** See `custom/docs/auth-settings-customization.md` for full reapply guide
 
-### 4. Automatic Port Assignment
+### 5. Automatic Port Assignment
 **Problem Solved:** Dev servers use framework defaults (3000, 5173) incompatible with SSH tunnels
 
 **How It Works:**
@@ -232,7 +295,7 @@ autocoder/
 # SSH tunnel: ssh -L 4000:localhost:4000 stu@server
 ```
 
-### 5. Patch System
+### 6. Patch System
 **Problem Solved:** Survive upstream updates without losing custom code
 
 **How It Works:**
@@ -240,7 +303,7 @@ autocoder/
 - Auto-patches core files to integrate status router
 - Documented in `custom/patches/README.md`
 
-### 6. Comprehensive Documentation
+### 7. Comprehensive Documentation
 **Problem Solved:** Multiple learning paths for different needs
 
 **Levels:**
