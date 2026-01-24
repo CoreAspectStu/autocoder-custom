@@ -227,6 +227,51 @@ autocoder-ui  # restart UI
 
 **Demo:** `python custom/mission_control/demo.py`
 
+### 2.1. Mission Control UI (NEW - 2026-01-24)
+**Problem Solved:** Fragmented UI - Kanban in one view, Status at /status, DevLayer broken, no chat history
+
+**What This Adds:**
+Unified tabbed interface that consolidates all features into a single view:
+- **Tab 1 (📋 Kanban)** - Existing feature board
+- **Tab 2 (💬 Chat)** - Agent conversation history (persistent, searchable)
+- **Tab 3 (🐛 Issues)** - Bug/annotation tracking (quick-add, resolve)
+- **Tab 4 (📊 Status)** - Server health dashboard
+- **Tab 5 (📺 Terminal)** - Agent output logs
+
+**Installation:**
+```bash
+cd custom/mission_control_ui
+./install.sh
+# Follow prompts to copy components and rebuild UI
+```
+
+**Usage:**
+1. Start AutoCoder UI: `autocoder ui`
+2. Press `L` key (or click purple button) to toggle tabbed interface
+3. Press `1-5` keys to switch between tabs
+4. All data is project-scoped (no cross-contamination)
+
+**Key Features:**
+- ✅ Project isolation (callAspect chat ≠ QR chat)
+- ✅ Persistent history across server restarts
+- ✅ Keyboard shortcuts (1-5 for tabs)
+- ✅ localStorage tab persistence
+- ✅ Real-time updates (polling every 3-5 seconds)
+
+**Documentation:** `custom/mission_control_ui/README.md`
+
+**Modified Files:**
+- `ui/src/App.tsx` - Import TabLayout, add conditional rendering
+- `ui/src/components/TabLayout.tsx` - NEW (main tab container)
+- `ui/src/components/ChatTab.tsx` - NEW (chat history UI)
+- `ui/src/components/IssuesTab.tsx` - NEW (annotation CRUD)
+- `ui/src/components/StatusTab.tsx` - NEW (server health dashboard)
+
+**Update Strategy:**
+- Source of truth: `custom/mission_control_ui/components/`
+- After upstream pull: Re-run `./install.sh` to re-apply patches
+- See `custom/mission_control_ui/INSTALLATION.md` for manual steps
+
 ### 3. Enhanced Status Dashboard (Legacy - now part of Mission Control)
 **Note:** This section kept for reference. Status Dashboard is now integrated into Mission Control (see #2 above).
 
