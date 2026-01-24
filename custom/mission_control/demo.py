@@ -109,30 +109,25 @@ async def main():
     print("=" * 60)
     print("\nMake sure AutoCoder UI is running (autocoder-ui)")
     print("Press L in UI to open DevLayer mode\n")
-    input("Press Enter to start demos...")
 
-    # Run demos in sequence
+    # Run demos in sequence (non-interactive)
     await demo_chat()
     await asyncio.sleep(2)
 
     await demo_annotation()
     await asyncio.sleep(2)
 
-    # Interactive demos (require human response)
+    # Skip interactive demos by default (require human response)
     print("\n" + "=" * 60)
-    print("  Interactive Demos (require response in UI)")
+    print("  Skipping Interactive Demos")
     print("=" * 60)
-
-    choice = input("\nRun interactive demos? (y/n): ")
-    if choice.lower() == 'y':
-        await demo_question()
-        await asyncio.sleep(2)
-        await demo_blocker()
+    print("\nInteractive demos (ask_question, report_blocker) require")
+    print("human responses in the UI and are skipped in non-interactive mode.")
 
     print("\n" + "=" * 60)
     print("  Demo Complete!")
     print("=" * 60)
-    print("\nCheck the DevLayer UI to see all requests/chat/annotations")
+    print("\nCheck the DevLayer UI (press L) to see all chat/annotations")
 
 
 if __name__ == "__main__":

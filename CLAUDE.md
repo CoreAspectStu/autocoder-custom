@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **This is NOT vanilla AutoCoder.** This instance has significant custom modifications:
 
-- **Mission Control** - `custom/mission-control/` (unified monitoring + human-in-the-loop)
+- **Mission Control** - `custom/mission_control/` (unified monitoring + human-in-the-loop)
   - DevLayer integration: Agents can ask questions, report blockers, request credentials
   - Python client library + MCP server with 6 agent tools
   - Press `L` in UI to toggle DevLayer mode

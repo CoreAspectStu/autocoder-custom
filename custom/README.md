@@ -67,7 +67,7 @@ git push origin master
 autocoder/
 ├── custom/                            # This directory - tracks all customizations
 │   ├── README.md                      # This file - master index
-│   ├── mission-control/               # [NEW] Mission Control module (monitoring + human-in-loop)
+│   ├── mission_control/               # [NEW] Mission Control module (monitoring + human-in-loop)
 │   │   ├── README.md                  # Feature documentation
 │   │   ├── install.py                 # Installation script
 │   │   ├── integration.py             # Client.py integration helper
@@ -119,8 +119,8 @@ autocoder/
 |------|----------|---------|-------|
 | `remote-start.sh` | `/` | tmux/Xvfb session manager with doctor command | 430 |
 | `apply-remote-access.sh` | `custom/patches/` | Auto-applies patches after git pull | 77 |
-| `install.py` | `custom/mission-control/` | Mission Control installer/uninstaller | 150 |
-| `demo.py` | `custom/mission-control/` | Demo script for DevLayer features | 120 |
+| `install.py` | `custom/mission_control/` | Mission Control installer/uninstaller | 150 |
+| `demo.py` | `custom/mission_control/` | Demo script for DevLayer features | 120 |
 
 ### Server Routes & Services
 
@@ -133,9 +133,9 @@ autocoder/
 
 | File | Location | Purpose | Lines |
 |------|----------|---------|-------|
-| `devlayer_client.py` | `custom/mission-control/client/` | Python client library for DevLayer | 250 |
-| `mission_control_mcp.py` | `custom/mission-control/mcp_server/` | MCP server exposing DevLayer as agent tools | 170 |
-| `integration.py` | `custom/mission-control/` | Client.py integration helper | 60 |
+| `devlayer_client.py` | `custom/mission_control/client/` | Python client library for DevLayer | 250 |
+| `mission_control_mcp.py` | `custom/mission_control/mcp_server/` | MCP server exposing DevLayer as agent tools | 170 |
+| `integration.py` | `custom/mission_control/` | Client.py integration helper | 60 |
 
 **Note:** After 2026-01-22 update, auth customizations were removed in favor of upstream's simplified approach. Port assignment system was also deprecated by upstream.
 
@@ -193,7 +193,7 @@ autocoder/
 
 **Installation:**
 ```bash
-python custom/mission-control/install.py
+python custom/mission_control/install.py
 echo "MISSION_CONTROL_ENABLED=true" >> .env
 autocoder-ui  # restart UI
 ```
@@ -223,9 +223,9 @@ autocoder-ui  # restart UI
 - `devlayer_send_chat` - Send status updates
 - `devlayer_create_annotation` - Document bugs/ideas
 
-**Documentation:** `custom/mission-control/README.md`
+**Documentation:** `custom/mission_control/README.md`
 
-**Demo:** `python custom/mission-control/demo.py`
+**Demo:** `python custom/mission_control/demo.py`
 
 ### 3. Enhanced Status Dashboard (Legacy - now part of Mission Control)
 **Note:** This section kept for reference. Status Dashboard is now integrated into Mission Control (see #2 above).
