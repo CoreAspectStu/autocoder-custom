@@ -33,6 +33,7 @@ from .routers import (
     assistant_chat_router,
     devlayer_router,
     devserver_router,
+    emergency_router,
     expand_project_router,
     features_router,
     filesystem_router,
@@ -42,6 +43,7 @@ from .routers import (
     settings_router,
     spec_creation_router,
     status_router,
+    systemd_router,
     terminal_router,
 )
 from .schemas import SetupStatus
@@ -133,6 +135,7 @@ app.include_router(agent_router)
 app.include_router(analytics_router)
 app.include_router(schedules_router)
 app.include_router(devserver_router)
+app.include_router(emergency_router)
 app.include_router(spec_creation_router)
 app.include_router(expand_project_router)
 app.include_router(filesystem_router)
@@ -142,6 +145,7 @@ app.include_router(terminal_router)
 app.include_router(status_router)
 app.include_router(messages_router)
 app.include_router(devlayer_router)
+app.include_router(systemd_router)
 
 
 # ============================================================================
