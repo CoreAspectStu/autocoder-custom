@@ -1,19 +1,32 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Server, PlayCircle, StopCircle, Loader2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Server, PlayCircle, StopCircle, Loader2, RefreshCw, ExternalLink } from 'lucide-react'
 
-interface ProjectStatus {
-  name: string
+interface DevServerStatus {
+  project: string
   path: string
   port: number | null
-  is_running: boolean
-  health: 'green' | 'yellow' | 'red' | 'gray'
-  progress: {
-    total: number
-    passing: number
-    percentage: number
+  status: 'running' | 'stopped'
+  url: string | null
+  has_spec: boolean
+  spec_path: string | null
+  project_type: string
+  features_total: number
+  features_passing: number
+  completion_percentage: number
+  has_features_db: boolean
+  agent_running: boolean
+  agent_session: string | null
+}
+
+interface StatusResponse {
+  servers: DevServerStatus[]
+  count: number
+  summary: {
+    running: number
+    agents: number
+    idle: number
   }
-  agent_status: 'running' | 'idle'
 }
 
 interface StatusTabProps {
@@ -24,14 +37,12 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Fetch project status data
-  const { data: projects = [], isLoading, refetch } = useQuery<ProjectStatus[]>({
+  const { data: statusData, isLoading, refetch } = useQuery<StatusResponse>({
     queryKey: ['projectStatus'],
     queryFn: async () => {
-      const res = await fetch('/api/status/json')
+      const res = await fetch('/api/status/devservers')
       if (!res.ok) {
-        // If JSON endpoint doesn't exist yet, return empty array
-        console.warn('/api/status/json not implemented yet')
-        return []
+        throw new Error('Failed to fetch status')
       }
       return res.json()
     },
@@ -39,24 +50,14 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
   })
 
   // Find current project
-  const currentProject = projects.find(p => p.name === selectedProject)
+  const currentProject = statusData?.servers?.find(p => p.project === selectedProject)
 
-  const getHealthColor = (health: string) => {
-    switch (health) {
-      case 'green': return 'bg-green-500'
-      case 'yellow': return 'bg-yellow-500'
-      case 'red': return 'bg-red-500'
-      default: return 'bg-gray-400'
-    }
-  }
-
-  const getHealthLabel = (health: string) => {
-    switch (health) {
-      case 'green': return 'Healthy'
-      case 'yellow': return 'In Progress'
-      case 'red': return 'Issues'
-      default: return 'Not Started'
-    }
+  // Calculate health based on completion percentage
+  const getHealthStatus = (percentage: number) => {
+    if (percentage === 0) return { color: 'bg-gray-400', label: 'Not Started' }
+    if (percentage < 50) return { color: 'bg-yellow-500', label: 'In Progress' }
+    if (percentage < 100) return { color: 'bg-blue-500', label: 'Making Progress' }
+    return { color: 'bg-green-500', label: 'Complete' }
   }
 
   if (!selectedProject) {
@@ -115,17 +116,16 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
           </div>
         )}
 
-        {!isLoading && projects.length === 0 && (
+        {!isLoading && !currentProject && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="text-yellow-600 dark:text-yellow-500 flex-shrink-0" size={20} />
+              <Server className="text-yellow-600 dark:text-yellow-500 flex-shrink-0" size={20} />
               <div>
                 <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                  Status API Not Implemented
+                  Project not found
                 </p>
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  The <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">/api/status/json</code> endpoint needs to be created.
-                  This will expose the same data as <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">/status</code> but in JSON format.
+                  Project &quot;{selectedProject}&quot; is not registered in the system.
                 </p>
               </div>
             </div>
@@ -140,9 +140,9 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
                 Health Status
               </h3>
               <div className="flex items-center gap-4">
-                <div className={`w-3 h-3 rounded-full ${getHealthColor(currentProject.health)}`} />
+                <div className={`w-3 h-3 rounded-full ${getHealthStatus(currentProject.completion_percentage).color}`} />
                 <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  {getHealthLabel(currentProject.health)}
+                  {getHealthStatus(currentProject.completion_percentage).label}
                 </span>
               </div>
             </div>
@@ -161,35 +161,35 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${currentProject.is_running ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <span className={`text-sm font-medium ${currentProject.is_running ? 'text-green-600' : 'text-gray-500'}`}>
-                      {currentProject.is_running ? 'Running' : 'Stopped'}
+                    <div className={`w-2 h-2 rounded-full ${currentProject.status === 'running' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className={`text-sm font-medium ${currentProject.status === 'running' ? 'text-green-600' : 'text-gray-500'}`}>
+                      {currentProject.status === 'running' ? 'Running' : 'Stopped'}
                     </span>
                   </div>
                 </div>
 
-                {currentProject.port && (
+                {currentProject.port && currentProject.url && (
                   <div className="flex gap-2">
-                    {!currentProject.is_running && (
-                      <button className="neo-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
+                    {currentProject.status === 'stopped' && (
+                      <button className="neo-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2" disabled>
                         <PlayCircle size={18} />
                         Start Server
                       </button>
                     )}
-                    {currentProject.is_running && (
+                    {currentProject.status === 'running' && (
                       <>
-                        <button className="neo-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
+                        <button className="neo-btn px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2" disabled>
                           <StopCircle size={18} />
                           Stop Server
                         </button>
                         <a
-                          href={`http://localhost:${currentProject.port}`}
+                          href={currentProject.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="neo-btn px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2"
+                          className="neo-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
                         >
-                          <Server size={18} />
-                          Open App
+                          <ExternalLink size={18} />
+                          Open {currentProject.port}
                         </a>
                       </>
                     )}
@@ -203,60 +203,72 @@ export function StatusTab({ selectedProject }: StatusTabProps) {
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
                 Feature Progress
               </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Completion</span>
-                  <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {currentProject.progress.percentage}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                  <div
-                    className="bg-purple-500 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${currentProject.progress.percentage}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {currentProject.progress.passing} of {currentProject.progress.total} features
-                  </span>
-                  <span className={`font-medium ${
-                    currentProject.agent_status === 'running'
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-500'
-                  }`}>
-                    Agent: {currentProject.agent_status}
-                  </span>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {currentProject.features_passing} of {currentProject.features_total} features complete
+                    </span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {currentProject.completion_percentage}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-purple-600 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${currentProject.completion_percentage}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Quick Links */}
+            {/* Agent Status */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                Quick Actions
+                Agent Status
               </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href="/status"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="neo-btn px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-center"
-                >
-                  View Full Status Dashboard
-                </a>
-                <button className="neo-btn px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
-                  View Logs
-                </button>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${currentProject.agent_running ? 'bg-green-500' : 'bg-gray-400'}`} />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {currentProject.agent_running ? 'Agent Running' : 'Agent Idle'}
+                  </p>
+                  {currentProject.agent_session && (
+                    <p className="text-xs text-gray-500">
+                      Session: {currentProject.agent_session}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
 
-        {!isLoading && !currentProject && projects.length > 0 && (
-          <div className="text-center text-gray-500 py-8">
-            <p className="text-lg mb-2">Project not found in status data</p>
-            <p className="text-sm">Select a different project or check the server</p>
+            {/* Project Info */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                Project Details
+              </h3>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-gray-600 dark:text-gray-400">Path:</dt>
+                  <dd className="text-gray-900 dark:text-gray-100 font-mono text-xs">
+                    {currentProject.path}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-600 dark:text-gray-400">Type:</dt>
+                  <dd className="text-gray-900 dark:text-gray-100">
+                    {currentProject.project_type || 'Unknown'}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-600 dark:text-gray-400">Has Spec:</dt>
+                  <dd className="text-gray-900 dark:text-gray-100">
+                    {currentProject.has_spec ? 'Yes' : 'No'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
         )}
       </div>
