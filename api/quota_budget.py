@@ -21,8 +21,15 @@ class QuotaBudget:
     - Conservative assumption: 400 prompts per 5 hours
     """
 
-    # Conservative quota limit for Max 20x plan
+    # Conservative quota limit for Max 20x plan (Anthropic)
+    # GLM has much higher limits - override via env var if needed
     DEFAULT_QUOTA_LIMIT = 400  # prompts per 5-hour window
+
+    # Allow override via environment variable
+    import os
+    if os.getenv("ANTHROPIC_BASE_URL", "").startswith("https://api.z.ai"):
+        # GLM via Zhipu AI has much higher quotas
+        DEFAULT_QUOTA_LIMIT = 10000  # Much higher limit for GLM
 
     # Time window for quota tracking (in hours)
     QUOTA_WINDOW_HOURS = 5
