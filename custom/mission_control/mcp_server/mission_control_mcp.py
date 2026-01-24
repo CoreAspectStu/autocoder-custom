@@ -11,11 +11,16 @@ Tools provided:
 - devlayer_request_auth: Request credentials
 - devlayer_send_chat: Send chat message
 - devlayer_create_annotation: Create bug/idea/workaround note
+- quota_get_usage: Get current API quota usage statistics
+- quota_set_limit: Set quota limit for Anthropic or GLM
+- quota_get_history: Get quota usage history and daily summaries
 """
 
 import asyncio
+import sqlite3
 import sys
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add autocoder root to path for imports
@@ -25,6 +30,7 @@ sys.path.insert(0, str(AUTOCODER_ROOT))
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 from custom.mission_control.client import DevLayerClient, RequestPriority, RequestType
+from api.quota_budget import QuotaBudget, get_quota_budget, _global_quota_budget
 
 # Get project name from environment (set by client.py)
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "unknown")
@@ -191,6 +197,68 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["type", "content"]
             }
+        ),
+        Tool(
+            name="quota_get_usage",
+            description=(
+                "Get current API quota usage statistics. "
+                "Shows remaining prompts, usage percentage, and quota limit for the 5-hour rolling window."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="quota_set_limit",
+            description=(
+                "Set the quota limit for API usage. "
+                "Different limits for Anthropic (default 400) vs GLM (default 10000). "
+                "Takes effect immediately and persists in environment."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "api_provider": {
+                        "type": "string",
+                        "enum": ["anthropic", "glm"],
+                        "description": "API provider to set limit for"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "New quota limit (prompts per 5-hour window)",
+                        "minimum": 1
+                    }
+                },
+                "required": ["api_provider", "limit"]
+            }
+        ),
+        Tool(
+            name="quota_get_history",
+            description=(
+                "Get quota usage history and daily summaries. "
+                "Shows usage trends by project, agent, and model over time."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "hours": {
+                        "type": "integer",
+                        "description": "Hours of history to retrieve (default: 24, max: 168)",
+                        "default": 24,
+                        "minimum": 1,
+                        "maximum": 168
+                    },
+                    "group_by": {
+                        "type": "string",
+                        "enum": ["project", "agent", "model", "hour"],
+                        "description": "How to group the data (default: hour)",
+                        "default": "hour"
+                    }
+                },
+                "required": []
+            }
         )
     ]
 
@@ -243,6 +311,137 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             result = await devlayer.create_annotation(ann_type, content, feature_id)
             return [TextContent(type="text", text=f"Annotation created (ID: {result['id']})")]
+
+        elif name == "quota_get_usage":
+            quota = get_quota_budget()
+            stats = quota.get_stats()
+
+            output = [
+                f"📊 API Quota Status (5-hour window)",
+                f"",
+                f"Used: {stats['used']} prompts",
+                f"Remaining: {stats['remaining']} prompts",
+                f"Limit: {stats['limit']} prompts",
+                f"Usage: {stats['percentage']:.1f}%",
+                f"Window: {stats['window_hours']} hours",
+                f"",
+                f"Safe concurrency (20 prompts/agent): {quota.calculate_safe_concurrency()} agents"
+            ]
+            return [TextContent(type="text", text="\n".join(output))]
+
+        elif name == "quota_set_limit":
+            api_provider = arguments["api_provider"]
+            limit = arguments["limit"]
+
+            # Get current quota budget to check current settings
+            quota = get_quota_budget()
+
+            # Update the class-level limit based on provider
+            import os
+            base_url = os.getenv("ANTHROPIC_BASE_URL", "")
+
+            if api_provider == "anthropic":
+                # Only update if not currently using GLM
+                if base_url.startswith("https://api.z.ai"):
+                    return [TextContent(
+                        type="text",
+                        text=f"⚠️ Cannot set Anthropic limit while GLM is active. "
+                        f"Current ANTHROPIC_BASE_URL points to GLM API."
+                    )]
+                QuotaBudget.DEFAULT_QUOTA_LIMIT = limit
+
+            elif api_provider == "glm":
+                # Only update if currently using GLM
+                if not base_url.startswith("https://api.z.ai"):
+                    return [TextContent(
+                        type="text",
+                        text=f"⚠️ Cannot set GLM limit while Anthropic is active. "
+                        f"Current ANTHROPIC_BASE_URL does not point to GLM API."
+                    )]
+                QuotaBudget.DEFAULT_QUOTA_LIMIT = limit
+
+            # Create new quota instance with updated limit
+            global _global_quota_budget
+            _global_quota_budget = QuotaBudget(quota_limit=limit)
+
+            output = [
+                f"✅ Quota limit updated",
+                f"",
+                f"Provider: {api_provider.upper()}",
+                f"New limit: {limit} prompts per 5 hours",
+                f"",
+                f"Current usage: {quota.get_usage_5h()} prompts ({quota.get_usage_percentage():.1f}%)",
+                f"Remaining: {quota.get_remaining_5h()} prompts"
+            ]
+            return [TextContent(type="text", text="\n".join(output))]
+
+        elif name == "quota_get_history":
+            hours = arguments.get("hours", 24)
+            group_by = arguments.get("group_by", "hour")
+
+            quota = get_quota_budget()
+            conn = sqlite3.connect(quota.db_path)
+
+            try:
+                # Get historical data
+                cutoff = datetime.utcnow() - timedelta(hours=hours)
+                cursor = conn.execute(
+                    """
+                    SELECT
+                        timestamp,
+                        model,
+                        prompts_used,
+                        project_name,
+                        agent_id
+                    FROM quota_log
+                    WHERE timestamp > ?
+                    ORDER BY timestamp DESC
+                    """,
+                    (cutoff.isoformat(),)
+                )
+                rows = cursor.fetchall()
+
+                if not rows:
+                    return [TextContent(type="text", text=f"No quota usage data in the last {hours} hours.")]
+
+                # Group data based on group_by parameter
+                from collections import defaultdict
+
+                grouped = defaultdict(int)
+
+                for row in rows:
+                    timestamp, model, prompts_used, project_name, agent_id = row
+
+                    if group_by == "project":
+                        key = project_name or "unknown"
+                    elif group_by == "agent":
+                        key = agent_id or "unknown"
+                    elif group_by == "model":
+                        key = model
+                    else:  # hour
+                        # Extract hour from timestamp
+                        dt = datetime.fromisoformat(timestamp)
+                        key = dt.strftime("%Y-%m-%d %H:00")
+
+                    grouped[key] += prompts_used
+
+                # Format output
+                output = [
+                    f"📈 Quota Usage History (last {hours} hours)",
+                    f"",
+                    f"Grouped by: {group_by}",
+                    f"Total prompts: {sum(grouped.values())}",
+                    f"",
+                ]
+
+                # Sort by count (descending) and add to output
+                for key, count in sorted(grouped.items(), key=lambda x: x[1], reverse=True):
+                    output.append(f"{key}: {count} prompts")
+
+                return [TextContent(type="text", text="\n".join(output))]
+
+            finally:
+                conn.close()
 
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
