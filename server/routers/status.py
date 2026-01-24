@@ -1241,18 +1241,39 @@ async def status_page():
                             <div class="detail-section">
                                 <h3>Configuration</h3>
                                 <div class="detail-item"><strong>Project Type:</strong> ${server.project_type || 'Unknown'}</div>
-                                <div class="detail-item"><strong>Port:</strong> ${server.port || 'Not assigned'}</div>
+                                <div class="detail-item">
+                                    <strong>Port:</strong>
+                                    <input type="number"
+                                           id="port-${server.project}"
+                                           value="${server.port || 4000}"
+                                           min="4000"
+                                           max="4099"
+                                           style="width: 70px; padding: 4px 8px; margin: 0 8px; border: 1px solid #d1d5db; border-radius: 4px;"
+                                           onclick="event.stopPropagation()">
+                                    <button class="btn btn-secondary"
+                                            onclick="event.stopPropagation(); changePort('${server.project}')"
+                                            style="padding: 4px 12px; font-size: 12px;">Change</button>
+                                </div>
                                 <div class="detail-item"><strong>Path:</strong> <code style="font-size: 11px; word-break: break-all;">${server.path}</code></div>
                             </div>
 
                             <div class="detail-section">
-                                <h3>🔗 Quick Actions</h3>
+                                <h3>🎮 Dev Server Controls</h3>
+                                <div class="quick-actions">
+                                    ${server.status === 'stopped'
+                                        ? `<button class="btn btn-success" onclick="event.stopPropagation(); startDevServer('${server.project}')">▶ Start Server</button>`
+                                        : `<button class="btn" style="background: #ef4444; color: white;" onclick="event.stopPropagation(); stopDevServer('${server.project}')">⏹ Stop Server</button>`}
+                                    ${hasUrl
+                                        ? `<a href="${server.url}" target="_blank" class="btn btn-primary" onclick="event.stopPropagation()">🌐 Open App</a>`
+                                        : ''}
+                                </div>
+                            </div>
+
+                            <div class="detail-section">
+                                <h3>🔗 Other Actions</h3>
                                 <div class="quick-actions">
                                     ${server.has_spec
-                                        ? `<button class="btn btn-primary" onclick="event.stopPropagation(); viewSpec('${server.project}')">View Spec</button>`
-                                        : ''}
-                                    ${hasUrl
-                                        ? `<a href="${server.url}" target="_blank" class="btn btn-success" onclick="event.stopPropagation()">Open App</a>`
+                                        ? `<button class="btn btn-primary" onclick="event.stopPropagation(); viewSpec('${server.project}')">📄 View Spec</button>`
                                         : ''}
                                     ${server.agent_running
                                         ? `<button class="btn btn-secondary" onclick="event.stopPropagation(); viewLogs('${server.project}')">🪵 View Logs</button>`
@@ -1434,6 +1455,96 @@ async def status_page():
 
         function viewLogs(project) {
             alert(`View logs for ${project}\n\nRun: ./remote-start.sh logs agent-${project.replace('/', '-')}`);
+        }
+
+        // Dev server control functions
+        async function startDevServer(project) {
+            try {
+                const response = await fetch(`/api/projects/${encodeURIComponent(project)}/devserver/start`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({})
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(`Failed to start server: ${data.detail || data.message || 'Unknown error'}`);
+                    return;
+                }
+
+                if (data.success) {
+                    alert(`✅ Server started successfully!\n\nProject: ${project}\nStatus: ${data.status}`);
+                    refresh(); // Refresh to show new status
+                } else {
+                    alert(`⚠️ ${data.message || 'Failed to start server'}`);
+                }
+            } catch (error) {
+                alert(`❌ Error starting server: ${error.message}`);
+            }
+        }
+
+        async function stopDevServer(project) {
+            if (!confirm(`Stop dev server for ${project}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/projects/${encodeURIComponent(project)}/devserver/stop`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(`Failed to stop server: ${data.detail || data.message || 'Unknown error'}`);
+                    return;
+                }
+
+                if (data.success) {
+                    alert(`✅ Server stopped successfully!\n\nProject: ${project}`);
+                    refresh(); // Refresh to show new status
+                } else {
+                    alert(`⚠️ ${data.message || 'Failed to stop server'}`);
+                }
+            } catch (error) {
+                alert(`❌ Error stopping server: ${error.message}`);
+            }
+        }
+
+        async function changePort(project) {
+            const inputEl = document.getElementById(`port-${project}`);
+            const newPort = parseInt(inputEl.value);
+
+            if (!newPort || newPort < 4000 || newPort > 4099) {
+                alert('Port must be between 4000 and 4099');
+                return;
+            }
+
+            if (!confirm(`Change port for ${project} to ${newPort}?\n\nNote: You may need to restart the dev server for the change to take effect.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/projects/${encodeURIComponent(project)}/devserver/config`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ assigned_port: newPort })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(`Failed to change port: ${data.detail || 'Unknown error'}`);
+                    return;
+                }
+
+                alert(`✅ Port changed successfully!\n\nProject: ${project}\nNew Port: ${data.assigned_port}\n\nThe dev command will now use this port.`);
+                refresh(); // Refresh to show new port
+            } catch (error) {
+                alert(`❌ Error changing port: ${error.message}`);
+            }
         }
 
         // Fetch and render data

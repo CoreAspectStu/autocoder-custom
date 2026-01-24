@@ -242,8 +242,11 @@ Provides `/status` endpoint showing all registered projects and their dev server
 **Key features:**
 - Detects configured port from `vite.config.js`, `vite.config.ts`, or `package.json`
 - Checks if the port is actually listening (detects ANY running server, not just AutoCoder-started ones)
+- **Start/Stop dev servers** - One-click buttons to control dev servers
+- **Change ports** - Modify assigned ports (4000-4099 range) with validation
 - Uses JavaScript fetch for updates (no page flashing)
 - Only updates DOM when data changes
+- Auto-refreshes every 5 seconds
 
 ```python
 """
@@ -482,11 +485,31 @@ cd /path/to/autocoder
 | Status Page | `http://localhost:8889/status` |
 | App Preview | Check status page for port |
 
-### 4. Disconnect SSH (Optional)
+### 4. Use the Status Page
+
+The status page (`/status`) provides one-click controls for all your projects:
+
+**Features:**
+- **Start/Stop Dev Servers** - Click ▶ Start Server or ⏹ Stop Server buttons
+- **Change Ports** - Modify the port number (4000-4099) and click "Change"
+- **View Running Status** - See which servers are running (green badge) or stopped
+- **Open Apps** - Click 🌐 Open App to launch running servers in new tab
+- **Monitor Progress** - See feature completion percentage for each project
+
+**Quick Actions:**
+1. Expand a project card by clicking anywhere on it
+2. Use the port input field to change ports (e.g., 4000 → 4005)
+3. Click "▶ Start Server" to launch the dev server
+4. Click "🌐 Open App" to open the running app
+5. Click "⏹ Stop Server" when done
+
+The page auto-refreshes every 5 seconds to show current status.
+
+### 5. Disconnect SSH (Optional)
 
 You can close the terminal - the UI keeps running in tmux.
 
-### 5. Reconnect Later
+### 6. Reconnect Later
 
 ```bash
 ssh autocoder-server
@@ -495,7 +518,7 @@ cd /path/to/autocoder
 ./remote-start.sh attach ui # Reattach to UI session
 ```
 
-### 6. Stop Everything
+### 7. Stop Everything
 
 ```bash
 ./remote-start.sh stop

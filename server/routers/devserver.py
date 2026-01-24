@@ -24,6 +24,7 @@ from ..services.project_config import (
     clear_dev_command,
     get_dev_command,
     get_project_config,
+    set_assigned_port,
     set_dev_command,
 )
 
@@ -242,9 +243,11 @@ async def update_devserver_config(
     Set custom_command to null/None to clear the custom command and revert
     to using the auto-detected command.
 
+    Set assigned_port to change the port number (must be 4000-4099 and not in use).
+
     Args:
         project_name: Name of the project
-        update: Configuration update containing the new custom_command
+        update: Configuration update containing the new custom_command and/or assigned_port
 
     Returns:
         Updated configuration details for the project's dev server
@@ -258,8 +261,8 @@ async def update_devserver_config(
             clear_dev_command(project_dir)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    else:
-        # Set the custom command
+    elif update.custom_command is not None:
+        # Set the custom command (empty string check happens in set_dev_command)
         try:
             set_dev_command(project_dir, update.custom_command)
         except ValueError as e:
@@ -268,6 +271,18 @@ async def update_devserver_config(
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to save configuration: {e}"
+            )
+
+    # Update the assigned port
+    if update.assigned_port is not None:
+        try:
+            set_assigned_port(project_dir, update.assigned_port)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to save port configuration: {e}"
             )
 
     # Return updated config

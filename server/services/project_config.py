@@ -412,6 +412,44 @@ def get_assigned_port(project_dir: Path) -> int:
     return new_port
 
 
+def set_assigned_port(project_dir: Path, port: int) -> None:
+    """
+    Set the assigned port for a project.
+
+    Args:
+        project_dir: Path to the project directory.
+        port: The port number to assign (must be in range 4000-4099).
+
+    Raises:
+        ValueError: If port is not in valid range or is already assigned to another project.
+        OSError: If the configuration file cannot be written.
+    """
+    project_dir = Path(project_dir).resolve()
+
+    # Validate port range
+    if not isinstance(port, int) or not (DEVSERVER_PORT_MIN <= port <= DEVSERVER_PORT_MAX):
+        raise ValueError(
+            f"Port must be between {DEVSERVER_PORT_MIN} and {DEVSERVER_PORT_MAX}, got {port}"
+        )
+
+    # Check if port is already assigned to a different project
+    config = _load_config(project_dir)
+    current_port = config.get("assigned_port")
+
+    # If changing to a different port, check for conflicts
+    if current_port != port:
+        assigned_ports = get_all_assigned_ports()
+        if port in assigned_ports:
+            raise ValueError(
+                f"Port {port} is already assigned to another project"
+            )
+
+    # Update and save config
+    config["assigned_port"] = port
+    _save_config(project_dir, config)
+    logger.info("Set port %d for project %s", port, project_dir.name)
+
+
 # =============================================================================
 # Dev Command Functions
 # =============================================================================

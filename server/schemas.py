@@ -450,6 +450,7 @@ class DevServerConfigResponse(BaseModel):
 class DevServerConfigUpdate(BaseModel):
     """Request schema for updating dev server configuration."""
     custom_command: str | None = None  # None clears the custom command
+    assigned_port: int | None = None  # Change the assigned port (4000-4099)
 
 
 # ============================================================================
