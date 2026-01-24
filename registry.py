@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Available models with display names
 # To add a new model: add an entry here with {"id": "model-id", "name": "Display Name"}
 AVAILABLE_MODELS = [
+    {"id": "glm-4.7", "name": "GLM 4.7"},
     {"id": "claude-opus-4-5-20251101", "name": "Claude Opus 4.5"},
     {"id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5"},
 ]
@@ -39,7 +40,7 @@ AVAILABLE_MODELS = [
 VALID_MODELS = [m["id"] for m in AVAILABLE_MODELS]
 
 # Default model and settings
-DEFAULT_MODEL = "claude-opus-4-5-20251101"
+DEFAULT_MODEL = "glm-4.7"
 DEFAULT_YOLO_MODE = False
 
 # SQLite connection settings

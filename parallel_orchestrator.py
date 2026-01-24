@@ -127,11 +127,10 @@ MAX_FEATURE_RETRIES = 3  # Maximum times to retry a failed feature
 INITIALIZER_TIMEOUT = 1800  # 30 minutes timeout for initializer
 
 # Model routing based on complexity
-# Haiku is ~4x cheaper than Sonnet for simple tasks
 MODEL_ROUTING = {
-    1: "claude-3-5-haiku-20241022",  # Simple: UI, docs, simple tests
-    2: "claude-sonnet-4-5-20250929",  # Medium: Standard features (default)
-    3: "claude-sonnet-4-5-20250929",  # Complex: Algorithms, architecture
+    1: "glm-4.7",  # Simple: UI, docs, simple tests
+    2: "glm-4.7",  # Medium: Standard features (default)
+    3: "glm-4.7",  # Complex: Algorithms, architecture
 }
 
 
