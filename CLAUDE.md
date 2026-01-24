@@ -6,7 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **This is NOT vanilla AutoCoder.** This instance has significant custom modifications:
 
-- **Enhanced Status Dashboard** - `server/routers/status.py` (1132 lines with XML formatting, modal UI, health metrics)
+- **Mission Control** - `custom/mission-control/` (unified monitoring + human-in-the-loop)
+  - DevLayer integration: Agents can ask questions, report blockers, request credentials
+  - Python client library + MCP server with 6 agent tools
+  - Press `L` in UI to toggle DevLayer mode
+  - Enable: `MISSION_CONTROL_ENABLED=true` in `.env`
+- **Enhanced Status Dashboard** - `server/routers/status.py` (1597 lines)
+  - Dev server controls: One-click start/stop buttons
+  - Port management: Change ports (4000-4099) with conflict detection
+  - XML spec viewer with modal UI
+  - Health metrics and progress tracking
+  - Auto-refresh every 5 seconds
 - **Remote Server Management** - `remote-start.sh` (tmux-based server control)
 - **Port Assignment System** - 4000-4099 range for SSH tunnel compatibility
 - **Custom Documentation** - `custom/` directory with guides and patches
