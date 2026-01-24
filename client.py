@@ -17,6 +17,9 @@ from dotenv import load_dotenv
 
 from security import bash_security_hook
 from api.quota_budget import get_quota_budget
+# Mission Control integration (optional)
+from custom.mission_control.integration import add_mission_control_mcp
+
 
 # Load environment variables from .env file if present
 load_dotenv()
@@ -303,6 +306,9 @@ def create_client(
             "command": "npx",
             "args": playwright_args,
         }
+
+    # Add Mission Control MCP server (if enabled via MISSION_CONTROL_ENABLED=true)
+    mcp_servers = add_mission_control_mcp(mcp_servers, project_dir)
 
     # Build environment overrides for API endpoint configuration
     # These override system env vars for the Claude CLI subprocess,
