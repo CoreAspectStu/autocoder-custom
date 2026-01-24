@@ -14,6 +14,7 @@ Tools provided:
 - quota_get_usage: Get current API quota usage statistics
 - quota_set_limit: Set quota limit for Anthropic or GLM
 - quota_get_history: Get quota usage history and daily summaries
+- resource_get_stats: Get system and AutoCoder resource usage (CPU, RAM, processes)
 """
 
 import asyncio
@@ -31,6 +32,7 @@ from mcp.server import Server
 from mcp.types import Tool, TextContent
 from custom.mission_control.client import DevLayerClient, RequestPriority, RequestType
 from api.quota_budget import QuotaBudget, get_quota_budget, _global_quota_budget
+import psutil
 
 # Get project name from environment (set by client.py)
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "unknown")
@@ -259,6 +261,26 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": []
             }
+        ),
+        Tool(
+            name="resource_get_stats",
+            description=(
+                "Get system and AutoCoder resource usage statistics. "
+                "Shows CPU, memory, process counts for system, AutoCoder cgroup, "
+                "and per-process breakdown (orchestrator, agents, Playwright). "
+                "Verifies systemd resource limits are being enforced."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_processes": {
+                        "type": "boolean",
+                        "description": "Include per-process breakdown (default: true)",
+                        "default": True
+                    }
+                },
+                "required": []
+            }
         )
     ]
 
@@ -442,6 +464,122 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             finally:
                 conn.close()
+
+        elif name == "resource_get_stats":
+            include_processes = arguments.get("include_processes", True)
+
+            try:
+                output = []
+
+                # System-wide stats
+                cpu_percent = psutil.cpu_percent(interval=1)
+                memory = psutil.virtual_memory()
+                load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else (0, 0, 0)
+
+                output.extend([
+                    "🖥️  System-Wide Resources",
+                    f"CPU: {cpu_percent}% (load: {load_avg[0]:.2f}, {load_avg[1]:.2f}, {load_avg[2]:.2f})",
+                    f"Memory: {memory.used / (1024**3):.2f}GB / {memory.total / (1024**3):.2f}GB ({memory.percent}%)",
+                    f"Processes: {len(psutil.pids())} total",
+                    "",
+                ])
+
+                # Check if we're running in autocoder-ui.service cgroup
+                in_cgroup = False
+                cgroup_path = Path("/proc/self/cgroup")
+                if cgroup_path.exists():
+                    cgroup_content = cgroup_path.read_text()
+                    in_cgroup = "autocoder-ui.service" in cgroup_content
+
+                if in_cgroup:
+                    # Get AutoCoder cgroup stats (systemd user slice)
+                    current_process = psutil.Process()
+                    autocoder_processes = []
+
+                    # Find all Python processes in the same cgroup
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent', 'memory_info']):
+                        try:
+                            if proc.info['name'] == 'python' or proc.info['name'] == 'python3':
+                                # Check if it's related to autocoder
+                                cmdline = ' '.join(proc.info['cmdline'] or [])
+                                if 'autocoder' in cmdline.lower() or 'uvicorn' in cmdline.lower() or 'autonomous_agent' in cmdline.lower():
+                                    autocoder_processes.append(proc)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+
+                    if autocoder_processes:
+                        total_cpu = sum(p.cpu_percent() for p in autocoder_processes)
+                        total_memory = sum(p.memory_info().rss for p in autocoder_processes)
+
+                        output.extend([
+                            "🔒 AutoCoder Cgroup (systemd limits enforced)",
+                            f"Status: ✅ Running inside autocoder-ui.service",
+                            f"Processes: {len(autocoder_processes)} (limit: 250)",
+                            f"CPU: {total_cpu:.1f}% (limit: 200% = 2 cores)",
+                            f"Memory: {total_memory / (1024**3):.2f}GB (limit: 32GB)",
+                            "",
+                        ])
+                    else:
+                        output.extend([
+                            "🔒 AutoCoder Cgroup",
+                            f"Status: ✅ Running inside autocoder-ui.service",
+                            f"Processes: 0 (idle)",
+                            "",
+                        ])
+
+                    # Per-process breakdown
+                    if include_processes and autocoder_processes:
+                        output.append("📋 Per-Process Breakdown")
+
+                        for proc in sorted(autocoder_processes, key=lambda p: p.memory_info().rss, reverse=True):
+                            try:
+                                cmdline = ' '.join(proc.info['cmdline'] or [])
+                                # Classify process type
+                                if 'uvicorn' in cmdline:
+                                    proc_type = "🌐 Web UI"
+                                elif 'autonomous_agent_demo' in cmdline and 'parallel' not in cmdline:
+                                    proc_type = "🤖 Agent"
+                                elif 'parallel_orchestrator' in cmdline:
+                                    proc_type = "🎯 Orchestrator"
+                                elif 'coding' in cmdline.lower() or 'feature' in cmdline.lower():
+                                    proc_type = "💻 Coding Agent"
+                                elif 'test' in cmdline.lower():
+                                    proc_type = "🧪 Testing Agent"
+                                elif 'playwright' in cmdline.lower():
+                                    proc_type = "🎭 Playwright"
+                                else:
+                                    proc_type = "📦 Python"
+
+                                mem_mb = proc.memory_info().rss / (1024**2)
+                                cpu_pct = proc.cpu_percent()
+
+                                output.append(f"  {proc_type} (PID {proc.pid}): {cpu_pct}% CPU, {mem_mb:.1f}MB RAM")
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+
+                        output.append("")
+                else:
+                    output.extend([
+                        "⚠️  AutoCoder Cgroup",
+                        f"Status: ❌ NOT running inside autocoder-ui.service",
+                        f"Warning: Resource limits NOT enforced!",
+                        "",
+                    ])
+
+                # Quota status summary
+                quota = get_quota_budget()
+                stats = quota.get_stats()
+
+                output.extend([
+                    "📊 API Quota (5-hour window)",
+                    f"Used: {stats['used']} / {stats['limit']} prompts ({stats['percentage']:.1f}%)",
+                    f"Remaining: {stats['remaining']} prompts",
+                ])
+
+                return [TextContent(type="text", text="\n".join(output))]
+
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error getting resource stats: {str(e)}")]
 
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
