@@ -555,6 +555,32 @@ tail -50 autocoder-ui.log
 2. Verify server is running: `ss -tlnp | grep 8888`
 3. Verify correct local port in browser URL
 
+### Status Page Not Showing Projects
+
+If http://localhost:8888/status loads but shows no projects or "Internal Server Error":
+
+```bash
+# 1. Check if API endpoint works
+curl http://localhost:8888/api/status/devservers | jq
+
+# 2. If you get "Internal Server Error", restart the server
+autocoder-ui-stop
+autocoder-ui-start
+
+# 3. Verify projects are registered
+cd ~/projects/autocoder
+source venv/bin/activate
+python -c "from registry import list_registered_projects; print(list_registered_projects())"
+
+# 4. Check server logs for errors
+autocoder logs ui | tail -100
+```
+
+Common causes:
+- **Stale server process**: The server was started before code changes. Solution: Restart with `autocoder-ui-stop && autocoder-ui-start`
+- **Missing dependencies**: Run `pip install -r requirements.txt` in venv
+- **Database issues**: Check if `~/.autocoder/registry.db` exists and is readable
+
 ### Xvfb Issues
 
 ```bash
