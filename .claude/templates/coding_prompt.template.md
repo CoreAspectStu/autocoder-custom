@@ -234,7 +234,10 @@ grep -r "new Map\(\)\|new Set\(\)" --include="*.ts" --include="*.tsx" --include=
    ./init.sh &
    sleep 15  # Allow server to fully start
    # Verify server is responding
-   curl -f http://localhost:3000/api/health || curl -f http://localhost:3000 || echo "WARNING: Health check failed"
+   if ! curl -f http://localhost:3000/api/health && ! curl -f http://localhost:3000; then
+     echo "ERROR: Server failed to start after restart"
+     exit 1
+   fi
    ```
 
 5. **Query for test data - it MUST still exist**
