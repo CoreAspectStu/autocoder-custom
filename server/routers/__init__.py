@@ -8,6 +8,7 @@ FastAPI routers for different API endpoints.
 from .agent import router as agent_router
 from .analytics import router as analytics_router
 from .assistant_chat import router as assistant_chat_router
+from .autoscaler import router as autoscaler_router
 from .devserver import router as devserver_router
 from .emergency import router as emergency_router
 from .expand_project import router as expand_project_router
@@ -41,4 +42,5 @@ __all__ = [
     "terminal_router",
     "messages_router",
     "devlayer_router",
+    "autoscaler_router",
 ]

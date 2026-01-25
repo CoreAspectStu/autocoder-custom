@@ -27,6 +27,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from ..utils.resource_monitor import ResourceMetrics
+
 
 # Configuration
 AUTOSCALER_DB = Path.home() / ".autocoder" / "autoscaler.db"
@@ -310,11 +312,12 @@ class AutoScaler:
     """
 
     def __init__(self):
-        self.config = AutoscalerConfig.load()
-        self.scaler = ThresholdScaler(self.config)
         self.is_running = False
         self.current_limits = {}
-        self._init_db()
+        self.last_scale_time = None  # Track last scaling action
+        self._init_db()  # Initialize database FIRST
+        self.config = AutoscalerConfig.load()  # THEN load config
+        self.scaler = ThresholdScaler(self.config)
 
     def _init_db(self):
         """Initialize database schema."""
