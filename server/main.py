@@ -31,6 +31,7 @@ from .routers import (
     agent_router,
     analytics_router,
     assistant_chat_router,
+    autoscaler_router,
     devlayer_router,
     devserver_router,
     emergency_router,
@@ -146,6 +147,7 @@ app.include_router(status_router)
 app.include_router(messages_router)
 app.include_router(devlayer_router)
 app.include_router(systemd_router)
+app.include_router(autoscaler_router)
 
 
 # ============================================================================
