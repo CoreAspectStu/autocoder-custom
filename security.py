@@ -7,11 +7,16 @@ Uses an allowlist approach - only explicitly permitted commands can run.
 """
 
 import os
+import re
 import shlex
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+# Regex pattern for valid pkill process names (no regex metacharacters allowed)
+# Matches alphanumeric names with dots, underscores, and hyphens
+VALID_PROCESS_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
 # Allowed commands for development tasks
 # Minimal set needed for the autonomous coding demo
@@ -474,9 +479,17 @@ def load_org_config() -> Optional[dict]:
             processes = config["pkill_processes"]
             if not isinstance(processes, list):
                 return None
+            # Normalize and validate each process name against safe pattern
+            normalized = []
             for proc in processes:
-                if not isinstance(proc, str) or proc.strip() == "":
+                if not isinstance(proc, str):
                     return None
+                proc = proc.strip()
+                # Block empty strings and regex metacharacters
+                if not proc or not VALID_PROCESS_NAME_PATTERN.fullmatch(proc):
+                    return None
+                normalized.append(proc)
+            config["pkill_processes"] = normalized
 
         return config
 
@@ -536,9 +549,17 @@ def load_project_commands(project_dir: Path) -> Optional[dict]:
             processes = config["pkill_processes"]
             if not isinstance(processes, list):
                 return None
+            # Normalize and validate each process name against safe pattern
+            normalized = []
             for proc in processes:
-                if not isinstance(proc, str) or proc.strip() == "":
+                if not isinstance(proc, str):
                     return None
+                proc = proc.strip()
+                # Block empty strings and regex metacharacters
+                if not proc or not VALID_PROCESS_NAME_PATTERN.fullmatch(proc):
+                    return None
+                normalized.append(proc)
+            config["pkill_processes"] = normalized
 
         return config
 

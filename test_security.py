@@ -809,6 +809,73 @@ pkill_processes:
                     print(f"  FAIL: pkill python should be allowed with org config: {result}")
                     failed += 1
 
+    # Test 9: Regex metacharacters should be rejected in pkill_processes
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autocoder"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                # Try to register a regex pattern (should be rejected)
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - ".*"
+""")
+
+                config = load_org_config()
+                if config is None:
+                    print("  PASS: Regex pattern '.*' rejected in pkill_processes")
+                    passed += 1
+                else:
+                    print("  FAIL: Regex pattern '.*' should be rejected")
+                    failed += 1
+
+    # Test 10: Valid process names with dots/underscores/hyphens should be accepted
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autocoder"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                # Valid names with special chars
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - my-app
+  - app_server
+  - node.js
+""")
+
+                config = load_org_config()
+                if config is not None and config.get("pkill_processes") == ["my-app", "app_server", "node.js"]:
+                    print("  PASS: Valid process names with dots/underscores/hyphens accepted")
+                    passed += 1
+                else:
+                    print(f"  FAIL: Valid process names should be accepted: {config}")
+                    failed += 1
+
+    # Test 11: Names with spaces should be rejected
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autocoder"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - "my app"
+""")
+
+                config = load_org_config()
+                if config is None:
+                    print("  PASS: Process name with space rejected")
+                    passed += 1
+                else:
+                    print("  FAIL: Process name with space should be rejected")
+                    failed += 1
+
     return passed, failed
 
 
