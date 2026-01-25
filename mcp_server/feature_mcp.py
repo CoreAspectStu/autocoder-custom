@@ -49,6 +49,7 @@ from api.dependency_resolver import (
     would_create_circular_dependency,
 )
 from api.migration import migrate_json_to_sqlite
+from api.database_backup import backup_features_db
 
 # Configuration from environment
 PROJECT_DIR = Path(os.environ.get("PROJECT_DIR", ".")).resolve()
@@ -254,6 +255,10 @@ def feature_mark_passing(
         # Set completion timestamp if not already set
         if feature.completed_at is None:
             feature.completed_at = datetime.utcnow()
+
+        # Backup before marking as passing
+        backup_features_db(PROJECT_DIR, reason="before_mark_passing")
+
         session.commit()
 
         return json.dumps({"success": True, "feature_id": feature_id, "name": feature.name})
@@ -295,6 +300,10 @@ def feature_mark_failing(
 
         feature.passes = False
         feature.in_progress = False
+
+        # Backup before marking as failing
+        backup_features_db(PROJECT_DIR, reason="before_mark_failing")
+
         session.commit()
         session.refresh(feature)
 
@@ -570,6 +579,9 @@ def feature_create_bulk(
             # Flush to get IDs assigned
             session.flush()
 
+            # Backup before making changes
+            backup_features_db(PROJECT_DIR, reason="before_bulk_create")
+
             # Third pass: resolve index-based dependencies to actual IDs
             deps_count = 0
             for i, feature_data in enumerate(features):
@@ -633,6 +645,10 @@ def feature_create(
                 created_at=datetime.utcnow(),
             )
             session.add(db_feature)
+
+            # Backup before creating new feature
+            backup_features_db(PROJECT_DIR, reason="before_feature_create")
+
             session.commit()
 
         session.refresh(db_feature)
@@ -700,6 +716,10 @@ def feature_add_dependency(
         # Add dependency
         current_deps.append(dependency_id)
         feature.dependencies = sorted(current_deps)
+
+        # Backup before adding dependency
+        backup_features_db(PROJECT_DIR, reason="before_add_dependency")
+
         session.commit()
 
         return json.dumps({
@@ -740,6 +760,10 @@ def feature_remove_dependency(
 
         current_deps.remove(dependency_id)
         feature.dependencies = current_deps if current_deps else None
+
+        # Backup before removing dependency
+        backup_features_db(PROJECT_DIR, reason="before_remove_dependency")
+
         session.commit()
 
         return json.dumps({
