@@ -876,6 +876,34 @@ pkill_processes:
                     print("  FAIL: Process name with space should be rejected")
                     failed += 1
 
+    # Test 12: Multiple patterns - all must be allowed (BSD behavior)
+    # On BSD, "pkill node sshd" would kill both, so we must validate all patterns
+    allowed, reason = validate_pkill_command("pkill node npm")
+    if allowed:
+        print("  PASS: Multiple allowed patterns accepted")
+        passed += 1
+    else:
+        print(f"  FAIL: Multiple allowed patterns should be accepted: {reason}")
+        failed += 1
+
+    # Test 13: Multiple patterns - block if any is disallowed
+    allowed, reason = validate_pkill_command("pkill node sshd")
+    if not allowed:
+        print("  PASS: Multiple patterns blocked when one is disallowed")
+        passed += 1
+    else:
+        print("  FAIL: Should block when any pattern is disallowed")
+        failed += 1
+
+    # Test 14: Multiple patterns - only first allowed, second disallowed
+    allowed, reason = validate_pkill_command("pkill npm python")
+    if not allowed:
+        print("  PASS: Multiple patterns blocked (first allowed, second not)")
+        passed += 1
+    else:
+        print("  FAIL: Should block when second pattern is disallowed")
+        failed += 1
+
     return passed, failed
 
 

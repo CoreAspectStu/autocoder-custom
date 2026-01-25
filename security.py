@@ -273,15 +273,17 @@ def validate_pkill_command(
     if not args:
         return False, "pkill requires a process name"
 
-    # The target is typically the last non-flag argument
-    target = args[-1]
+    # Validate every non-flag argument (pkill accepts multiple patterns on BSD)
+    # This defensively ensures no disallowed process can be targeted
+    targets = []
+    for arg in args:
+        # For -f flag (full command line match), take the first word as process name
+        # e.g., "pkill -f 'node server.js'" -> target is "node server.js", process is "node"
+        t = arg.split()[0] if " " in arg else arg
+        targets.append(t)
 
-    # For -f flag (full command line match), extract the first word as process name
-    # e.g., "pkill -f 'node server.js'" -> target is "node server.js", process is "node"
-    if " " in target:
-        target = target.split()[0]
-
-    if target in allowed_process_names:
+    disallowed = [t for t in targets if t not in allowed_process_names]
+    if not disallowed:
         return True, ""
     return False, f"pkill only allowed for processes: {sorted(allowed_process_names)}"
 
