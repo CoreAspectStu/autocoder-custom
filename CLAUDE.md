@@ -11,12 +11,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Python client library + MCP server with 6 agent tools
   - Press `L` in UI to toggle DevLayer mode
   - Enable: `MISSION_CONTROL_ENABLED=true` in `.env`
-- **Enhanced Status Dashboard** - `server/routers/status.py` (1597 lines)
-  - Dev server controls: One-click start/stop buttons
-  - Port management: Change ports (4000-4099) with conflict detection
-  - XML spec viewer with modal UI
-  - Health metrics and progress tracking
-  - Auto-refresh every 5 seconds
+- **Enhanced Status Dashboard** - `server/routers/status.py` (2542 lines)
+  - **Resource Monitoring**: Real-time CPU, memory, process tracking with psutil
+  - **Service Controls**: Start/Stop/Restart AutoCoder UI service via systemd
+  - **Inline Limit Adjustment**: Edit CPU, memory, and process limits directly (applies with restart)
+  - **Emergency Stop**: Kill all processes and reset agents instantly
+  - **Dev Server Controls**: One-click start/stop buttons for project servers
+  - **Port Management**: Change ports (4000-4099) with conflict detection
+  - **XML Spec Viewer**: Modal UI for viewing app specifications
+  - **Health Metrics**: Feature completion, progress tracking
+  - **Auto-refresh**: Updates every 5 seconds
+- **Systemd Integration** - `server/routers/systemd.py` (483 lines)
+  - Service status monitoring (active/inactive/failed)
+  - Resource limit management (CPU quota, memory, tasks)
+  - Log retrieval via journalctl
+  - Safe limit updates with automatic backup and rollback
 - **Remote Server Management** - `remote-start.sh` (tmux-based server control)
 - **Port Assignment System** - 4000-4099 range for SSH tunnel compatibility
 - **Custom Documentation** - `custom/` directory with guides and patches

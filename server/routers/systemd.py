@@ -480,3 +480,91 @@ async def update_resource_limits(limits: ResourceLimits):
         "message": f"Resource limits updated: CPU={limits.cpu_quota}%, Memory={limits.memory_max}GB, Tasks={limits.tasks_max}. Service restarted.",
         "limits": limits.model_dump()
     }
+
+
+@router.post("/api/emergency/stop")
+async def emergency_stop():
+    """
+    EMERGENCY STOP - Immediately kill all AutoCoder processes.
+
+    This is a drastic measure that:
+    1. Kills all Python/uvicorn/node processes related to AutoCoder
+    2. Removes agent lock files
+    3. Stops the systemd service
+    4. Does NOT save any work
+
+    Use only when the system is completely unresponsive.
+    """
+    killed_count = 0
+    lock_files_removed = 0
+    agents_reset = 0
+
+    try:
+        # Kill all AutoCoder-related processes
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = ' '.join(proc.info['cmdline'] or [])
+                if not cmdline:
+                    continue
+
+                cmdline_lower = cmdline.lower()
+                if any(keyword in cmdline_lower for keyword in [
+                    'uvicorn server.main:app',
+                    'autonomous_agent_demo',
+                    'parallel_orchestrator',
+                    'playwright',
+                    'autocoder'
+                ]):
+                    proc.kill()
+                    killed_count += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        # Remove lock files from all projects
+        from registry import list_registered_projects
+        projects = list_registered_projects()
+
+        for name, info in projects.items():
+            project_path = Path(info.get('path', ''))
+            if not project_path.exists():
+                continue
+
+            # Remove agent lock file
+            lock_file = project_path / '.agent.lock'
+            if lock_file.exists():
+                try:
+                    lock_file.unlink()
+                    lock_files_removed += 1
+                except Exception:
+                    pass
+
+            # Remove devserver lock
+            devserver_lock = project_path / '.devserver.lock'
+            if devserver_lock.exists():
+                try:
+                    devserver_lock.unlink()
+                    lock_files_removed += 1
+                except Exception:
+                    pass
+
+        agents_reset = len(projects)
+
+        # Stop the service
+        try:
+            _run_systemctl(["systemctl", "--user", "stop", SERVICE_NAME])
+        except Exception:
+            pass  # Service might already be stopped
+
+        return {
+            "success": True,
+            "killed_count": killed_count,
+            "lock_files_removed": lock_files_removed,
+            "agents_reset": agents_reset,
+            "message": f"Emergency stop completed: {killed_count} processes killed, {lock_files_removed} lock files removed, {agents_reset} agents reset"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Emergency stop failed: {e}"
+        }

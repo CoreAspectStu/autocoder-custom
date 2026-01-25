@@ -839,6 +839,29 @@ async def status_page():
             transform: scale(1.02);
         }
 
+        .limit-input {
+            width: 80px;
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a202c;
+            text-align: right;
+        }
+
+        .limit-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .limit-unit {
+            font-size: 12px;
+            color: #6b7280;
+            margin-left: 4px;
+        }
+
         .service-info {
             font-size: 12px;
             color: #6b7280;
@@ -1497,7 +1520,9 @@ async def status_page():
                 <!-- Resource Limits -->
                 <div class="control-group">
                     <h4>Resource Limits</h4>
-                    <div class="limits-display">
+
+                    <!-- Display Mode -->
+                    <div class="limits-display" id="limits-display">
                         <div class="limit-item">
                             <span class="limit-label">CPU:</span>
                             <span class="limit-value" id="limit-cpu">-</span>
@@ -1511,7 +1536,39 @@ async def status_page():
                             <span class="limit-value" id="limit-processes">-</span>
                         </div>
                     </div>
-                    <button class="btn btn-secondary btn-small" onclick="openLimitsModal()">
+
+                    <!-- Edit Mode (hidden by default) -->
+                    <div class="limits-edit" id="limits-edit" style="display: none;">
+                        <div class="limit-item">
+                            <span class="limit-label">CPU:</span>
+                            <input type="number" id="edit-cpu" min="50" max="800" step="50" class="limit-input">
+                            <span class="limit-unit">cores</span>
+                        </div>
+                        <div class="limit-item">
+                            <span class="limit-label">Memory:</span>
+                            <input type="number" id="edit-memory" min="4" max="128" step="4" class="limit-input">
+                            <span class="limit-unit">GB</span>
+                        </div>
+                        <div class="limit-item">
+                            <span class="limit-label">Processes:</span>
+                            <input type="number" id="edit-processes" min="50" max="500" step="50" class="limit-input">
+                            <span class="limit-unit">max</span>
+                        </div>
+                        <div class="button-group" style="margin-top: 12px;">
+                            <button class="btn btn-success btn-small" onclick="applyLimits()">
+                                ✅ Apply
+                            </button>
+                            <button class="btn btn-secondary btn-small" onclick="cancelEditLimits()">
+                                ✖ Cancel
+                            </button>
+                        </div>
+                        <div class="service-info" style="margin-top: 8px;">
+                            ⚠️ Service will restart to apply changes
+                        </div>
+                    </div>
+
+                    <!-- Display Mode Button -->
+                    <button class="btn btn-secondary btn-small" id="btn-edit-limits" onclick="startEditLimits()">
                         ⚙️ Adjust Limits
                     </button>
                 </div>
@@ -2350,8 +2407,93 @@ async def status_page():
             }
         }
 
-        function openLimitsModal() {
-            alert('Resource limits modal will be implemented soon.\\n\\nFor now, you can manually edit:\\n~/.config/systemd/user/autocoder-ui.service\\n\\nThen run:\\nsystemctl --user daemon-reload\\nsystemctl --user restart autocoder-ui.service');
+        // Resource Limits Editing Functions
+        let originalLimits = { cpu: 0, memory: 0, processes: 0 };
+
+        async function startEditLimits() {
+            try {
+                // Fetch current limits
+                const resp = await fetch('/api/systemd/limits');
+                const limits = await resp.json();
+
+                // Store original values
+                originalLimits = {
+                    cpu: limits.cpu_quota,
+                    memory: limits.memory_max,
+                    processes: limits.tasks_max
+                };
+
+                // Populate edit fields
+                document.getElementById('edit-cpu').value = limits.cpu_quota / 100;
+                document.getElementById('edit-memory').value = limits.memory_max;
+                document.getElementById('edit-processes').value = limits.tasks_max;
+
+                // Show edit mode, hide display mode
+                document.getElementById('limits-display').style.display = 'none';
+                document.getElementById('limits-edit').style.display = 'block';
+                document.getElementById('btn-edit-limits').style.display = 'none';
+
+            } catch (e) {
+                alert('Failed to load current limits: ' + e.message);
+            }
+        }
+
+        function cancelEditLimits() {
+            // Hide edit mode, show display mode
+            document.getElementById('limits-display').style.display = 'block';
+            document.getElementById('limits-edit').style.display = 'none';
+            document.getElementById('btn-edit-limits').style.display = 'inline-block';
+        }
+
+        async function applyLimits() {
+            const cpuCores = parseInt(document.getElementById('edit-cpu').value);
+            const memoryGB = parseInt(document.getElementById('edit-memory').value);
+            const processes = parseInt(document.getElementById('edit-processes').value);
+
+            // Validate
+            if (cpuCores < 0.5 || cpuCores > 8) {
+                alert('CPU must be between 0.5 and 8 cores');
+                return;
+            }
+            if (memoryGB < 4 || memoryGB > 128) {
+                alert('Memory must be between 4 and 128 GB');
+                return;
+            }
+            if (processes < 50 || processes > 500) {
+                alert('Processes must be between 50 and 500');
+                return;
+            }
+
+            if (!confirm(`Apply new limits?\n\nCPU: ${cpuCores} cores\nMemory: ${memoryGB}GB\nProcesses: ${processes}\n\nThe service will restart to apply changes.`)) {
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/systemd/limits', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cpu_quota: cpuCores * 100,  // Convert to percent
+                        memory_max: memoryGB,
+                        tasks_max: processes
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                    // Exit edit mode
+                    cancelEditLimits();
+                    // Refresh status after delay
+                    setTimeout(refreshServiceStatus, 3000);
+                } else {
+                    alert('❌ Failed to apply limits: ' + data.message);
+                }
+
+            } catch (e) {
+                alert('❌ Error applying limits: ' + e.message);
+            }
         }
 
         function confirmEmergencyStop() {
