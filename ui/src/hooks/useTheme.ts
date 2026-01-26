@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type ThemeId = 'twitter' | 'claude' | 'neo-brutalism' | 'retro-arcade'
+export type ThemeId = 'twitter' | 'claude' | 'neo-brutalism' | 'retro-arcade' | 'aurora'
 
 export interface ThemeOption {
   id: ThemeId
@@ -37,6 +37,12 @@ export const THEMES: ThemeOption[] = [
     name: 'Retro Arcade',
     description: 'Vibrant pink and teal pixel vibes',
     previewColors: { primary: '#e8457c', background: '#f0e6d3', accent: '#4eb8a5' }
+  },
+  {
+    id: 'aurora',
+    name: 'Aurora',
+    description: 'Deep violet and teal, like northern lights',
+    previewColors: { primary: '#8b5cf6', background: '#faf8ff', accent: '#2dd4bf' }
   }
 ]
 
@@ -53,6 +59,8 @@ function getThemeClass(themeId: ThemeId): string {
       return 'theme-neo-brutalism'
     case 'retro-arcade':
       return 'theme-retro-arcade'
+    case 'aurora':
+      return 'theme-aurora'
     default:
       return ''
   }
@@ -62,7 +70,7 @@ export function useTheme() {
   const [theme, setThemeState] = useState<ThemeId>(() => {
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY)
-      if (stored === 'twitter' || stored === 'claude' || stored === 'neo-brutalism' || stored === 'retro-arcade') {
+      if (stored === 'twitter' || stored === 'claude' || stored === 'neo-brutalism' || stored === 'retro-arcade' || stored === 'aurora') {
         return stored
       }
     } catch {
@@ -84,7 +92,7 @@ export function useTheme() {
     const root = document.documentElement
 
     // Remove all theme classes
-    root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade')
+    root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade', 'theme-aurora')
 
     // Add current theme class (if not twitter/default)
     const themeClass = getThemeClass(theme)

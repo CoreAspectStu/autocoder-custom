@@ -32,13 +32,15 @@ export function ThemeSelector({ themes, currentTheme, onThemeChange }: ThemeSele
   useEffect(() => {
     if (previewTheme) {
       const root = document.documentElement
-      root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade')
+      root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade', 'theme-aurora')
       if (previewTheme === 'claude') {
         root.classList.add('theme-claude')
       } else if (previewTheme === 'neo-brutalism') {
         root.classList.add('theme-neo-brutalism')
       } else if (previewTheme === 'retro-arcade') {
         root.classList.add('theme-retro-arcade')
+      } else if (previewTheme === 'aurora') {
+        root.classList.add('theme-aurora')
       }
     }
 
@@ -46,13 +48,15 @@ export function ThemeSelector({ themes, currentTheme, onThemeChange }: ThemeSele
     return () => {
       if (previewTheme) {
         const root = document.documentElement
-        root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade')
+        root.classList.remove('theme-claude', 'theme-neo-brutalism', 'theme-retro-arcade', 'theme-aurora')
         if (currentTheme === 'claude') {
           root.classList.add('theme-claude')
         } else if (currentTheme === 'neo-brutalism') {
           root.classList.add('theme-neo-brutalism')
         } else if (currentTheme === 'retro-arcade') {
           root.classList.add('theme-retro-arcade')
+        } else if (currentTheme === 'aurora') {
+          root.classList.add('theme-aurora')
         }
       }
     }
