@@ -298,10 +298,9 @@ a:focus-visible,
   box-shadow: none !important;
 }
 
+/* Only disable hover transforms, not layout utilities like -translate-x-1/2 */
 [class*="hover:translate"],
-[class*="hover:-translate"],
-[class*="translate-x"],
-[class*="translate-y"] {
+[class*="hover:-translate"] {
   transform: none !important;
 }
 
