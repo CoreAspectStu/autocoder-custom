@@ -4,6 +4,7 @@ import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/u
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
+import { useTheme } from './hooks/useTheme'
 import { ProjectSelector } from './components/ProjectSelector'
 import { KanbanBoard } from './components/KanbanBoard'
 import { AgentControl } from './components/AgentControl'
@@ -24,6 +25,7 @@ import { DevServerControl } from './components/DevServerControl'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
+import { ThemeSelector } from './components/ThemeSelector'
 import { getDependencyGraph } from './lib/api'
 import { Loader2, Settings, Moon, Sun } from 'lucide-react'
 import type { Feature } from './lib/types'
@@ -32,7 +34,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 const STORAGE_KEY = 'autocoder-selected-project'
-const DARK_MODE_KEY = 'autocoder-dark-mode'
 const VIEW_MODE_KEY = 'autocoder-view-mode'
 
 function App() {
@@ -56,13 +57,6 @@ function App() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
   const [isSpecCreating, setIsSpecCreating] = useState(false)
   const [showSpecChat, setShowSpecChat] = useState(false)  // For "Create Spec" button in empty kanban
-  const [darkMode, setDarkMode] = useState(() => {
-    try {
-      return localStorage.getItem(DARK_MODE_KEY) === 'true'
-    } catch {
-      return false
-    }
-  })
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
       const stored = localStorage.getItem(VIEW_MODE_KEY)
@@ -78,6 +72,7 @@ function App() {
   const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
+  const { theme, setTheme, darkMode, toggleDarkMode, themes } = useTheme()
 
   // Get has_spec from the selected project
   const selectedProjectData = projects?.find(p => p.name === selectedProject)
@@ -90,20 +85,6 @@ function App() {
     enabled: !!selectedProject && viewMode === 'graph',
     refetchInterval: 5000, // Refresh every 5 seconds
   })
-
-  // Apply dark mode class to document
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-    try {
-      localStorage.setItem(DARK_MODE_KEY, String(darkMode))
-    } catch {
-      // localStorage not available
-    }
-  }, [darkMode])
 
   // Persist view mode to localStorage
   useEffect(() => {
@@ -325,9 +306,16 @@ function App() {
                 </>
               )}
 
+              {/* Theme selector */}
+              <ThemeSelector
+                themes={themes}
+                currentTheme={theme}
+                onThemeChange={setTheme}
+              />
+
               {/* Dark mode toggle - always visible */}
               <Button
-                onClick={() => setDarkMode(!darkMode)}
+                onClick={toggleDarkMode}
                 variant="outline"
                 size="sm"
                 title="Toggle dark mode"
