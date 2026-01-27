@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #428: Tablet Layout at 768px</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .feature-info {
+            background: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .feature-info h2 {
+            color: #374151;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .acceptance-criteria {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .criteria {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .criteria h3 {
+            color: #667eea;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .criteria p {
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .viewport-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .viewport-controls h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn-active {
+            background: #10b981;
+            color: white;
+        }
+
+        .viewport-info {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewport-info span {
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .viewport-info strong {
+            color: #1f2937;
+            font-weight: 600;
+        }
+
+        .preview-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .preview-header h2 {
+            color: #1f2937;
+            font-size: 20px;
+        }
+
+        .viewport-frame {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f9fafb;
+            transition: all 0.3s ease;
+        }
+
+        .viewport-frame.tablet {
+            width: 768px;
+            margin: 0 auto;
+        }
+
+        .viewport-frame.mobile {
+            width: 375px;
+            margin: 0 auto;
+        }
+
+        .viewport-frame.desktop {
+            width: 1024px;
+            margin: 0 auto;
+        }
+
+        .iframe-container {
+            width: 100%;
+            height: 600px;
+            overflow: auto;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .results h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .test-results {
+            display: grid;
+            gap: 10px;
+        }
+
+        .test-result {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .test-result.pass {
+            border-left: 4px solid #10b981;
+        }
+
+        .test-result.fail {
+            border-left: 4px solid #ef4444;
+        }
+
+        .test-result .icon {
+            font-size: 20px;
+        }
+
+        .test-result .content {
+            flex: 1;
+        }
+
+        .test-result .content h3 {
+            color: #1f2937;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .test-result .content p {
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .viewport-frame {
+                width: 100% !important;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Feature #428: Tablet Layout at 768px</h1>
+            <p>Verifies the UAT Gateway layout adapts properly to tablet viewport at exactly 768px width.</p>
+
+            <div class="feature-info">
+                <h2>Acceptance Criteria</h2>
+                <div class="acceptance-criteria">
+                    <div class="criteria">
+                        <h3>AC1: Open at 768px width</h3>
+                        <p>Page loads successfully at tablet viewport width (768px)</p>
+                    </div>
+                    <div class="criteria">
+                        <h3>AC2: Verify layout adapts</h3>
+                        <p>Grid changes to 2-column layout at 768px width</p>
+                    </div>
+                    <div class="criteria">
+                        <h3>AC3: Verify navigation adjusts</h3>
+                        <p>Skip link and buttons are accessible and usable</p>
+                    </div>
+                    <div class="criteria">
+                        <h3>AC4: Verify content stacks</h3>
+                        <p>Text is readable with proper spacing and sizing</p>
+                    </div>
+                    <div class="criteria">
+                        <h3>AC5: Verify touch targets work</h3>
+                        <p>All buttons meet minimum touch target size (44x44px)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="viewport-controls">
+            <h2>Viewport Controls</h2>
+            <div class="controls">
+                <button class="btn btn-secondary" onclick="setViewport(375, this)">Mobile (375px)</button>
+                <button class="btn btn-primary btn-active" onclick="setViewport(768, this)">Tablet (768px) ⭐</button>
+                <button class="btn btn-secondary" onclick="setViewport(1024, this)">Desktop (1024px)</button>
+                <button class="btn btn-secondary" onclick="setViewport(1280, this)">Large (1280px)</button>
+            </div>
+            <div class="viewport-info">
+                <span>Current Viewport: <strong id="viewport-size">768 × 1024</strong></span>
+                <span>Breakpoint: <strong id="breakpoint-name">Tablet (2-column)</strong></span>
+            </div>
+        </div>
+
+        <div class="preview-container">
+            <div class="preview-header">
+                <h2>Live Preview</h2>
+                <button class="btn btn-primary" onclick="runTests()">Run All Tests</button>
+            </div>
+            <div class="viewport-frame tablet" id="viewport-frame">
+                <div class="iframe-container">
+                    <iframe src="uat-card.html" id="preview-frame"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <div class="results">
+            <h2>Test Results</h2>
+            <div class="test-results" id="test-results">
+                <div class="test-result" id="result-ac1">
+                    <span class="icon">⏳</span>
+                    <div class="content">
+                        <h3>AC1: Open at 768px width</h3>
+                        <p>Click "Run All Tests" to verify</p>
+                    </div>
+                </div>
+                <div class="test-result" id="result-ac2">
+                    <span class="icon">⏳</span>
+                    <div class="content">
+                        <h3>AC2: Verify layout adapts</h3>
+                        <p>Click "Run All Tests" to verify</p>
+                    </div>
+                </div>
+                <div class="test-result" id="result-ac3">
+                    <span class="icon">⏳</span>
+                    <div class="content">
+                        <h3>AC3: Verify navigation adjusts</h3>
+                        <p>Click "Run All Tests" to verify</p>
+                    </div>
+                </div>
+                <div class="test-result" id="result-ac4">
+                    <span class="icon">⏳</span>
+                    <div class="content">
+                        <h3>AC4: Verify content stacks</h3>
+                        <p>Click "Run All Tests" to verify</p>
+                    </div>
+                </div>
+                <div class="test-result" id="result-ac5">
+                    <span class="icon">⏳</span>
+                    <div class="content">
+                        <h3>AC5: Verify touch targets work</h3>
+                        <p>Click "Run All Tests" to verify</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentWidth = 768;
+        const currentHeight = 1024;
+
+        function setViewport(width, button) {
+            currentWidth = width;
+            const frame = document.getElementById('viewport-frame');
+
+            // Update button states
+            document.querySelectorAll('.controls .btn').forEach(btn => {
+                btn.classList.remove('btn-active');
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            button.classList.add('btn-active');
+            button.classList.add('btn-primary');
+            button.classList.remove('btn-secondary');
+
+            // Update frame class
+            frame.className = 'viewport-frame';
+            if (width === 375) frame.classList.add('mobile');
+            else if (width === 768) frame.classList.add('tablet');
+            else if (width === 1024) frame.classList.add('desktop');
+
+            // Update info
+            document.getElementById('viewport-size').textContent = `${width} × ${currentHeight}`;
+
+            let breakpoint;
+            if (width < 640) breakpoint = 'Mobile (1-column)';
+            else if (width < 1024) breakpoint = 'Tablet (2-column)';
+            else if (width < 1280) breakpoint = 'Desktop (3-column)';
+            else breakpoint = 'Large (4-column)';
+            document.getElementById('breakpoint-name').textContent = breakpoint;
+
+            // Reset test results
+            resetTests();
+        }
+
+        function resetTests() {
+            const tests = ['ac1', 'ac2', 'ac3', 'ac4', 'ac5'];
+            tests.forEach(id => {
+                const result = document.getElementById(`result-${id}`);
+                result.className = 'test-result';
+                result.querySelector('.icon').textContent = '⏳';
+                result.querySelector('.content p').textContent = 'Click "Run All Tests" to verify';
+            });
+        }
+
+        function updateResult(id, passed, message) {
+            const result = document.getElementById(`result-${id}`);
+            result.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            result.querySelector('.icon').textContent = passed ? '✅' : '❌';
+            result.querySelector('.content p').textContent = message;
+        }
+
+        async function runTests() {
+            const iframe = document.getElementById('preview-frame');
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            const iframeWindow = iframe.contentWindow;
+
+            // AC1: Verify viewport
+            const viewportWidth = iframeWindow.innerWidth;
+            updateResult('ac1', viewportWidth === currentWidth,
+                `Viewport is ${viewportWidth}px (expected ${currentWidth}px)`);
+
+            // AC2: Verify 2-column layout at 768px
+            if (currentWidth >= 640 && currentWidth < 1024) {
+                const cards = iframeDoc.querySelectorAll('.uat-card');
+                const grid = iframeDoc.querySelector('.uat-card-grid');
+                const gridStyle = iframeWindow.getComputedStyle(grid);
+                const gridColumns = gridStyle.gridTemplateColumns;
+
+                const isTwoColumn = gridColumns.includes('2') || cards.length >= 2;
+                updateResult('ac2', isTwoColumn,
+                    `Grid: ${gridColumns} (expected 2 columns at 768px)`);
+            } else {
+                updateResult('ac2', false,
+                    `Test only valid at tablet width (640-1023px). Current: ${currentWidth}px`);
+            }
+
+            // AC3: Verify navigation adjusts
+            const skipLink = iframeDoc.querySelector('.skip-link');
+            const buttons = iframeDoc.querySelectorAll('.uat-card__button');
+            let touchCompliant = 0;
+            buttons.forEach(btn => {
+                const rect = btn.getBoundingClientRect();
+                if (rect.width >= 44 && rect.height >= 44) touchCompliant++;
+            });
+
+            updateResult('ac3',
+                skipLink && touchCompliant === buttons.length,
+                `Skip link: ${skipLink ? '✓' : '✗'}, Touch targets: ${touchCompliant}/${buttons.length}`);
+
+            // AC4: Verify content stacks
+            const title = iframeDoc.querySelector('.uat-card__title');
+            const desc = iframeDoc.querySelector('.uat-card__description');
+            if (title && desc) {
+                const titleSize = parseFloat(iframeWindow.getComputedStyle(title).fontSize);
+                const descSize = parseFloat(iframeWindow.getComputedStyle(desc).fontSize);
+
+                updateResult('ac4',
+                    titleSize >= 16 && titleSize <= 24 && descSize >= 14 && descSize <= 18,
+                    `Title: ${titleSize}px, Description: ${descSize}px`);
+            } else {
+                updateResult('ac4', false, 'Could not find content elements');
+            }
+
+            // AC5: Verify touch targets work
+            updateResult('ac5',
+                touchCompliant === buttons.length,
+                `${touchCompliant}/${buttons.length} buttons meet 44x44px minimum`);
+
+            // Scroll results into view
+            document.querySelector('.results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Auto-run tests when page loads
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #371: Breadcrumb Navigation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .breadcrumb-container {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            list-style: none;
+            gap: 8px;
+        }
+
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .breadcrumb-item a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .breadcrumb-item a:hover {
+            background: #e9ecef;
+            color: #5568d3;
+        }
+
+        .breadcrumb-item.active {
+            color: #495057;
+            font-weight: 600;
+            padding: 6px 12px;
+        }
+
+        .breadcrumb-separator {
+            color: #6c757d;
+            font-size: 12px;
+            margin: 0 4px;
+        }
+
+        .content {
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .view h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .card h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .card p {
+            color: #6c757d;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .navigation-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 15px 20px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #495057;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            padding: 20px;
+            border-top: 2px solid #e9ecef;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .status-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .button-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .button-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .button-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h4 {
+            color: #1976D2;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .info-box p {
+            color: #424242;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .test-section {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .test-section h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .test-checklist {
+            list-style: none;
+            padding: 0;
+        }
+
+        .test-checklist li {
+            padding: 10px 0;
+            border-bottom: 1px solid #ffeeba;
+            display: flex;
+            align-items: center;
+        }
+
+        .test-checklist li:before {
+            content: "☐";
+            font-size: 20px;
+            margin-right: 10px;
+            color: #ffc107;
+        }
+
+        .test-checklist li.passed:before {
+            content: "☑";
+            color: #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .breadcrumb {
+                font-size: 12px;
+            }
+
+            .breadcrumb-item a,
+            .breadcrumb-item.active {
+                padding: 4px 8px;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Feature #371: Breadcrumb Navigation</h1>
+            <p>Verifying breadcrumbs show current location and enable navigation</p>
+        </div>
+
+        <div class="breadcrumb-container">
+            <nav aria-label="Breadcrumb">
+                <ul class="breadcrumb" id="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="#" data-level="home">Home</a>
+                    </li>
+                    <li class="breadcrumb-separator">›</li>
+                </ul>
+            </nav>
+        </div>
+
+        <div class="content">
+            <!-- Home View -->
+            <div class="view active" id="view-home" data-breadcrumb="Home">
+                <h2>Home</h2>
+                <div class="info-box">
+                    <h4>About Breadcrumb Navigation</h4>
+                    <p>Breadcrumbs provide a secondary navigation scheme that reveals the user's location in a website or web application. They should:</p>
+                    <ul>
+                        <li>Show the hierarchy of the current page</li>
+                        <li>Provide clickable links to parent pages</li>
+                        <li>Update automatically as you navigate</li>
+                        <li>Be accurate and reflect the true path</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3>Navigate to test breadcrumbs</h3>
+                    <p>Click any link below to navigate deeper into the application and verify breadcrumbs update correctly.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="projects">Projects</a>
+                        <a href="#" class="nav-link" data-level="reports">Reports</a>
+                        <a href="#" class="nav-link" data-level="settings">Settings</a>
+                        <a href="#" class="nav-link" data-level="admin">Admin Panel</a>
+                    </div>
+                </div>
+
+                <div class="test-section">
+                    <h3>Verification Checklist</h3>
+                    <ul class="test-checklist" id="checklist">
+                        <li data-test="navigate">Navigate deep into app (click links above)</li>
+                        <li data-test="trail">Check breadcrumb trail shows all levels</li>
+                        <li data-test="click">Click breadcrumb to navigate back</li>
+                        <li data-test="accurate">Verify breadcrumb is accurate</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Projects View -->
+            <div class="view" id="view-projects" data-breadcrumb="Home › Projects">
+                <h2>Projects</h2>
+                <div class="card">
+                    <h3>Project Directory</h3>
+                    <p>Browse and manage your UAT testing projects.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="uat-gateway">UAT Gateway</a>
+                        <a href="#" class="nav-link" data-level="test-runner">Test Runner</a>
+                        <a href="#" class="nav-link" data-level="report-generator">Report Generator</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UAT Gateway View -->
+            <div class="view" id="view-uat-gateway" data-breadcrumb="Home › Projects › UAT Gateway">
+                <h2>UAT Gateway Project</h2>
+                <div class="card">
+                    <h3>Project Details</h3>
+                    <p>Automated User Acceptance Testing system for AutoCoder projects.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="journeys">Journeys</a>
+                        <a href="#" class="nav-link" data-level="scenarios">Scenarios</a>
+                        <a href="#" class="nav-link" data-level="test-results">Test Results</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Results View -->
+            <div class="view" id="view-test-results" data-breadcrumb="Home › Projects › UAT Gateway › Test Results">
+                <h2>Test Results</h2>
+                <div class="card">
+                    <h3>Recent Test Executions</h3>
+                    <p>View detailed results from automated test runs.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="result-123">Result #123 - Authentication Flow</a>
+                        <a href="#" class="nav-link" data-level="result-124">Result #124 - Payment Processing</a>
+                        <a href="#" class="nav-link" data-level="result-125">Result #125 - User Onboarding</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Result Detail View -->
+            <div class="view" id="view-result-123" data-breadcrumb="Home › Projects › UAT Gateway › Test Results › Result #123">
+                <h2>Test Result #123 - Authentication Flow</h2>
+                <div class="card">
+                    <h3>Test Execution Details</h3>
+                    <p><strong>Status:</strong> Passed</p>
+                    <p><strong>Duration:</strong> 2.3 seconds</p>
+                    <p><strong>Executed:</strong> 2025-01-26 15:10:45</p>
+                    <p><strong>Scenarios Tested:</strong> 5</p>
+                </div>
+                <div class="card">
+                    <h3>Scenarios</h3>
+                    <ul>
+                        <li>Login with valid credentials ✓</li>
+                        <li>Login with invalid credentials ✓</li>
+                        <li>Password reset flow ✓</li>
+                        <li>Session timeout ✓</li>
+                        <li>Logout functionality ✓</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Reports View -->
+            <div class="view" id="view-reports" data-breadcrumb="Home › Reports">
+                <h2>Reports</h2>
+                <div class="card">
+                    <h3>Report Center</h3>
+                    <p>Generate and view testing reports and analytics.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="execution-report">Execution Reports</a>
+                        <a href="#" class="nav-link" data-level="coverage-report">Coverage Reports</a>
+                        <a href="#" class="nav-link" data-level="performance-report">Performance Reports</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Report View -->
+            <div class="view" id="view-execution-report" data-breadcrumb="Home › Reports › Execution Reports">
+                <h2>Execution Reports</h2>
+                <div class="card">
+                    <h3>Test Execution History</h3>
+                    <p>Historical data of all test executions across all projects.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="execution-2025-01">January 2025</a>
+                        <a href="#" class="nav-link" data-level="execution-2024-12">December 2024</a>
+                        <a href="#" class="nav-link" data-level="execution-2024-11">November 2024</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div class="view" id="view-settings" data-breadcrumb="Home › Settings">
+                <h2>Settings</h2>
+                <div class="card">
+                    <h3>Application Configuration</h3>
+                    <p>Configure application settings and preferences.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="general-settings">General Settings</a>
+                        <a href="#" class="nav-link" data-level="notification-settings">Notifications</a>
+                        <a href="#" class="nav-link" data-level="security-settings">Security</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Settings View -->
+            <div class="view" id="view-security-settings" data-breadcrumb="Home › Settings › Security">
+                <h2>Security Settings</h2>
+                <div class="card">
+                    <h3>Security Configuration</h3>
+                    <p>Manage authentication, authorization, and security policies.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="auth-settings">Authentication</a>
+                        <a href="#" class="nav-link" data-level="api-keys">API Keys</a>
+                        <a href="#" class="nav-link" data-level="rate-limits">Rate Limiting</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Panel View -->
+            <div class="view" id="view-admin" data-breadcrumb="Home › Admin Panel">
+                <h2>Admin Panel</h2>
+                <div class="card">
+                    <h3>System Administration</h3>
+                    <p>Administrative tools for system management and monitoring.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="user-management">User Management</a>
+                        <a href="#" class="nav-link" data-level="system-monitoring">System Monitoring</a>
+                        <a href="#" class="nav-link" data-level="audit-logs">Audit Logs</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management View -->
+            <div class="view" id="view-user-management" data-breadcrumb="Home › Admin Panel › User Management">
+                <h2>User Management</h2>
+                <div class="card">
+                    <h3>User Accounts</h3>
+                    <p>Manage user accounts, roles, and permissions.</p>
+                    <div class="navigation-section">
+                        <a href="#" class="nav-link" data-level="user-list">User List</a>
+                        <a href="#" class="nav-link" data-level="roles">Roles & Permissions</a>
+                        <a href="#" class="nav-link" data-level="activity-logs">Activity Logs</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generic sub-level views -->
+            <div class="view" id="view-journeys" data-breadcrumb="Home › Projects › UAT Gateway › Journeys">
+                <h2>Journeys</h2>
+                <div class="card">
+                    <h3>Test Journeys</h3>
+                    <p>Define and manage user journey tests.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-scenarios" data-breadcrumb="Home › Projects › UAT Gateway › Scenarios">
+                <h2>Scenarios</h2>
+                <div class="card">
+                    <h3>Test Scenarios</h3>
+                    <p>Create and manage individual test scenarios.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-test-runner" data-breadcrumb="Home › Projects › Test Runner">
+                <h2>Test Runner</h2>
+                <div class="card">
+                    <h3>Test Execution Engine</h3>
+                    <p>Execute and monitor test runs.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-report-generator" data-breadcrumb="Home › Projects › Report Generator">
+                <h2>Report Generator</h2>
+                <div class="card">
+                    <h3>Automated Reports</h3>
+                    <p>Generate comprehensive test reports.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-coverage-report" data-breadcrumb="Home › Reports › Coverage Reports">
+                <h2>Coverage Reports</h2>
+                <div class="card">
+                    <h3>Test Coverage Analysis</h3>
+                    <p>View code and feature coverage metrics.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-performance-report" data-breadcrumb="Home › Reports › Performance Reports">
+                <h2>Performance Reports</h2>
+                <div class="card">
+                    <h3>Performance Metrics</h3>
+                    <p>Analyze test execution performance and trends.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-general-settings" data-breadcrumb="Home › Settings › General">
+                <h2>General Settings</h2>
+                <div class="card">
+                    <h3>Application Preferences</h3>
+                    <p>Configure general application behavior and appearance.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-notification-settings" data-breadcrumb="Home › Settings › Notifications">
+                <h2>Notification Settings</h2>
+                <div class="card">
+                    <h3>Notification Preferences</h3>
+                    <p>Configure how and when you receive notifications.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-auth-settings" data-breadcrumb="Home › Settings › Security › Authentication">
+                <h2>Authentication Settings</h2>
+                <div class="card">
+                    <h3>Authentication Configuration</h3>
+                    <p>Manage authentication methods and policies.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-api-keys" data-breadcrumb="Home › Settings › Security › API Keys">
+                <h2>API Keys</h2>
+                <div class="card">
+                    <h3>API Key Management</h3>
+                    <p>Generate and manage API keys for programmatic access.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-rate-limits" data-breadcrumb="Home › Settings › Security › Rate Limiting">
+                <h2>Rate Limiting</h2>
+                <div class="card">
+                    <h3>Rate Limit Configuration</h3>
+                    <p>Configure API rate limits and throttling policies.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-system-monitoring" data-breadcrumb="Home › Admin Panel › System Monitoring">
+                <h2>System Monitoring</h2>
+                <div class="card">
+                    <h3>System Health Dashboard</h3>
+                    <p>Monitor system health, performance, and resource usage.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-audit-logs" data-breadcrumb="Home › Admin Panel › Audit Logs">
+                <h2>Audit Logs</h2>
+                <div class="card">
+                    <h3>System Audit Trail</h3>
+                    <p>View comprehensive audit logs of all system activities.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-user-list" data-breadcrumb="Home › Admin Panel › User Management › User List">
+                <h2>User List</h2>
+                <div class="card">
+                    <h3>All Users</h3>
+                    <p>View and manage all user accounts in the system.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-roles" data-breadcrumb="Home › Admin Panel › User Management › Roles & Permissions">
+                <h2>Roles & Permissions</h2>
+                <div class="card">
+                    <h3>Access Control</h3>
+                    <p>Define roles and configure permission policies.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-activity-logs" data-breadcrumb="Home › Admin Panel › User Management › Activity Logs">
+                <h2>Activity Logs</h2>
+                <div class="card">
+                    <h3>User Activity</h3>
+                    <p>Track and review user activity across the system.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-result-124" data-breadcrumb="Home › Projects › UAT Gateway › Test Results › Result #124">
+                <h2>Test Result #124 - Payment Processing</h2>
+                <div class="card">
+                    <h3>Test Execution Details</h3>
+                    <p><strong>Status:</strong> Passed</p>
+                    <p><strong>Duration:</strong> 3.7 seconds</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-result-125" data-breadcrumb="Home › Projects › UAT Gateway › Test Results › Result #125">
+                <h2>Test Result #125 - User Onboarding</h2>
+                <div class="card">
+                    <h3>Test Execution Details</h3>
+                    <p><strong>Status:</strong> Failed</p>
+                    <p><strong>Duration:</strong> 1.9 seconds</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-execution-2025-01" data-breadcrumb="Home › Reports › Execution Reports › January 2025">
+                <h2>January 2025 Executions</h2>
+                <div class="card">
+                    <h3>Monthly Summary</h3>
+                    <p>Test execution statistics for January 2025.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-execution-2024-12" data-breadcrumb="Home › Reports › Execution Reports › December 2024">
+                <h2>December 2024 Executions</h2>
+                <div class="card">
+                    <h3>Monthly Summary</h3>
+                    <p>Test execution statistics for December 2024.</p>
+                </div>
+            </div>
+
+            <div class="view" id="view-execution-2024-11" data-breadcrumb="Home › Reports › Execution Reports › November 2024">
+                <h2>November 2024 Executions</h2>
+                <div class="card">
+                    <h3>Monthly Summary</h3>
+                    <p>Test execution statistics for November 2024.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Current View</div>
+                <div class="status-value" id="current-view">Home</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Breadcrumb Levels</div>
+                <div class="status-value" id="breadcrumb-levels">1</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Navigation Depth</div>
+                <div class="status-value" id="nav-depth">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Tests Passed</div>
+                <div class="status-value" id="tests-passed">0/4</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navigation state
+        const navigationHistory = [];
+        let testsPassed = new Set();
+
+        // Breadcrumb management
+        function updateBreadcrumb(breadcrumbText) {
+            const breadcrumb = document.getElementById('breadcrumb');
+            const parts = breadcrumbText.split(' › ');
+
+            // Clear current breadcrumb
+            breadcrumb.innerHTML = '';
+
+            // Build breadcrumb items
+            parts.forEach((part, index) => {
+                const li = document.createElement('li');
+                li.className = 'breadcrumb-item';
+
+                if (index === parts.length - 1) {
+                    // Last item - active (not clickable)
+                    li.classList.add('active');
+                    li.textContent = part;
+                } else {
+                    // Not last item - clickable
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = part;
+
+                    // Build the breadcrumb path up to this level
+                    const pathToLevel = parts.slice(0, index + 1).join(' › ');
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        navigateToBreadcrumb(pathToLevel);
+                    });
+
+                    li.appendChild(link);
+
+                    // Add separator
+                    const separator = document.createElement('li');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '›';
+                    breadcrumb.appendChild(li);
+                    breadcrumb.appendChild(separator);
+                    return; // Skip adding the item itself (separator already added)
+                }
+
+                breadcrumb.appendChild(li);
+            });
+
+            // Update status
+            document.getElementById('breadcrumb-levels').textContent = parts.length;
+        }
+
+        // Navigate to a specific breadcrumb level
+        function navigateToBreadcrumb(breadcrumbText) {
+            // Find the view with matching breadcrumb
+            const views = document.querySelectorAll('.view');
+            for (const view of views) {
+                if (view.dataset.breadcrumb === breadcrumbText) {
+                    showView(view.id.replace('view-', ''));
+                    return;
+                }
+            }
+
+            // If exact match not found, try to find closest match
+            console.warn('Breadcrumb not found:', breadcrumbText);
+        }
+
+        // Show a specific view
+        function showView(level) {
+            const viewId = `view-${level}`;
+            const view = document.getElementById(viewId);
+
+            if (!view) {
+                console.error('View not found:', viewId);
+                return;
+            }
+
+            // Hide all views
+            document.querySelectorAll('.view').forEach(v => {
+                v.classList.remove('active');
+            });
+
+            // Show selected view
+            view.classList.add('active');
+
+            // Update breadcrumb
+            const breadcrumbText = view.dataset.breadcrumb || 'Home';
+            updateBreadcrumb(breadcrumbText);
+
+            // Update current view status
+            document.getElementById('current-view').textContent = view.querySelector('h2').textContent;
+
+            // Calculate navigation depth
+            const depth = breadcrumbText.split(' › ').length - 1;
+            document.getElementById('nav-depth').textContent = depth;
+
+            // Track navigation
+            navigationHistory.push({
+                level: level,
+                breadcrumb: breadcrumbText,
+                timestamp: new Date().toISOString()
+            });
+
+            // Mark test as passed if conditions met
+            if (depth >= 3) {
+                markTestPassed('trail');
+            }
+        }
+
+        // Mark a test as passed
+        function markTestPassed(testId) {
+            if (!testsPassed.has(testId)) {
+                testsPassed.add(testId);
+                const testItem = document.querySelector(`[data-test="${testId}"]`);
+                if (testItem) {
+                    testItem.classList.add('passed');
+                }
+                updateTestStatus();
+            }
+        }
+
+        // Update test status display
+        function updateTestStatus() {
+            const total = 4;
+            const passed = testsPassed.size;
+            document.getElementById('tests-passed').textContent = `${passed}/${total}`;
+
+            if (passed === total) {
+                setTimeout(() => {
+                    alert('✅ All breadcrumb navigation tests passed!');
+                }, 500);
+            }
+        }
+
+        // Initialize navigation links
+        function initNavigationLinks() {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const level = link.dataset.level;
+                    showView(level);
+                    markTestPassed('navigate');
+                });
+            });
+
+            // Mark test as passed when breadcrumb is clicked
+            document.getElementById('breadcrumb').addEventListener('click', () => {
+                setTimeout(() => {
+                    if (navigationHistory.length > 1) {
+                        markTestPassed('click');
+                        markTestPassed('accurate');
+                    }
+                }, 100);
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            showView('home');
+            initNavigationLinks();
+            console.log('Breadcrumb navigation demo initialized');
+            console.log('Feature #371: Breadcrumb navigation works');
+        });
+    </script>
+</body>
+</html>

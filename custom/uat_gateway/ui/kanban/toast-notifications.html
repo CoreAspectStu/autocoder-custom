@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UAT Gateway - Toast Notifications Demo</title>
+  <link rel="stylesheet" href="toast-notifications.css">
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+  <!-- Toast Container - Fixed position for stacking notifications -->
+  <div id="toast-container" class="toast-container" role="alert" aria-live="polite" aria-atomic="true">
+    <!-- Toasts will be dynamically added here -->
+  </div>
+
+  <!-- Demo Controls -->
+  <div class="demo-controls">
+    <h1>Toast Notifications Demo - Feature #231</h1>
+    <p>Click buttons to trigger success notifications</p>
+
+    <div class="button-group">
+      <button class="demo-button" onclick="showTestSuccessToast()">
+        Test Completed
+      </button>
+      <button class="demo-button" onclick="showCardCreatedToast()">
+        Card Created
+      </button>
+      <button class="demo-button" onclick="showSettingsSavedToast()">
+        Settings Saved
+      </button>
+      <button class="demo-button" onclick="showMultipleToasts()">
+        Multiple Success Actions
+      </button>
+      <button class="demo-button" onclick="clearAllToasts()">
+        Clear All
+      </button>
+    </div>
+
+    <div class="info-box">
+      <h3>Acceptance Criteria Verification:</h3>
+      <ul>
+        <li>✅ AC1: Complete action successfully - Click any button above</li>
+        <li>✅ AC2: Verify success toast appears - Toast appears at top-right</li>
+        <li>✅ AC3: Verify message is clear - Shows action + details</li>
+        <li>✅ AC4: Verify toast auto-dismisses - Dismisses after 5 seconds</li>
+        <li>✅ AC5: Verify multiple toasts stack - Click "Multiple Success Actions"</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="toast-notifications.js"></script>
+</body>
+</html>

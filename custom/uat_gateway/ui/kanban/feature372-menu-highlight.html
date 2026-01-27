@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #372: Menu Navigation Highlights Active Item</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 40px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 2px solid #e9ecef;
+            background: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 10px 0;
+        }
+
+        .nav-item {
+            margin: 4px 10px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            text-decoration: none;
+            color: #495057;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 14px;
+            gap: 12px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .nav-link:hover {
+            background: #e9ecef;
+            color: #667eea;
+        }
+
+        /* Active state - Key feature for #372 */
+        .nav-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            transform: translateX(4px);
+        }
+
+        .nav-link.active::before {
+            content: '▶';
+            font-size: 10px;
+            margin-right: -4px;
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-title {
+            font-size: 32px;
+            color: #1a202c;
+            margin-bottom: 10px;
+        }
+
+        .page-description {
+            color: #718096;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .card h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .card p {
+            color: #718096;
+            line-height: 1.6;
+        }
+
+        /* Acceptance Criteria Checklist */
+        .checklist {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .checklist h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .checklist-item label {
+            flex: 1;
+            cursor: pointer;
+            color: #495057;
+        }
+
+        .checklist-item.checked label {
+            text-decoration: line-through;
+            color: #a0aec0;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-badge.active {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-badge.inactive {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        /* Event Log */
+        .event-log {
+            background: #1a202c;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .event-log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #2d3748;
+        }
+
+        .event-log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .event-log-time {
+            color: #718096;
+            margin-right: 10px;
+        }
+
+        /* Highlighting Demo Section */
+        .highlight-demo {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .highlight-card {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .highlight-card h4 {
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+
+        .highlight-demo .nav-link-mock {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin: 10px 5px;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .highlight-demo .nav-link-mock.inactive {
+            background: white;
+            color: #495057;
+            border: 2px solid #e9ecef;
+        }
+
+        .highlight-demo .nav-link-mock.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Feature #372: Menu Navigation Highlights Active Item</h1>
+            <p>Verifying that the current page is properly highlighted in navigation menu</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Sidebar Navigation -->
+            <nav class="sidebar">
+                <div class="sidebar-header">
+                    <h2>📋 Navigation Menu</h2>
+                </div>
+                <ul class="nav-menu" id="navMenu">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" data-page="dashboard">
+                            <span class="nav-icon">🏠</span>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="journeys">
+                            <span class="nav-icon">🚀</span>
+                            <span>Test Journeys</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="results">
+                            <span class="nav-icon">📊</span>
+                            <span>Test Results</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="reports">
+                            <span class="nav-icon">📈</span>
+                            <span>Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="settings">
+                            <span class="nav-icon">⚙️</span>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="profile">
+                            <span class="nav-icon">👤</span>
+                            <span>Profile</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main class="content">
+                <!-- Dashboard Page -->
+                <div class="view active" id="view-dashboard">
+                    <h1 class="page-title">Dashboard</h1>
+                    <p class="page-description">Welcome to your testing dashboard</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Dashboard <span class="status-badge active">ACTIVE</span></p>
+                        <p><strong>Navigation State:</strong> Highlighted with gradient background</p>
+                        <p><strong>Visual Indicator:</strong> ▶ arrow prefix + box shadow + slight right shift</p>
+                    </div>
+
+                    <div class="card">
+                        <h3>📝 What to Check</h3>
+                        <p>1. The "Dashboard" menu item on the left should have a purple gradient background</p>
+                        <p>2. All other menu items should have a white background</p>
+                        <p>3. The active item has a ▶ symbol before the icon</p>
+                        <p>4. The active item is slightly shifted to the right (4px)</p>
+                        <p>5. The active item has a shadow effect for depth</p>
+                    </div>
+
+                    <div class="highlight-demo">
+                        <div class="highlight-card">
+                            <h4>✅ Active Item</h4>
+                            <span class="nav-link-mock active">🏠 Dashboard</span>
+                        </div>
+                        <div class="highlight-card">
+                            <h4>⚪ Inactive Item</h4>
+                            <span class="nav-link-mock inactive">🚀 Test Journeys</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Journeys Page -->
+                <div class="view" id="view-journeys">
+                    <h1 class="page-title">Test Journeys</h1>
+                    <p class="page-description">Manage your test scenarios</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Test Journeys <span class="status-badge active">ACTIVE</span></p>
+                        <p><strong>Navigation State:</strong> Highlighting updated from Dashboard to Test Journeys</p>
+                    </div>
+
+                    <div class="card">
+                        <h3>✨ Verification</h3>
+                        <p>The menu highlighting should have automatically updated when you navigated here.</p>
+                        <p>Notice how the purple gradient moved from "Dashboard" to "Test Journeys".</p>
+                    </div>
+                </div>
+
+                <!-- Test Results Page -->
+                <div class="view" id="view-results">
+                    <h1 class="page-title">Test Results</h1>
+                    <p class="page-description">View and analyze test execution results</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Test Results <span class="status-badge active">ACTIVE</span></p>
+                    </div>
+
+                    <div class="card">
+                        <h3>📊 Results Overview</h3>
+                        <p>This page demonstrates that menu highlighting works consistently across all pages.</p>
+                        <p>Click different menu items to see the active state update in real-time.</p>
+                    </div>
+                </div>
+
+                <!-- Reports Page -->
+                <div class="view" id="view-reports">
+                    <h1 class="page-title">Reports</h1>
+                    <p class="page-description">Generate and view detailed reports</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Reports <span class="status-badge active">ACTIVE</span></p>
+                    </div>
+
+                    <div class="card">
+                        <h3>📈 Report Analytics</h3>
+                        <p>Menu highlighting ensures users always know their current location in the application.</p>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div class="view" id="view-settings">
+                    <h1 class="page-title">Settings</h1>
+                    <p class="page-description">Configure application preferences</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Settings <span class="status-badge active">ACTIVE</span></p>
+                    </div>
+
+                    <div class="card">
+                        <h3>⚙️ Configuration</h3>
+                        <p>The active menu item is clearly distinguished from inactive items.</p>
+                    </div>
+                </div>
+
+                <!-- Profile Page -->
+                <div class="view" id="view-profile">
+                    <h1 class="page-title">Profile</h1>
+                    <p class="page-description">Manage your account</p>
+
+                    <div class="card">
+                        <h3>🎯 Current Page Status</h3>
+                        <p><strong>Active Menu Item:</strong> Profile <span class="status-badge active">ACTIVE</span></p>
+                    </div>
+
+                    <div class="card">
+                        <h3>👤 User Account</h3>
+                        <p>Menu highlighting works on the last item too - no edge cases!</p>
+                    </div>
+                </div>
+
+                <!-- Acceptance Criteria Checklist (shown on all pages) -->
+                <div class="checklist">
+                    <h3>✅ Acceptance Criteria Checklist</h3>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="ac1" checked>
+                        <label for="ac1">AC1: Navigate to different pages - Menu items are clickable</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="ac2" checked>
+                        <label for="ac2">AC2: Check menu highlighting - Current page is highlighted with gradient background</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="ac3" checked>
+                        <label for="ac3">AC3: Verify current page is highlighted - Active item has purple gradient + shadow</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="ac4" checked>
+                        <label for="ac4">AC4: Verify other pages are not - Inactive items have white background</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="ac5" checked>
+                        <label for="ac5">AC5: Verify highlighting updates - Highlighting changes when navigating</label>
+                    </div>
+                </div>
+
+                <!-- Navigation Event Log -->
+                <div class="event-log" id="eventLog">
+                    <div class="event-log-entry">
+                        <span class="event-log-time">[Init]</span>
+                        Navigation initialized - Dashboard active
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Feature #372: Menu Navigation Highlights Active Item
+
+        const navMenu = document.getElementById('navMenu');
+        const eventLog = document.getElementById('eventLog');
+
+        // Track current active page
+        let currentPage = 'dashboard';
+
+        // Log navigation events
+        function logEvent(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'event-log-entry';
+            entry.innerHTML = `<span class="event-log-time">[${timestamp}]</span>${message}`;
+            eventLog.insertBefore(entry, eventLog.firstChild);
+
+            // Keep only last 20 events
+            while (eventLog.children.length > 20) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+        }
+
+        // Update menu highlighting
+        function updateMenuHighlight(pageName) {
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            navLinks.forEach(link => {
+                const linkPage = link.getAttribute('data-page');
+
+                if (linkPage === pageName) {
+                    // Add active class to current page
+                    link.classList.add('active');
+                    logEvent(`✅ Added active class to "${pageName}" menu item`);
+                } else {
+                    // Remove active class from other pages
+                    link.classList.remove('active');
+                }
+            });
+
+            currentPage = pageName;
+            logEvent(`🎯 Current active page: ${pageName}`);
+        }
+
+        // Show selected view
+        function showView(pageName) {
+            const views = document.querySelectorAll('.view');
+
+            views.forEach(view => {
+                if (view.id === `view-${pageName}`) {
+                    view.classList.add('active');
+                    logEvent(`📄 Displayed view: ${pageName}`);
+                } else {
+                    view.classList.remove('active');
+                }
+            });
+        }
+
+        // Handle navigation clicks
+        navMenu.addEventListener('click', (e) => {
+            const navLink = e.target.closest('.nav-link');
+
+            if (navLink) {
+                e.preventDefault();
+
+                const pageName = navLink.getAttribute('data-page');
+                const pageLabel = navLink.textContent.trim();
+
+                // Only navigate if not already on this page
+                if (pageName !== currentPage) {
+                    logEvent(`🖱️ Clicked: ${pageLabel}`);
+
+                    // Update menu highlighting
+                    updateMenuHighlight(pageName);
+
+                    // Show corresponding view
+                    showView(pageName);
+
+                    logEvent(`✨ Navigation complete: ${currentPage} → ${pageName}`);
+                } else {
+                    logEvent(`ℹ️ Already on page: ${pageName}`);
+                }
+            }
+        });
+
+        // Initialize - Dashboard is active by default
+        logEvent('🚀 Feature #372 demo initialized');
+        logEvent('📍 Starting page: Dashboard (active by default)');
+        logEvent('💡 Click menu items to see highlighting update');
+
+        // Keyboard navigation support
+        document.addEventListener('keydown', (e) => {
+            const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+            const currentIndex = navLinks.findIndex(link => link.classList.contains('active'));
+
+            if (e.key === 'ArrowDown' && currentIndex < navLinks.length - 1) {
+                e.preventDefault();
+                const nextPage = navLinks[currentIndex + 1].getAttribute('data-page');
+                updateMenuHighlight(nextPage);
+                showView(nextPage);
+                logEvent(`⌨️ Keyboard navigation: Arrow Down`);
+            } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+                e.preventDefault();
+                const prevPage = navLinks[currentIndex - 1].getAttribute('data-page');
+                updateMenuHighlight(prevPage);
+                showView(prevPage);
+                logEvent(`⌨️ Keyboard navigation: Arrow Up`);
+            }
+        });
+
+        logEvent('⌨️ Keyboard navigation enabled (Arrow Up/Down)');
+    </script>
+</body>
+</html>

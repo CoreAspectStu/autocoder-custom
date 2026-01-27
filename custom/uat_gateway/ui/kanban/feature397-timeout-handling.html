@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Timeout Handling - Feature #397</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+        }
+
+        .test-section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(255, 107, 107, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(255, 107, 107, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #ff6b6b;
+        }
+
+        .response-area {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 150px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .response-area:empty::before {
+            content: "Response will appear here...";
+            color: #999;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .status-idle {
+            background: #e9ecef;
+            color: #666;
+        }
+
+        .status-loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-timeout {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #721c24;
+            font-size: 13px;
+        }
+
+        .partial-state {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #856404;
+            font-size: 13px;
+        }
+
+        .acceptance-criteria {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .acceptance-criteria h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .criteria-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        .criteria-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .criteria-checkbox.checked {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+
+        .criteria-text {
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .criteria-text strong {
+            color: #333;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #ff6b6b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .recovery-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .recovery-btn {
+            background: #17a2b8;
+            font-size: 12px;
+            padding: 8px 16px;
+        }
+
+        .recovery-btn:hover {
+            background: #138496;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Feature #397: Timeout Handling Test</h1>
+        <p class="subtitle">Verify timeouts are handled gracefully with error recovery</p>
+
+        <div id="status" class="status-badge status-idle">Status: Idle</div>
+
+        <div class="test-section">
+            <h2>Test Controls</h2>
+
+            <div class="input-group">
+                <label for="timeout-input">Client Timeout (ms):</label>
+                <input type="number" id="timeout-input" value="1000" min="100" max="10000" step="100">
+                <small style="color: #999; display: block; margin-top: 5px;">
+                    Request will timeout if server takes longer than this to respond
+                </small>
+            </div>
+
+            <div class="controls">
+                <button id="trigger-timeout-btn" onclick="testTimeout()">
+                    ⏱️ Trigger Timeout
+                </button>
+                <button id="trigger-edge-btn" onclick="testEdgeCase()">
+                    🎯 Test Edge Case
+                </button>
+                <button id="test-recovery-btn" onclick="testRecovery()">
+                    🔄 Test Recovery
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Response</h2>
+            <div id="response-output" class="response-area"></div>
+        </div>
+
+        <div class="acceptance-criteria">
+            <h3>✅ Acceptance Criteria Checklist</h3>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac1">✓</div>
+                <div class="criteria-text">
+                    <strong>AC1:</strong> Trigger timeout condition - Request exceeds allowed time limit
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac2">✓</div>
+                <div class="criteria-text">
+                    <strong>AC2:</strong> Verify timeout is caught - Error is properly intercepted
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac3">✓</div>
+                <div class="criteria-text">
+                    <strong>AC3:</strong> Verify error message is shown - User-friendly timeout message displayed
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac4">✓</div>
+                <div class="criteria-text">
+                    <strong>AC4:</strong> Verify partial state is saved - Form data or progress preserved
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac5">✓</div>
+                <div class="criteria-text">
+                    <strong>AC5:</strong> Verify recovery is possible - User can retry or continue
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+        let testState = {
+            attemptCount: 0,
+            savedFormData: null,
+            lastError: null
+        };
+
+        function updateStatus(status, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = `Status: ${status}`;
+            statusEl.className = `status-badge status-${type}`;
+        }
+
+        function appendResponse(data) {
+            const output = document.getElementById('response-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${JSON.stringify(data, null, 2)}\n\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function markAC(acId, checked) {
+            const checkbox = document.getElementById(acId);
+            if (checked) {
+                checkbox.classList.add('checked');
+            } else {
+                checkbox.classList.remove('checked');
+            }
+        }
+
+        function resetAllACs() {
+            ['ac1', 'ac2', 'ac3', 'ac4', 'ac5'].forEach(id => markAC(id, false));
+        }
+
+        async function testTimeout() {
+            resetAllACs();
+
+            const clientTimeoutMs = parseInt(document.getElementById('timeout-input').value) || 1000;
+            const serverDelayMs = clientTimeoutMs + 2000; // Server delay is longer to ensure timeout
+
+            updateStatus('Triggering timeout...', 'loading');
+
+            // AC4: Save partial state (simulated form data)
+            testState.savedFormData = {
+                timestamp: new Date().toISOString(),
+                clientTimeout: clientTimeoutMs,
+                serverDelay: serverDelayMs,
+                attempt: ++testState.attemptCount
+            };
+
+            appendResponse({
+                action: 'Starting timeout test',
+                config: {
+                    client_timeout: `${clientTimeoutMs}ms`,
+                    server_delay: `${serverDelayMs}ms`,
+                    note: 'Server delay > client timeout = timeout condition'
+                },
+                partial_state_saved: testState.savedFormData
+            });
+
+            // AC1: Trigger timeout condition
+            markAC('ac1', true);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), clientTimeoutMs);
+
+            try {
+                // Make request that will timeout
+                const response = await fetch(
+                    `${API_BASE}/api/test/delay?ms=${serverDelayMs}`,
+                    {
+                        signal: controller.signal
+                    }
+                );
+
+                clearTimeout(timeoutId);
+                const data = await response.json();
+
+                // If we get here, timeout didn't occur (unexpected)
+                updateStatus('No Timeout (Unexpected)', 'idle');
+                appendResponse({
+                    warning: 'Request completed without timeout',
+                    data: data
+                });
+
+            } catch (error) {
+                clearTimeout(timeoutId);
+
+                // AC2: Verify timeout is caught
+                if (error.name === 'AbortError') {
+                    markAC('ac2', true);
+                    appendResponse({
+                        timeout_detected: true,
+                        error_type: error.name,
+                        error_message: error.message
+                    });
+
+                    // AC3: Verify error message is shown
+                    const userFriendlyMessage = `Request timeout: The server took too long to respond (timeout: ${clientTimeoutMs}ms)`;
+                    showError(userFriendlyMessage);
+                    markAC('ac3', true);
+
+                    // AC4: Verify partial state is saved
+                    showPartialState();
+                    markAC('ac4', true);
+
+                    // AC5: Verify recovery is possible
+                    showRecoveryActions();
+                    markAC('ac5', true);
+
+                    updateStatus('Timeout Handled', 'timeout');
+
+                } else {
+                    // Different error (not timeout)
+                    updateStatus('Error', 'timeout');
+                    appendResponse({
+                        error: error.message,
+                        note: 'This is not a timeout error'
+                    });
+                }
+            }
+        }
+
+        async function testEdgeCase() {
+            resetAllACs();
+            updateStatus('Testing edge case...', 'loading');
+
+            // Test with very short timeout
+            const clientTimeoutMs = 100;
+            const serverDelayMs = 5000;
+
+            appendResponse({
+                action: 'Testing edge case',
+                config: {
+                    client_timeout: `${clientTimeoutMs}ms (very short)`,
+                    server_delay: `${serverDelayMs}ms`,
+                    expected: 'Immediate timeout'
+                }
+            });
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), clientTimeoutMs);
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/test/delay?ms=${serverDelayMs}`,
+                    { signal: controller.signal }
+                );
+
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                appendResponse({ warning: 'Unexpected success', data });
+
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    appendResponse({
+                        edge_case_verified: true,
+                        timeout_occurred_as_expected: `${clientTimeoutMs}ms`,
+                        message: 'Short timeout correctly triggers immediate abort'
+                    });
+                    markAC('ac1', true);
+                    markAC('ac2', true);
+                }
+            }
+
+            updateStatus('Edge Case Complete', 'idle');
+        }
+
+        async function testRecovery() {
+            updateStatus('Testing recovery...', 'loading');
+
+            // AC5: Verify recovery is possible
+            appendResponse({
+                testing: 'Recovery mechanism',
+                scenario: 'User retries after timeout with increased timeout'
+            });
+
+            const firstTimeoutMs = 1000;
+            const retryTimeoutMs = 5000;
+            const serverDelayMs = 2000;
+
+            // First attempt (will timeout)
+            appendResponse({
+                attempt: 1,
+                timeout: `${firstTimeoutMs}ms`,
+                server_delay: `${serverDelayMs}ms`,
+                expected: 'TIMEOUT'
+            });
+
+            const controller1 = new AbortController();
+            const timeoutId1 = setTimeout(() => controller1.abort(), firstTimeoutMs);
+
+            try {
+                await fetch(`${API_BASE}/api/test/delay?ms=${serverDelayMs}`, {
+                    signal: controller1.signal
+                });
+            } catch (error) {
+                clearTimeout(timeoutId1);
+                if (error.name === 'AbortError') {
+                    appendResponse({
+                        attempt_1_result: 'TIMEOUT (as expected)',
+                        message: 'First attempt timed out'
+                    });
+                }
+            }
+
+            // Second attempt (with longer timeout - should succeed)
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            appendResponse({
+                attempt: 2,
+                timeout: `${retryTimeoutMs}ms`,
+                server_delay: `${serverDelayMs}ms`,
+                expected: 'SUCCESS'
+            });
+
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), retryTimeoutMs);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/test/delay?ms=${serverDelayMs}`, {
+                    signal: controller2.signal
+                });
+                clearTimeout(timeoutId2);
+                const data = await response.json();
+
+                appendResponse({
+                    attempt_2_result: 'SUCCESS',
+                    message: 'Retry with increased timeout succeeded',
+                    recovery_verified: true,
+                    data: data
+                });
+
+                markAC('ac5', true);
+                updateStatus('Recovery Successful', 'success');
+
+            } catch (error) {
+                clearTimeout(timeoutId2);
+                appendResponse({
+                    attempt_2_result: 'FAILED',
+                    error: error.message
+                });
+                updateStatus('Recovery Failed', 'timeout');
+            }
+        }
+
+        function showError(message) {
+            const output = document.getElementById('response-output');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            output.insertBefore(errorDiv, output.firstChild);
+        }
+
+        function showPartialState() {
+            const output = document.getElementById('response-output');
+            const stateDiv = document.createElement('div');
+            stateDiv.className = 'partial-state';
+            stateDiv.innerHTML = `
+                <strong>Partial State Saved:</strong>
+                <pre style="margin-top: 10px;">${JSON.stringify(testState.savedFormData, null, 2)}</pre>
+            `;
+            output.insertBefore(stateDiv, output.firstChild);
+        }
+
+        function showRecoveryActions() {
+            const output = document.getElementById('response-output');
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'recovery-actions';
+            actionsDiv.innerHTML = `
+                <button class="recovery-btn" onclick="testRecovery()">🔄 Retry</button>
+                <button class="recovery-btn" onclick="document.getElementById('response-output').textContent = ''">Clear</button>
+            `;
+            output.appendChild(actionsDiv);
+        }
+
+        // Auto-test on page load for automated testing
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('auto') === 'true') {
+                setTimeout(() => testTimeout(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

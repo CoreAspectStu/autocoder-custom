@@ -1,0 +1,525 @@
+/**
+ * Keyboard Navigation Styles
+ *
+ * Feature #236: UAT gateway supports keyboard navigation
+ *
+ * These styles ensure all interactive elements have visible focus indicators
+ * and proper keyboard navigation support.
+ */
+
+/* ========================================
+   CORE FOCUS STYLES
+   ======================================== */
+
+/* Default focus style for all focusable elements */
+:focus {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 2px !important;
+}
+
+/* Focus-visible for better keyboard navigation */
+/* Only shows focus indicator when using keyboard (not mouse) */
+:focus-visible {
+    outline: 3px solid #2563EB !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Remove outline when using mouse */
+:focus:not(:focus-visible) {
+    outline: none !important;
+}
+
+/* ========================================
+   BUTTON FOCUS STYLES
+   ======================================== */
+
+button:focus,
+.uat-card__button:focus,
+button:focus-visible {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 2px !important;
+    border-radius: 4px;
+}
+
+.uat-card__button--primary:focus {
+    outline-color: #2563EB !important;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3) !important;
+}
+
+.uat-card__button--secondary:focus {
+    outline-color: #10B981 !important;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* ========================================
+   CARD FOCUS STYLES
+   ======================================== */
+
+.uat-card {
+    transition: all 0.2s ease;
+}
+
+.uat-card:focus,
+.uat-card:focus-visible {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 4px !important;
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3) !important;
+    transform: translateY(-2px);
+}
+
+.uat-card:focus-visible {
+    outline-color: #2563EB !important;
+}
+
+/* Card buttons when card has focus */
+.uat-card:focus .uat-card__button {
+    transition: all 0.2s ease;
+}
+
+/* ========================================
+   FILTER AND CONTROL FOCUS STYLES
+   ======================================== */
+
+[data-filter-type]:focus,
+.filter-checkbox:focus,
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 3px solid #10B981 !important;
+    outline-offset: 2px !important;
+    border-color: #10B981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+}
+
+[data-filter-type]:focus-visible {
+    outline-color: #059669 !important;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.3) !important;
+}
+
+/* ========================================
+   MODAL FOCUS STYLES
+   ======================================== */
+
+/* Modal base styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 1;
+}
+
+.modal-content {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 0;
+    z-index: 2;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1F2937;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #6B7280;
+    border-radius: 4px;
+    transition: all 0.2s;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.modal-close:hover {
+    background: #F3F4F6;
+    color: #1F2937;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.keyboard-shortcuts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.keyboard-shortcuts-list li {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+.keyboard-shortcuts-list li:last-child {
+    border-bottom: none;
+}
+
+.keyboard-shortcuts-list kbd {
+    background: #F3F4F6;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: monospace;
+    font-size: 0.9em;
+    min-width: 80px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.keyboard-tip {
+    margin-top: 16px;
+    padding: 12px;
+    background: #FEF3C7;
+    border-left: 4px solid #F59E0B;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #92400E;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.modal[role="dialog"]:focus,
+.modal:focus-within {
+    outline: 3px solid #F59E0B !important;
+    outline-offset: 2px !important;
+}
+
+.modal-close:focus,
+.modal-confirm:focus,
+.modal-cancel:focus {
+    outline: 3px solid #F59E0B !important;
+    outline-offset: 2px !important;
+}
+
+/* Modal focus trap styles */
+.modal-content:focus {
+    outline: none !important;
+}
+
+/* ========================================
+   RESPONSIVE MODAL STYLES - Feature #345
+   ======================================== */
+
+/* Mobile modal adjustments */
+@media (max-width: 640px) {
+    .modal-content {
+        max-width: 95%;
+        width: 95%;
+        max-height: 90vh;
+        margin: 20px auto;
+    }
+
+    .modal-header {
+        padding: 16px;
+    }
+
+    .modal-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .modal-close {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 12px;
+        font-size: 1.25rem;
+    }
+
+    .modal-body {
+        padding: 16px;
+        font-size: 0.95rem;
+    }
+}
+
+/* Tablet modal adjustments */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .modal-content {
+        max-width: 85%;
+        width: 85%;
+    }
+}
+
+/* Small phones */
+@media (max-width: 375px) {
+    .modal-content {
+        max-width: 95%;
+        width: 95%;
+        margin: 10px auto;
+    }
+
+    .modal-header {
+        padding: 12px;
+    }
+
+    .modal-body {
+        padding: 12px;
+    }
+}
+
+/* ========================================
+   SKIP LINKS
+   ======================================== */
+
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #000;
+    color: #fff;
+    padding: 8px 16px;
+    text-decoration: none;
+    z-index: 100000;
+    border-radius: 0 0 4px 0;
+    font-weight: 600;
+    transition: top 0.3s ease;
+}
+
+.skip-link:focus {
+    top: 0;
+    outline: 3px solid #fff !important;
+    outline-offset: 2px !important;
+}
+
+/* ========================================
+   LINK FOCUS STYLES
+   ======================================== */
+
+a:focus,
+a:focus-visible {
+    outline: 3px solid #8B5CF6 !important;
+    outline-offset: 2px !important;
+    text-decoration: underline;
+}
+
+/* ========================================
+   DARK MODE SUPPORT
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    :focus {
+        outline-color: #60A5FA !important;
+    }
+
+    :focus-visible {
+        outline-color: #3B82F6 !important;
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.4) !important;
+    }
+
+    button:focus {
+        outline-color: #60A5FA !important;
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.3) !important;
+    }
+
+    .uat-card:focus {
+        outline-color: #60A5FA !important;
+        box-shadow: 0 10px 25px rgba(96, 165, 250, 0.4) !important;
+    }
+
+    [data-filter-type]:focus,
+    input:focus,
+    select:focus,
+    textarea:focus {
+        outline-color: #34D399 !important;
+        border-color: #34D399 !important;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.3) !important;
+    }
+
+    .modal[role="dialog"]:focus {
+        outline-color: #FBBF24 !important;
+    }
+
+    .skip-link {
+        background: #1F2937;
+        color: #F9FAFB;
+    }
+}
+
+/* ========================================
+   HIGH CONTRAST MODE SUPPORT
+   ======================================== */
+
+@media (prefers-contrast: high) {
+    :focus {
+        outline: 4px solid currentColor !important;
+        outline-offset: 2px !important;
+        box-shadow: none !important;
+    }
+
+    button:focus,
+    .uat-card__button:focus {
+        outline-width: 4px !important;
+    }
+
+    .uat-card:focus {
+        outline-width: 4px !important;
+    }
+}
+
+/* ========================================
+   REDUCED MOTION SUPPORT
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :focus {
+        transition: none !important;
+    }
+
+    .skip-link {
+        transition: none !important;
+    }
+
+    .uat-card {
+        transition: none !important;
+    }
+
+    .uat-card:focus {
+        transform: none !important;
+    }
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Hide elements (for modals, dropdowns, etc.) */
+.hidden {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Remove focus outline (use sparingly) */
+.focus-outline-none:focus {
+    outline: none !important;
+}
+
+/* Custom focus ring for specific components */
+.focus-ring-blue:focus-visible {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 2px !important;
+}
+
+.focus-ring-green:focus-visible {
+    outline: 3px solid #10B981 !important;
+    outline-offset: 2px !important;
+}
+
+.focus-ring-amber:focus-visible {
+    outline: 3px solid #F59E0B !important;
+    outline-offset: 2px !important;
+}
+
+/* Inset focus for small elements */
+.focus-inset:focus-visible {
+    outline: 2px solid inset currentColor !important;
+    outline-offset: -2px !important;
+}
+
+/* ========================================
+   ACCESSIBILITY IMPROVEMENTS
+   ======================================== */
+
+/* Ensure focus indicators are visible on all interactive elements */
+[role="button"]:focus,
+[tabindex]:focus {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 2px !important;
+}
+
+/* Better focus for checkbox and radio inputs */
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+    outline: 3px solid #10B981 !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Focus for range sliders */
+input[type="range"]:focus {
+    outline: 3px solid #8B5CF6 !important;
+    outline-offset: 2px !important;
+}
+
+/* Focus for file inputs */
+input[type="file"]:focus {
+    outline: 3px solid #EC4899 !important;
+    outline-offset: 2px !important;
+}
+
+/* ========================================
+   KEYBOARD HIGHLIGHT STYLES
+   ======================================== */
+
+/* Highlight element when navigating with keyboard */
+.keyboard-navigation-active *:focus {
+    outline: 3px solid #3B82F6 !important;
+    outline-offset: 2px !important;
+}
+
+/* Stronger focus for elements being activated */
+.keyboard-activating {
+    opacity: 0.8;
+    transform: scale(0.98);
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+    .skip-link {
+        display: none;
+    }
+
+    :focus {
+        outline: 1px solid #000 !important;
+    }
+}

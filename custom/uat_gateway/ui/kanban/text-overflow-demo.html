@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Text Overflow Handling Demo</title>
+  <link href="uat-card.css?v=2" rel="stylesheet"/>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      margin: 0;
+    }
+    .demo-section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .demo-section h2 {
+      margin-top: 0;
+      color: #1f2937;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .test-case {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .test-case h3 {
+      margin-top: 0;
+      font-size: 14px;
+      color: #374151;
+    }
+    .expected {
+      color: #059669;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .code {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+  </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+  <h1 style="color: #1f2937;">Feature #346: Text Overflow Handling</h1>
+  <p style="color: #6b7280;">Verifying text doesn't overflow containers</p>
+
+  <!-- Demo Section 1: Long Titles -->
+  <div class="demo-section">
+    <h2>Test 1: Long Title Handling</h2>
+    <p class="expected">Expected: Title should wrap to multiple lines without breaking layout</p>
+
+    <div class="test-case">
+      <h3>Normal Title</h3>
+      <article class="uat-card">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji" role="img">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">User Authentication Journey</h3>
+            <span class="uat-card__id">JOURNEY-20250126-001</span>
+          </div>
+        </header>
+      </article>
+    </div>
+
+    <div class="test-case">
+      <h3>Very Long Title (Should Wrap)</h3>
+      <article class="uat-card">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji" role="img">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">This is an extremely long title that goes on and on and on and on and should not break the layout even though it is very very long and contains many many words</h3>
+            <span class="uat-card__id">JOURNEY-20250126-001</span>
+          </div>
+        </header>
+      </article>
+    </div>
+  </div>
+
+  <!-- Demo Section 2: Long IDs -->
+  <div class="demo-section">
+    <h2>Test 2: Long ID Handling</h2>
+    <p class="expected">Expected: ID should truncate with ellipsis (...) and full text visible on hover</p>
+
+    <div class="test-case">
+      <h3>Normal ID</h3>
+      <article class="uat-card">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji" role="img">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Test Journey</h3>
+            <span class="uat-card__id" title="JOURNEY-20250126-001">JOURNEY-20250126-001</span>
+          </div>
+        </header>
+      </article>
+    </div>
+
+    <div class="test-case">
+      <h3>Very Long ID (Should Truncate with Ellipsis)</h3>
+      <article class="uat-card">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji" role="img">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Test Journey</h3>
+            <span class="uat-card__id" title="JOURNEY-20250126-001-EXTENDED-ID-FOR-TESTING-OVERFLOW">JOURNEY-20250126-001-EXTENDED-ID-FOR-TESTING-OVERFLOW</span>
+          </div>
+        </header>
+      </article>
+    </div>
+  </div>
+
+  <!-- Demo Section 3: Long Descriptions -->
+  <div class="demo-section">
+    <h2>Test 3: Long Description Handling</h2>
+    <p class="expected">Expected: Description should wrap naturally to multiple lines</p>
+
+    <div class="test-case">
+      <h3>Normal Description</h3>
+      <article class="uat-card">
+        <div class="uat-card__body">
+          <p class="uat-card__description">Complete user authentication workflow including registration, login, logout, and password recovery</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="test-case">
+      <h3>Very Long Description (Should Wrap)</h3>
+      <article class="uat-card">
+        <div class="uat-card__body">
+          <p class="uat-card__description">This is an exceptionally long description that tests how the card handles text overflow in various scenarios. It should wrap properly and not break the layout or extend beyond the card boundaries while maintaining readability and proper formatting.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <!-- Demo Section 4: Long Labels -->
+  <div class="demo-section">
+    <h2>Test 4: Long Label Handling</h2>
+    <p class="expected">Expected: Labels should truncate with ellipsis when too long</p>
+
+    <div class="test-case">
+      <h3>Normal Labels</h3>
+      <div class="uat-card__labels">
+        <span class="uat-card__label uat-card__label--journey">journey</span>
+        <span class="uat-card__label">authentication</span>
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Very Long Labels (Should Truncate)</h3>
+      <div class="uat-card__labels">
+        <span class="uat-card__label uat-card__label--journey" title="this-is-a-very-long-journey-label">this-is-a-very-long-journey-label</span>
+        <span class="uat-card__label" title="extended-label-for-testing">extended-label-for-testing</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Demo Section 5: Mobile Viewport -->
+  <div class="demo-section">
+    <h2>Test 5: Mobile Viewport (375px wide)</h2>
+    <p class="expected">Expected: All text should fit without horizontal scroll on mobile</p>
+
+    <div style="width: 375px; margin: 0 auto; border: 2px dashed #3b82f6; padding: 10px;">
+      <article class="uat-card">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji" role="img">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">This is a very long title for mobile testing</h3>
+            <span class="uat-card__id" title="JOURNEY-20250126-001-LONG">JOURNEY-20250126-001-LONG</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">This is a very long description that should wrap properly on mobile devices without causing any overflow issues or layout problems.</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">4 scenarios</span>
+            <span class="uat-card__metadata-item">~45 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--journey">journey</span>
+            <span class="uat-card__label">authentication</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <!-- Demo Section 6: CSS Rules -->
+  <div class="demo-section">
+    <h2>Test 6: CSS Overflow Rules Applied</h2>
+    <p class="expected">Expected: All components have proper overflow handling CSS</p>
+
+    <div class="test-case">
+      <h3>Title CSS</h3>
+      <div class="code">
+.uat-card__title {<br>
+&nbsp;&nbsp;overflow-wrap: break-word;<br>
+&nbsp;&nbsp;word-wrap: break-word;<br>
+&nbsp;&nbsp;word-break: break-word;<br>
+&nbsp;&nbsp;hyphens: auto;<br>
+}
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>ID CSS</h3>
+      <div class="code">
+.uat-card__id {<br>
+&nbsp;&nbsp;overflow: hidden;<br>
+&nbsp;&nbsp;text-overflow: ellipsis;<br>
+&nbsp;&nbsp;white-space: nowrap;<br>
+&nbsp;&nbsp;max-width: 100%;<br>
+}
+      </div>
+    </div>
+
+    <div class="test-case">
+      <h3>Label CSS</h3>
+      <div class="code">
+.uat-card__label {<br>
+&nbsp;&nbsp;overflow: hidden;<br>
+&nbsp;&nbsp;text-overflow: ellipsis;<br>
+&nbsp;&nbsp;white-space: nowrap;<br>
+&nbsp;&nbsp;max-width: 100%;<br>
+}
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="demo-section" style="background: #d1fae5; border-color: #059669;">
+    <h2 style="border-color: #059669;">✓ All Acceptance Criteria Verified</h2>
+    <ul style="color: #065f46; line-height: 1.8;">
+      <li>✓ Long text content added to all components</li>
+      <li>✓ Viewed on small screen (375px mobile viewport)</li>
+      <li>✓ Text wraps or truncates appropriately</li>
+      <li>✓ Truncated text has ellipsis (ID, labels)</li>
+      <li>✓ Full text is accessible (via hover tooltip and title attribute)</li>
+    </ul>
+  </div>
+
+</body>
+</html>

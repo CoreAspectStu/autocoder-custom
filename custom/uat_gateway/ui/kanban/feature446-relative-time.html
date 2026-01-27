@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #446: Relative Time Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .header .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .test-results {
+            display: grid;
+            gap: 16px;
+        }
+
+        .test-result {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s;
+        }
+
+        .test-result:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .test-result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .test-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .test-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .test-status.passed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .test-status.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .test-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #6b7280;
+            flex-wrap: wrap;
+        }
+
+        .test-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Feature #446: Relative time display with hover tooltip */
+        .relative-time {
+            position: relative;
+            cursor: help;
+            color: #667eea;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .relative-time:hover {
+            background: #eff6ff;
+        }
+
+        /* Tooltip showing absolute time */
+        .relative-time::after {
+            content: attr(data-absolute-time);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            background: #1f2937;
+            color: white;
+            font-size: 13px;
+            border-radius: 6px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 1000;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .relative-time:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Live update indicator */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: #d1fae5;
+            color: #065f46;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .info-box {
+            padding: 16px;
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #1e40af;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .info-box li {
+            color: #1e40af;
+            font-size: 14px;
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .info-box li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        .refresh-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Feature #446: Relative Time Display</h1>
+            <p>
+                Verify that timestamps are shown as relative time (e.g., "2 hours ago") and that
+                hovering reveals the absolute time. This makes recent content feel fresh while
+                preserving precise timestamp information.
+            </p>
+            <div class="badge">Temporal & Timezone</div>
+        </div>
+
+        <!-- Implementation Guide -->
+        <div class="section">
+            <h2>📋 Implementation Guide</h2>
+            <div class="info-box">
+                <h3>Feature Requirements:</h3>
+                <ul>
+                    <li>Display timestamps as relative time (e.g., "2 hours ago", "just now", "yesterday")</li>
+                    <li>Show absolute time on hover (e.g., "January 26, 2025 at 2:30 PM")</li>
+                    <li>Update relative times dynamically (every minute)</li>
+                    <li>Handle timezones correctly</li>
+                    <li>Use both formats for maximum usability</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>Acceptance Criteria:</h3>
+                <ul>
+                    <li>AC1: View recent test result - See relative time displayed</li>
+                    <li>AC2: Verify relative time shown - Times show "X hours ago" format</li>
+                    <li>AC3: Hover for absolute time - Tooltip shows exact date/time</li>
+                    <li>AC4: Verify both formats useful - Both relative and absolute are clear</li>
+                    <li>AC5: Verify relative updates over time - Times update automatically</li>
+                </ul>
+            </div>
+
+            <h3 style="color: #1f2937; font-size: 16px; margin-top: 16px;">JavaScript Implementation:</h3>
+            <div class="code-block">
+// Format relative time
+function formatRelativeTime(timestamp) {
+    const now = new Date();
+    const delta = now - timestamp;
+    const seconds = Math.floor(delta / 1000);
+
+    if (seconds < 60) {
+        if (seconds < 10) return 'just now';
+        return seconds + ' seconds ago';
+    }
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+        if (minutes === 1) return '1 minute ago';
+        return minutes + ' minutes ago';
+    }
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        if (hours === 1) return '1 hour ago';
+        return hours + ' hours ago';
+    }
+
+    const days = Math.floor(hours / 24);
+    if (days < 7) {
+        if (days === 1) {
+            return 'yesterday at ' + timestamp.toLocaleTimeString('en-US',
+                { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        return days + ' days ago';
+    }
+
+    return timestamp.toLocaleDateString('en-US',
+        { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// Update all relative times every minute
+setInterval(updateRelativeTimes, 60000);
+            </div>
+        </div>
+
+        <!-- Live Demo -->
+        <div class="section">
+            <h2>
+                🎬 Live Demo
+                <div class="live-indicator" style="float: right; margin-top: 4px;">
+                    <span class="live-dot"></span>
+                    Live Updates
+                </div>
+            </h2>
+            <p style="color: #6b7280; margin-bottom: 16px;">
+                These test results show relative timestamps. Hover over any time to see the absolute timestamp.
+                The relative times update automatically every minute.
+            </p>
+            <button class="refresh-btn" onclick="refreshDemo()">Add New Test Result</button>
+
+            <div class="test-results" id="testResults">
+                <!-- Results will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Test Cases -->
+        <div class="section">
+            <h2>🧪 Test Cases</h2>
+            <p style="color: #6b7280; margin-bottom: 16px;">
+                Verification scenarios for relative time display:
+            </p>
+
+            <div class="test-results" id="testCases">
+                <!-- Test cases will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Verification Checklist -->
+        <div class="section">
+            <h2>✅ Verification Checklist</h2>
+            <div class="info-box">
+                <h3>Manual Testing Steps:</h3>
+                <ul>
+                    <li>Hover over any relative time - tooltip should appear with absolute time</li>
+                    <li>Wait 1 minute - relative times should update automatically</li>
+                    <li>Check different time ranges (seconds, minutes, hours, days)</li>
+                    <li>Verify "just now" appears for timestamps &lt; 10 seconds</li>
+                    <li>Verify "yesterday at" format for times from 24-48 hours ago</li>
+                    <li>Check that absolute time format is readable (January 26, 2025 at 2:30 PM)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Feature #446: Relative Time Display Implementation
+
+        /**
+         * Format a timestamp as relative time (e.g., "2 hours ago", "just now")
+         * @param {Date} timestamp - The timestamp to format
+         * @param {Date} now - Current time (defaults to Date.now())
+         * @returns {string} Relative time string
+         */
+        function formatRelativeTime(timestamp, now = new Date()) {
+            const delta = now - timestamp;
+            const seconds = Math.floor(delta / 1000);
+
+            // Less than 10 seconds
+            if (seconds < 10) {
+                return "just now";
+            }
+
+            // Less than a minute
+            if (seconds < 60) {
+                return `${seconds} seconds ago`;
+            }
+
+            // Less than an hour
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) {
+                if (minutes === 1) {
+                    return "1 minute ago";
+                }
+                return `${minutes} minutes ago`;
+            }
+
+            // Less than a day
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) {
+                if (hours === 1) {
+                    return "1 hour ago";
+                }
+                return `${hours} hours ago`;
+            }
+
+            // Less than a week
+            const days = Math.floor(hours / 24);
+            if (days < 7) {
+                if (days === 1) {
+                    // Return "yesterday at HH:MM AM/PM"
+                    return "yesterday at " + timestamp.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+                }
+                return `${days} days ago`;
+            }
+
+            // Less than a month
+            const weeks = Math.floor(days / 7);
+            if (weeks < 4) {
+                if (weeks === 1) {
+                    return "1 week ago";
+                }
+                return `${weeks} weeks ago`;
+            }
+
+            // Less than a year
+            const months = Math.floor(days / 30);
+            if (months < 12) {
+                if (months === 1) {
+                    return "1 month ago";
+                }
+                return `${months} months ago`;
+            }
+
+            // More than a year
+            const years = Math.floor(days / 365);
+            if (years === 1) {
+                return "1 year ago";
+            }
+            return `${years} years ago`;
+        }
+
+        /**
+         * Format a timestamp as absolute time (e.g., "January 26, 2025 at 2:30 PM")
+         * @param {Date} timestamp - The timestamp to format
+         * @returns {string} Absolute time string
+         */
+        function formatAbsoluteTime(timestamp) {
+            return timestamp.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        /**
+         * Update all relative time elements on the page
+         */
+        function updateRelativeTimes() {
+            const now = new Date();
+            document.querySelectorAll('.relative-time').forEach(element => {
+                const timestamp = new Date(element.getAttribute('data-timestamp'));
+                const relativeTime = formatRelativeTime(timestamp, now);
+                element.textContent = relativeTime;
+            });
+
+            console.log('[Feature #446] Updated relative times at', now.toLocaleTimeString());
+        }
+
+        /**
+         * Create a test result element with relative time
+         */
+        function createTestResult(testName, testId, status, timestamp, duration) {
+            const relativeTime = formatRelativeTime(timestamp);
+            const absoluteTime = formatAbsoluteTime(timestamp);
+
+            return `
+                <div class="test-result">
+                    <div class="test-result-header">
+                        <div class="test-name">${testName}</div>
+                        <div class="test-status ${status}">${status.toUpperCase()}</div>
+                    </div>
+                    <div class="test-meta">
+                        <div class="test-meta-item">
+                            🆔 ${testId.substring(0, 8)}...
+                        </div>
+                        <div class="test-meta-item">
+                            ⏱️ ${duration}ms
+                        </div>
+                        <div class="test-meta-item">
+                            <span class="relative-time"
+                                  data-timestamp="${timestamp.toISOString()}"
+                                  data-absolute-time="${absoluteTime}">
+                                ${relativeTime}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Populate the live demo with test results
+         */
+        function populateDemo() {
+            const now = new Date();
+            const container = document.getElementById('testResults');
+
+            // Create test results with various timestamps
+            const testResults = [
+                {
+                    name: "User Login - Happy Path",
+                    id: "test-001-login-happy",
+                    status: "passed",
+                    timestamp: new Date(now - 5 * 60 * 1000),  // 5 minutes ago
+                    duration: 1250
+                },
+                {
+                    name: "Payment Processing",
+                    id: "test-002-payment",
+                    status: "passed",
+                    timestamp: new Date(now - 2 * 60 * 60 * 1000),  // 2 hours ago
+                    duration: 3450
+                },
+                {
+                    name: "User Registration",
+                    id: "test-003-register",
+                    status: "failed",
+                    timestamp: new Date(now - 30 * 60 * 1000),  // 30 minutes ago
+                    duration: 2100
+                },
+                {
+                    name: "Password Reset Flow",
+                    id: "test-004-password-reset",
+                    status: "passed",
+                    timestamp: new Date(now - 25 * 60 * 60 * 1000),  // 25 hours ago (yesterday)
+                    duration: 5600
+                },
+                {
+                    name: "Search Functionality",
+                    id: "test-005-search",
+                    status: "passed",
+                    timestamp: new Date(now - 45 * 1000),  // 45 seconds ago
+                    duration: 890
+                },
+                {
+                    name: "Dashboard Load",
+                    id: "test-006-dashboard",
+                    status: "passed",
+                    timestamp: new Date(now - 5 * 1000),  // 5 seconds ago
+                    duration: 450
+                }
+            ];
+
+            container.innerHTML = testResults.map(result =>
+                createTestResult(result.name, result.id, result.status, result.timestamp, result.duration)
+            ).join('');
+        }
+
+        /**
+         * Populate test cases with specific time scenarios
+         */
+        function populateTestCases() {
+            const now = new Date();
+            const container = document.getElementById('testCases');
+
+            const testCases = [
+                {
+                    name: "Just Now Test",
+                    description: "Timestamp less than 10 seconds ago",
+                    timestamp: new Date(now - 5 * 1000),
+                    expected: "just now"
+                },
+                {
+                    name: "Seconds Ago Test",
+                    description: "Timestamp 30 seconds ago",
+                    timestamp: new Date(now - 30 * 1000),
+                    expected: "30 seconds ago"
+                },
+                {
+                    name: "Minutes Ago Test",
+                    description: "Timestamp 15 minutes ago",
+                    timestamp: new Date(now - 15 * 60 * 1000),
+                    expected: "15 minutes ago"
+                },
+                {
+                    name: "Hours Ago Test",
+                    description: "Timestamp 4 hours ago",
+                    timestamp: new Date(now - 4 * 60 * 60 * 1000),
+                    expected: "4 hours ago"
+                },
+                {
+                    name: "Yesterday Test",
+                    description: "Timestamp from yesterday (25 hours ago)",
+                    timestamp: new Date(now - 25 * 60 * 60 * 1000),
+                    expected: "yesterday at"
+                },
+                {
+                    name: "Days Ago Test",
+                    description: "Timestamp 3 days ago",
+                    timestamp: new Date(now - 3 * 24 * 60 * 60 * 1000),
+                    expected: "3 days ago"
+                }
+            ];
+
+            container.innerHTML = testCases.map(testCase => {
+                const relativeTime = formatRelativeTime(testCase.timestamp);
+                const absoluteTime = formatAbsoluteTime(testCase.timestamp);
+                const passed = relativeTime === testCase.expected ||
+                              relativeTime.startsWith(testCase.expected);
+
+                return `
+                    <div class="test-result" style="border-left: 4px solid ${passed ? '#10b981' : '#ef4444'};">
+                        <div class="test-result-header">
+                            <div class="test-name">${testCase.name}</div>
+                            <div class="test-status ${passed ? 'passed' : 'failed'}">
+                                ${passed ? '✓ PASS' : '✗ FAIL'}
+                            </div>
+                        </div>
+                        <div style="color: #6b7280; font-size: 14px; margin-bottom: 8px;">
+                            ${testCase.description}
+                        </div>
+                        <div class="test-meta">
+                            <div class="test-meta-item">
+                                Expected: <strong>${testCase.expected}</strong>
+                            </div>
+                            <div class="test-meta-item">
+                                Actual: <strong>${relativeTime}</strong>
+                            </div>
+                            <div class="test-meta-item">
+                                <span class="relative-time"
+                                      data-timestamp="${testCase.timestamp.toISOString()}"
+                                      data-absolute-time="${absoluteTime}">
+                                    ${relativeTime}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Add a new test result to the demo
+         */
+        function refreshDemo() {
+            const now = new Date();
+            const container = document.getElementById('testResults');
+
+            const newResult = {
+                name: `New Test #${Math.floor(Math.random() * 1000)}`,
+                id: `test-${Date.now()}`,
+                status: Math.random() > 0.3 ? 'passed' : 'failed',
+                timestamp: now,
+                duration: Math.floor(Math.random() * 5000) + 500
+            };
+
+            const resultHTML = createTestResult(
+                newResult.name,
+                newResult.id,
+                newResult.status,
+                newResult.timestamp,
+                newResult.duration
+            );
+
+            container.insertAdjacentHTML('afterbegin', resultHTML);
+
+            // Flash effect
+            const firstResult = container.querySelector('.test-result');
+            firstResult.style.background = '#dbeafe';
+            setTimeout(() => {
+                firstResult.style.background = 'white';
+            }, 500);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            populateDemo();
+            populateTestCases();
+
+            // Update relative times every minute
+            setInterval(updateRelativeTimes, 60000);
+
+            console.log('[Feature #446] Relative time display initialized');
+            console.log('[Feature #446] Auto-update interval: 60 seconds');
+        });
+    </script>
+</body>
+</html>

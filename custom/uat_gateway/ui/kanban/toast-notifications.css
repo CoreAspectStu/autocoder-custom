@@ -1,0 +1,347 @@
+/**
+ * Toast Notification Styles - Feature #231
+ *
+ * Success notifications appear at top-right of screen
+ * Multiple toasts stack vertically
+ * Auto-dismiss after 5 seconds with animation
+ */
+
+/* ============================================================================
+   Toast Container - Fixed position, top-right corner
+   ============================================================================ */
+
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  width: 100%;
+  pointer-events: none; /* Allow clicks through container */
+}
+
+.toast-container .toast {
+  pointer-events: auto; /* Re-enable clicks on individual toasts */
+}
+
+/* ============================================================================
+   Toast Notification Styles
+   ============================================================================ */
+
+.toast {
+  background: #ffffff;
+  border: 2px solid #059669;
+  border-left: 4px solid #10b981;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 420px;
+
+  /* Animation */
+  animation: toast-slide-in 0.3s ease-out;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.toast-dismissing {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+/* ============================================================================
+   Toast Icon
+   ============================================================================ */
+
+.toast__icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #d1fae5;
+  border-radius: 50%;
+  color: #047857;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* ============================================================================
+   Toast Content
+   ============================================================================ */
+
+.toast__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #065f46;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.toast__message {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.toast__meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.toast__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ============================================================================
+   Toast Close Button
+   ============================================================================ */
+
+.toast__close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.toast__close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.toast__close:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Toast Progress Bar (shows auto-dismiss countdown)
+   ============================================================================ */
+
+.toast__progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #10b981, #059669);
+  border-radius: 0 0 4px 4px;
+  animation: toast-progress 5s linear forwards;
+}
+
+.toast {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .toast-container {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    max-width: none;
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+/* ============================================================================
+   Reduced Motion (Accessibility)
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast__close,
+  .toast__progress {
+    animation: none;
+    transition: none;
+  }
+
+  .toast {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================================================
+   Dark Mode Support
+   ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  .toast {
+    background: #1f2937;
+    border-color: #064e3b;
+    border-left-color: #10b981;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .toast__title {
+    color: #6ee7b7;
+  }
+
+  .toast__message {
+    color: #d1d5db;
+  }
+
+  .toast__icon {
+    background: #064e3b;
+    color: #6ee7b7;
+  }
+
+  .toast__close {
+    color: #9ca3af;
+  }
+
+  .toast__close:hover {
+    background: #374151;
+    color: #d1d5db;
+  }
+
+  .toast__meta {
+    color: #9ca3af;
+  }
+
+  .toast__meta-item {
+    background: #374151;
+  }
+}
+
+/* ============================================================================
+   Demo Page Styles (for testing)
+   ============================================================================ */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #f9fafb;
+  color: #111827;
+}
+
+.demo-controls {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.demo-controls h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.demo-controls p {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.demo-button {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.demo-button:hover {
+  background: #2563eb;
+}
+
+.demo-button:active {
+  background: #1d4ed8;
+}
+
+.info-box {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.info-box h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.info-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.info-box li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UAT Gateway - Keyboard Navigation Demo</title>
+  <link rel="stylesheet" href="uat-card.css">
+  <link rel="stylesheet" href="keyboard-navigation.css">
+  <style>
+    /* Additional demo styles */
+    body {
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .demo-header {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      color: white;
+    }
+
+    .demo-header h1 {
+      margin: 0 0 10px 0;
+      font-size: 2em;
+    }
+
+    .demo-info {
+      background: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border-left: 4px solid #3B82F6;
+    }
+
+    .demo-info h3 {
+      margin-top: 0;
+      color: #1F2937;
+    }
+
+    .keyboard-shortcuts-demo {
+      background: #FEF3C7;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border-left: 4px solid #F59E0B;
+    }
+
+    .shortcut-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .shortcut-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    kbd {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: monospace;
+      font-size: 0.9em;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .focus-indicator-demo {
+      background: #ECFDF5;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border-left: 4px solid #10B981;
+    }
+
+    .test-instructions {
+      background: #EFF6FF;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border-left: 4px solid #3B82F6;
+    }
+
+    .test-instructions ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .test-instructions li {
+      margin: 8px 0;
+      line-height: 1.6;
+    }
+  </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+  <!-- Skip Links for Keyboard Navigation -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#card-grid" class="skip-link" style="top: -80px">Skip to cards</a>
+
+  <div class="demo-header">
+    <h1>♿ UAT Gateway - Keyboard Navigation Demo</h1>
+    <p>Feature #236: Comprehensive keyboard navigation support</p>
+  </div>
+
+  <div class="demo-info">
+    <h3>🎯 What This Demonstrates</h3>
+    <p>This page showcases full keyboard navigation support for the UAT Gateway interface. All interactive elements are accessible via keyboard, with visible focus indicators and logical tab order.</p>
+  </div>
+
+  <div class="keyboard-shortcuts-demo">
+    <h3>⌨️ Keyboard Shortcuts</h3>
+    <div class="shortcut-list">
+      <div class="shortcut-item">
+        <kbd>Tab</kbd>
+        <span>Move to next element</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Shift</kbd> + <kbd>Tab</kbd>
+        <span>Move to previous element</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Enter</kbd> / <kbd>Space</kbd>
+        <span>Activate buttons/links</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>↑</kbd> <kbd>↓</kbd>
+        <span>Navigate in lists</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Home</kbd> / <kbd>End</kbd>
+        <span>First/last item</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Esc</kbd>
+        <span>Close modals</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Alt</kbd> + <kbd>C</kbd>
+        <span>Jump to cards</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>?</kbd>
+        <span>Show shortcuts help</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="focus-indicator-demo">
+    <h3>👁️ Focus Indicators</h3>
+    <p>When you navigate with keyboard, each element displays a clear blue focus ring (3px outline). This helps you track your position and know what will be activated.</p>
+    <p><strong>Note:</strong> Focus indicators only appear when using keyboard, not when clicking with mouse (using :focus-visible).</p>
+  </div>
+
+  <div class="test-instructions">
+    <h3>🧪 Test Instructions</h3>
+    <ol>
+      <li><strong>Start at the top:</strong> Press <kbd>Tab</kbd> to move focus through skip links</li>
+      <li><strong>Navigate cards:</strong> Use <kbd>Tab</kbd> or <kbd>↑</kbd><kbd>↓</kbd> arrow keys to move between cards</li>
+      <li><strong>Activate card:</strong> Press <kbd>Enter</kbd> or <kbd>Space</kbd> to activate a focused card</li>
+      <li><strong>Navigate buttons:</strong> Press <kbd>Tab</kbd> to move to action buttons within cards</li>
+      <li><strong>Use shortcuts:</strong> Press <kbd>Alt</kbd>+<kbd>C</kbd> to jump directly to card grid</li>
+      <li><strong>Check focus order:</strong> Verify focus follows logical left-to-right, top-to-bottom order</li>
+      <li><strong>Test focus visibility:</strong> Confirm blue focus ring appears on all interactive elements</li>
+    </ol>
+  </div>
+
+  <!-- Main Content -->
+  <main id="main-content">
+    <div class="uat-card-grid" id="card-grid" role="list" aria-label="UAT test cards">
+      <article class="uat-card" data-card-type="journey" tabindex="0" role="button" aria-label="User Authentication Journey">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">🆔</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">User Authentication Journey</h3>
+            <span class="uat-card__id">JOURNEY-20250126-001</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">Complete user authentication workflow including registration, login, logout, and password recovery</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">4 scenarios</span>
+            <span class="uat-card__metadata-item">~45 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--journey">journey</span>
+            <span class="uat-card__label">authentication</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--in-progress">In Progress</span>
+          <time class="uat-card__timestamp">Updated 2h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="View Details for User Authentication Journey">View Details</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="Open Test for User Authentication Journey">Open Test</button>
+        </div>
+      </article>
+
+      <article class="uat-card" data-card-type="scenario" tabindex="0" role="button" aria-label="Login Happy Path Test">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">🧪</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Login - Happy Path</h3>
+            <span class="uat-card__id">SCENARIO-20250126-001</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">Verify user can successfully log in with valid credentials and access dashboard</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">8 steps</span>
+            <span class="uat-card__metadata-item">~8 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--scenario">scenario</span>
+            <span class="uat-card__label uat-card__label--happy-path">happy-path</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--done">Done</span>
+          <time class="uat-card__timestamp">Updated 3h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="View Results for Login Happy Path">View Results</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="Re-run Login Happy Path Test">Re-run</button>
+        </div>
+      </article>
+
+      <article class="uat-card" data-card-type="bug" tabindex="0" role="button" aria-label="Login Button Not Responsive Bug">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">🐛</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Login button not responsive</h3>
+            <span class="uat-card__id">BUG-KANBAN-20250126-001</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">Login button does not respond to touch events on mobile devices</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">High severity</span>
+            <span class="uat-card__metadata-item">Priority: 2</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--bug">bug</span>
+            <span class="uat-card__label">mobile</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--todo">To Do</span>
+          <time class="uat-card__timestamp">Created 1h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="Fix Login Button Bug">Fix Bug</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="View Test for Login Button Bug">View Test</button>
+        </div>
+      </article>
+
+      <article class="uat-card" data-card-type="journey" tabindex="0" role="button" aria-label="Payment Processing Journey">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">💳</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Payment Processing Journey</h3>
+            <span class="uat-card__id">JOURNEY-20250126-002</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">Complete payment workflow including card entry, validation, processing, and confirmation</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">6 scenarios</span>
+            <span class="uat-card__metadata-item">~60 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--journey">journey</span>
+            <span class="uat-card__label">payment</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--backlog">Backlog</span>
+          <time class="uat-card__timestamp">Created 4h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="Start Testing Payment Journey">Start Testing</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="Configure Payment Journey">Configure</button>
+        </div>
+      </article>
+
+      <article class="uat-card" data-card-type="scenario" tabindex="0" role="button" aria-label="Login Invalid Password Test">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">🧪</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">Login - Invalid Password</h3>
+            <span class="uat-card__id">SCENARIO-20250126-002</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">Verify appropriate error message when user enters incorrect password</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">5 steps</span>
+            <span class="uat-card__metadata-item">~5 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--scenario">scenario</span>
+            <span class="uat-card__label uat-card__label--error-path">error-path</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--done">Done</span>
+          <time class="uat-card__timestamp">Updated 3h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="View Results for Invalid Password Test">View Results</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="Re-run Invalid Password Test">Re-run</button>
+        </div>
+      </article>
+
+      <article class="uat-card" data-card-type="journey" tabindex="0" role="button" aria-label="User Profile Management Journey">
+        <header class="uat-card__header">
+          <span class="uat-card__emoji">👤</span>
+          <div class="uat-card__title-group">
+            <h3 class="uat-card__title">User Profile Management Journey</h3>
+            <span class="uat-card__id">JOURNEY-20250126-003</span>
+          </div>
+        </header>
+        <div class="uat-card__body">
+          <p class="uat-card__description">User profile viewing, editing, avatar upload, and preferences management</p>
+          <div class="uat-card__metadata">
+            <span class="uat-card__metadata-item">3 scenarios</span>
+            <span class="uat-card__metadata-item">~30 min</span>
+          </div>
+          <div class="uat-card__labels">
+            <span class="uat-card__label uat-card__label--journey">journey</span>
+            <span class="uat-card__label">profile</span>
+          </div>
+        </div>
+        <footer class="uat-card__footer">
+          <span class="uat-card__status uat-card__status--in-review">In Review</span>
+          <time class="uat-card__timestamp">Updated 2h ago</time>
+        </footer>
+        <div class="uat-card__actions">
+          <button class="uat-card__button uat-card__button--primary" aria-label="Review User Profile Tests">Review Tests</button>
+          <button class="uat-card__button uat-card__button--secondary" aria-label="Approve User Profile Tests">Approve</button>
+        </div>
+      </article>
+    </div>
+  </main>
+
+  <!-- Keyboard Navigation JavaScript -->
+  <script src="keyboard-navigation.js"></script>
+
+  <script>
+    // Demo-specific event handlers
+    document.querySelectorAll('.uat-card').forEach(card => {
+      card.addEventListener('click', function() {
+        const title = this.querySelector('.uat-card__title').textContent;
+        console.log(`Card activated: ${title}`);
+        // In a real app, this would navigate to the card details
+      });
+    });
+
+    document.querySelectorAll('.uat-card__button').forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const action = this.textContent;
+        console.log(`Button clicked: ${action}`);
+        // In a real app, this would perform the action
+      });
+    });
+  </script>
+</body>
+</html>

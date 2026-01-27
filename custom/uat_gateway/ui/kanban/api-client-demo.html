@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Client Demo - Late Response Handling</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f7f9fc;
+            border-radius: 8px;
+        }
+
+        .section h2 {
+            font-size: 20px;
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #667eea;
+            color: white;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.danger {
+            background: #ef4444;
+        }
+
+        button.danger:hover {
+            background: #dc2626;
+        }
+
+        button.success {
+            background: #10b981;
+        }
+
+        button.success:hover {
+            background: #059669;
+        }
+
+        button.warning {
+            background: #f59e0b;
+        }
+
+        button.warning:hover {
+            background: #d97706;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            max-width: 200px;
+            padding: 10px 14px;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .result {
+            background: white;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e1e8ed;
+        }
+
+        .result.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .result.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .result.info {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #e1e8ed;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .active-requests {
+            background: white;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e1e8ed;
+        }
+
+        .active-request {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .active-request:last-child {
+            border-bottom: none;
+        }
+
+        .request-info {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .request-time {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #1e40af;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 API Client Demo</h1>
+        <p class="subtitle">Feature #320: Late API Response Handling</p>
+
+        <div class="info-box">
+            <strong>About this demo:</strong> This page tests the API client's ability to handle
+            delayed responses, show loading indicators, cancel requests, and ignore late responses.
+            Try clicking multiple buttons rapidly, then click "Cancel All" to see request cancellation in action.
+        </div>
+
+        <!-- Quick Tests -->
+        <div class="section">
+            <h2>Quick Tests</h2>
+            <div class="button-group">
+                <button onclick="testNormalRequest()">Normal Request</button>
+                <button onclick="testDelayedRequest(2000)">2s Delay</button>
+                <button onclick="testDelayedRequest(5000)">5s Delay</button>
+                <button onclick="testDelayedRequest(10000)">10s Delay</button>
+                <button class="danger" onclick="cancelAll()">Cancel All Requests</button>
+            </div>
+            <div id="quick-result" class="result info">Click a button to start...</div>
+        </div>
+
+        <!-- Simulate Multiple Requests -->
+        <div class="section">
+            <h2>Multiple Concurrent Requests</h2>
+            <div class="button-group">
+                <button onclick="startMultipleRequests(3)">Start 3 Requests</button>
+                <button onclick="startMultipleRequests(5)">Start 5 Requests</button>
+                <button onclick="startMultipleRequests(10)">Start 10 Requests</button>
+                <button class="warning" onclick="cancelAll()">Cancel All</button>
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="value" id="total-requests">0</div>
+                    <div class="label">Total Requests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="completed-requests">0</div>
+                    <div class="label">Completed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="cancelled-requests">0</div>
+                    <div class="label">Cancelled</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="active-count">0</div>
+                    <div class="label">Active</div>
+                </div>
+            </div>
+            <div id="multiple-result" class="result info"></div>
+        </div>
+
+        <!-- Custom Delay Test -->
+        <div class="section">
+            <h2>Custom Delay Test</h2>
+            <div class="input-group">
+                <label for="delay-input">Delay (milliseconds):</label>
+                <input type="number" id="delay-input" value="3000" min="100" max="30000" step="100">
+            </div>
+            <div class="button-group">
+                <button onclick="testCustomDelay()">Start Request</button>
+                <button class="danger" onclick="cancelLastRequest()">Cancel Last Request</button>
+            </div>
+            <div id="custom-result" class="result info">Enter a delay and click "Start Request"</div>
+        </div>
+
+        <!-- Active Requests -->
+        <div class="section">
+            <h2>Active Requests</h2>
+            <div id="active-requests-list" class="active-requests">
+                <div style="text-align: center; color: #999; padding: 20px;">No active requests</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="api-client.js"></script>
+    <script src="loading-indicator.js"></script>
+    <script>
+        // Statistics
+        let stats = {
+            total: 0,
+            completed: 0,
+            cancelled: 0
+        };
+
+        let lastRequestId = null;
+
+        // Update statistics display
+        function updateStats() {
+            document.getElementById('total-requests').textContent = stats.total;
+            document.getElementById('completed-requests').textContent = stats.completed;
+            document.getElementById('cancelled-requests').textContent = stats.cancelled;
+            document.getElementById('active-count').textContent = apiClient.getActiveRequests().length;
+            updateActiveRequestsList();
+        }
+
+        // Update active requests list
+        function updateActiveRequestsList() {
+            const container = document.getElementById('active-requests-list');
+            const active = apiClient.getActiveRequests();
+
+            if (active.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No active requests</div>';
+                return;
+            }
+
+            container.innerHTML = active.map(req => `
+                <div class="active-request">
+                    <div class="request-info">
+                        <strong>${req.url}</strong><br>
+                        <span class="request-time">Active for ${(req.duration / 1000).toFixed(1)}s</span>
+                    </div>
+                    <button class="danger" style="padding: 6px 12px; font-size: 12px;" onclick="cancelRequest('${req.id}')">Cancel</button>
+                </div>
+            `).join('');
+        }
+
+        // Register loading callback
+        apiClient.onLoadingChange((isLoading, requestId) => {
+            if (isLoading) {
+                loadingIndicator.show(requestId, `Loading: ${requestId}...`, () => {
+                    apiClient.cancelRequest(requestId);
+                    stats.cancelled++;
+                    updateStats();
+                    logResult('custom-result', `Request ${requestId} cancelled`, 'info');
+                });
+            } else {
+                loadingIndicator.hide(requestId);
+            }
+            updateStats();
+        });
+
+        // Test normal request
+        async function testNormalRequest() {
+            stats.total++;
+            updateStats();
+            logResult('quick-result', 'Starting normal request...', 'info');
+
+            try {
+                const result = await apiClient.get('/timezones');
+                stats.completed++;
+                updateStats();
+                logResult('quick-result', `Success! Received response in ${result.duration}ms\n\n${JSON.stringify(result.data, null, 2)}`, 'success');
+            } catch (error) {
+                logResult('quick-result', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Test delayed request
+        async function testDelayedRequest(delay) {
+            stats.total++;
+            updateStats();
+            logResult('quick-result', `Starting ${delay}ms delayed request...`, 'info');
+
+            try {
+                const result = await apiClient.get(`/test/delay?ms=${delay}`);
+                stats.completed++;
+                updateStats();
+                logResult('quick-result', `Success! Received response in ${result.duration}ms\n\n${JSON.stringify(result.data, null, 2)}`, 'success');
+            } catch (error) {
+                if (error.message.includes('cancelled') || error.message.includes('timed out')) {
+                    logResult('quick-result', `Request was cancelled or timed out after ${delay}ms`, 'info');
+                } else {
+                    logResult('quick-result', `Error: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Start multiple requests
+        async function startMultipleRequests(count) {
+            const container = document.getElementById('multiple-result');
+            container.innerHTML = `<div style="text-align: center; padding: 20px;">Starting ${count} concurrent requests...</div>`;
+
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    testDelayedRequest(2000 + Math.random() * 3000);
+                }, i * 100);
+            }
+
+            setTimeout(() => {
+                const completed = stats.completed;
+                const cancelled = stats.cancelled;
+                const total = stats.total;
+                container.innerHTML = `<div style="text-align: center; padding: 20px;">
+                    <strong>Results:</strong><br>
+                    Total: ${total} | Completed: ${completed} | Cancelled: ${cancelled} | Active: ${apiClient.getActiveRequests().length}
+                </div>`;
+            }, count * 100 + 100);
+        }
+
+        // Test custom delay
+        async function testCustomDelay() {
+            const delay = parseInt(document.getElementById('delay-input').value);
+            stats.total++;
+            lastRequestId = null;
+            updateStats();
+            logResult('custom-result', `Starting request with ${delay}ms delay...`, 'info');
+
+            try {
+                const result = await apiClient.get(`/test/delay?ms=${delay}`);
+                lastRequestId = result.requestId;
+                stats.completed++;
+                updateStats();
+                logResult('custom-result', `Success! Received response in ${result.duration}ms\n\n${JSON.stringify(result.data, null, 2)}`, 'success');
+            } catch (error) {
+                if (error.message.includes('cancelled') || error.message.includes('timed out')) {
+                    stats.cancelled++;
+                    updateStats();
+                    logResult('custom-result', `Request was cancelled or timed out after ${delay}ms`, 'info');
+                } else {
+                    logResult('custom-result', `Error: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Cancel all requests
+        function cancelAll() {
+            const count = apiClient.cancelAllRequests();
+            stats.cancelled += count;
+            updateStats();
+            loadingIndicator.hideAll();
+            logResult('quick-result', `Cancelled ${count} active requests`, 'warning');
+        }
+
+        // Cancel last request
+        function cancelLastRequest() {
+            const active = apiClient.getActiveRequests();
+            if (active.length > 0) {
+                const last = active[active.length - 1];
+                apiClient.cancelRequest(last.id);
+                stats.cancelled++;
+                updateStats();
+                logResult('custom-result', `Cancelled request ${last.id}`, 'warning');
+            } else {
+                logResult('custom-result', 'No active requests to cancel', 'info');
+            }
+        }
+
+        // Cancel specific request
+        function cancelRequest(requestId) {
+            apiClient.cancelRequest(requestId);
+            stats.cancelled++;
+            updateStats();
+        }
+
+        // Log result to container
+        function logResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            container.className = `result ${type}`;
+            container.textContent = message;
+        }
+
+        // Initial stats update
+        updateStats();
+    </script>
+</body>
+</html>

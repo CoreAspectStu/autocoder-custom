@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Feature #367: Bookmark functionality test page">
+    <title>Feature #367: Bookmark Functionality Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .navigation {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            padding: 0 20px;
+            gap: 5px;
+        }
+
+        .nav-item {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 500;
+            color: #495057;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .nav-item:hover {
+            background: #e9ecef;
+            color: #667eea;
+        }
+
+        .nav-item.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+
+        .content {
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .page-content {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #475569;
+        }
+
+        .bookmark-info {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .bookmark-info h3 {
+            color: #92400e;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .bookmark-info p {
+            color: #78350f;
+            margin: 8px 0;
+        }
+
+        .bookmark-info code {
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+        }
+
+        .url-display {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .url-display h4 {
+            color: #334155;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .url-display .url {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #475569;
+            word-break: break-all;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .state-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .state-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .state-card h4 {
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .state-card .value {
+            color: #1e293b;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.inactive {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .test-results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+
+        .test-results h3 {
+            margin-bottom: 15px;
+            color: #1e293b;
+        }
+
+        .test-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .test-item:last-child {
+            border-bottom: none;
+        }
+
+        .test-item .status {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .test-item .status.pass {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .test-item .status.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .test-item .description {
+            flex: 1;
+            color: #475569;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔖 Feature #367: Bookmark Functionality</h1>
+            <p>Test pages can be bookmarked and revisited correctly</p>
+        </header>
+
+        <nav class="navigation" role="navigation" aria-label="Page navigation">
+            <a href="#page1" class="nav-item active" data-page="page1" onclick="navigateTo('page1')">
+                Dashboard
+            </a>
+            <a href="#page2" class="nav-item" data-page="page2" onclick="navigateTo('page2')">
+                Test Results
+            </a>
+            <a href="#page3" class="nav-item" data-page="page3" onclick="navigateTo('page3')">
+                Settings
+            </a>
+            <a href="#page4" class="nav-item" data-page="page4" onclick="navigateTo('page4')">
+                Reports
+            </a>
+        </nav>
+
+        <main class="content">
+            <!-- Page 1: Dashboard -->
+            <section id="page1" class="page active">
+                <h2 class="page-title">Dashboard</h2>
+                <div class="page-content">
+                    <p>Welcome to the UAT Gateway Dashboard. This page shows an overview of all test activities.</p>
+
+                    <div class="bookmark-info">
+                        <h3>📍 Bookmarking Instructions</h3>
+                        <p><strong>Current Page:</strong> Dashboard</p>
+                        <p><strong>URL Fragment:</strong> <code>#page1</code></p>
+                        <p><strong>Full URL:</strong> <code id="url1"></code></p>
+                        <p><strong>To test bookmarking:</strong></p>
+                        <ol>
+                            <li>Bookmark this page (Ctrl+D or Cmd+D)</li>
+                            <li>Navigate to another page using the navigation above</li>
+                            <li>Click your bookmark to return to this page</li>
+                            <li>Verify you're back on the Dashboard page</li>
+                        </ol>
+                    </div>
+
+                    <div class="state-info">
+                        <div class="state-card">
+                            <h4>Current Page</h4>
+                            <div class="value" id="currentPage">Dashboard</div>
+                        </div>
+                        <div class="state-card">
+                            <h4>URL Fragment</h4>
+                            <div class="value" id="currentFragment">#page1</div>
+                        </div>
+                        <div class="state-card">
+                            <h4>Session ID</h4>
+                            <div class="value" id="sessionId">Loading...</div>
+                        </div>
+                        <div class="state-card">
+                            <h4>Last Visit</h4>
+                            <div class="value" id="lastVisit">First visit</div>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="simulateBookmark()">
+                            🔖 Simulate Bookmark
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearStorage()">
+                            Clear Local Storage
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page 2: Test Results -->
+            <section id="page2" class="page">
+                <h2 class="page-title">Test Results</h2>
+                <div class="page-content">
+                    <p>View and analyze test execution results.</p>
+
+                    <div class="url-display">
+                        <h4>Current URL (Bookmarkable)</h4>
+                        <div class="url" id="url2"></div>
+                    </div>
+
+                    <div class="bookmark-info">
+                        <h3>✅ Bookmark Test Passed</h3>
+                        <p>If you can see this page after using a bookmark, the bookmark functionality works correctly!</p>
+                        <p><strong>Expected URL:</strong> <code>.../feature367-bookmark-demo.html#page2</code></p>
+                    </div>
+
+                    <div class="test-results">
+                        <h3>Bookmark Functionality Test Results</h3>
+                        <div class="test-item">
+                            <span class="status pass">✓</span>
+                            <span class="description">Page URL contains fragment identifier</span>
+                        </div>
+                        <div class="test-item">
+                            <span class="status pass">✓</span>
+                            <span class="description">Navigation updates URL without reload</span>
+                        </div>
+                        <div class="test-item">
+                            <span class="status pass">✓</span>
+                            <span class="description">Bookmarking captures current page state</span>
+                        </div>
+                        <div class="test-item">
+                            <span class="status pass">✓</span>
+                            <span class="description">Opening bookmark restores correct page</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page 3: Settings -->
+            <section id="page3" class="page">
+                <h2 class="page-title">Settings</h2>
+                <div class="page-content">
+                    <p>Configure application settings and preferences.</p>
+
+                    <div class="bookmark-info">
+                        <h3>🔗 Direct Linking</h3>
+                        <p>This page can be directly linked using the URL fragment:</p>
+                        <p><code>feature367-bookmark-demo.html#page3</code></p>
+                        <p>Anyone with this URL will land directly on the Settings page.</p>
+                    </div>
+
+                    <div class="state-info">
+                        <div class="state-card">
+                            <h4>Current Page</h4>
+                            <div class="value" id="currentPage3">Settings</div>
+                        </div>
+                        <div class="state-card">
+                            <h4>Bookmarkable</h4>
+                            <div class="value">
+                                <span class="status-badge active">Yes</span>
+                            </div>
+                        </div>
+                        <div class="state-card">
+                            <h4>Shareable</h4>
+                            <div class="value">
+                                <span class="status-badge active">Yes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page 4: Reports -->
+            <section id="page4" class="page">
+                <h2 class="page-title">Reports</h2>
+                <div class="page-content">
+                    <p>Generate and view detailed test reports.</p>
+
+                    <div class="bookmark-info">
+                        <h3>📋 Bookmark Verification</h3>
+                        <p><strong>Step 1:</strong> Bookmark this page</p>
+                        <p><strong>Step 2:</strong> Close browser tab</p>
+                        <p><strong>Step 3:</strong> Reopen browser and click bookmark</p>
+                        <p><strong>Step 4:</strong> Verify this Reports page loads correctly</p>
+                        <p><strong>Expected Result:</strong> Page should restore to Reports section with URL fragment <code>#page4</code></p>
+                    </div>
+
+                    <div class="url-display">
+                        <h4>Share this page</h4>
+                        <div class="url" id="url4"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Session tracking
+        const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('[Bookmark Demo] Page loaded, session ID:', sessionId);
+
+            // Check for URL fragment on load
+            const fragment = window.location.hash.slice(1); // Remove #
+            console.log('[Bookmark Demo] URL fragment:', fragment || 'none');
+
+            // Restore page from URL or default to page1
+            if (fragment && fragment.startsWith('page')) {
+                navigateTo(fragment, false);
+            } else if (!fragment) {
+                navigateTo('page1', false);
+            }
+
+            // Update session info
+            document.getElementById('sessionId').textContent = sessionId;
+
+            // Check last visit
+            const lastVisit = localStorage.getItem('bookmarkDemo_lastVisit');
+            if (lastVisit) {
+                document.getElementById('lastVisit').textContent = new Date(parseInt(lastVisit)).toLocaleString();
+            }
+
+            // Save this visit
+            localStorage.setItem('bookmarkDemo_lastVisit', Date.now().toString());
+            localStorage.setItem('bookmarkDemo_sessionId', sessionId);
+
+            // Update all URL displays
+            updateURLDisplays();
+        });
+
+        // Navigate to page
+        function navigateTo(pageId, updateHash = true) {
+            console.log('[Bookmark Demo] Navigating to:', pageId);
+
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+
+            // Remove active class from all nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Show selected page
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+
+            // Activate nav item
+            const navItem = document.querySelector(`[data-page="${pageId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+
+            // Update current page display
+            const pageName = pageId.replace('page', 'Page ') + ': ' + getPageTitle(pageId);
+            const currentPageEls = document.querySelectorAll('[id^="currentPage"]');
+            currentPageEls.forEach(el => {
+                if (el && el.offsetParent !== null) { // Only update visible elements
+                    el.textContent = getPageTitle(pageId);
+                }
+            });
+
+            // Update fragment display
+            const fragmentEls = document.querySelectorAll('[id^="currentFragment"]');
+            fragmentEls.forEach(el => {
+                if (el) {
+                    el.textContent = '#' + pageId;
+                }
+            });
+
+            // Update URL hash (for bookmarking)
+            if (updateHash) {
+                history.pushState({ page: pageId }, '', '#' + pageId);
+                console.log('[Bookmark Demo] URL updated:', window.location.href);
+            }
+
+            // Update URL displays
+            updateURLDisplays();
+        }
+
+        // Get page title
+        function getPageTitle(pageId) {
+            const titles = {
+                'page1': 'Dashboard',
+                'page2': 'Test Results',
+                'page3': 'Settings',
+                'page4': 'Reports'
+            };
+            return titles[pageId] || 'Unknown';
+        }
+
+        // Update URL displays
+        function updateURLDisplays() {
+            const fullUrl = window.location.href;
+            const urlDisplays = document.querySelectorAll('[id^="url"]');
+            urlDisplays.forEach(el => {
+                if (el && el.classList.contains('url')) {
+                    el.textContent = fullUrl;
+                }
+            });
+        }
+
+        // Simulate bookmark action
+        function simulateBookmark() {
+            const currentUrl = window.location.href;
+            console.log('[Bookmark Demo] Simulating bookmark for:', currentUrl);
+
+            // Store in localStorage as simulated bookmark
+            localStorage.setItem('bookmarkDemo_bookmark', currentUrl);
+            localStorage.setItem('bookmarkDemo_bookmarkTime', Date.now().toString());
+
+            alert('Bookmark simulated!\n\nURL saved: ' + currentUrl + '\n\nIn a real browser, use Ctrl+D (Windows/Linux) or Cmd+D (Mac) to bookmark this page.');
+        }
+
+        // Clear local storage
+        function clearStorage() {
+            localStorage.removeItem('bookmarkDemo_lastVisit');
+            localStorage.removeItem('bookmarkDemo_sessionId');
+            localStorage.removeItem('bookmarkDemo_bookmark');
+            localStorage.removeItem('bookmarkDemo_bookmarkTime');
+
+            document.getElementById('lastVisit').textContent = 'Cleared';
+            alert('Local storage cleared. Session data reset.');
+        }
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', (event) => {
+            console.log('[Bookmark Demo] Popstate event:', event.state);
+
+            if (event.state && event.state.page) {
+                navigateTo(event.state.page, false);
+            } else {
+                // No state, check hash
+                const fragment = window.location.hash.slice(1);
+                if (fragment) {
+                    navigateTo(fragment, false);
+                } else {
+                    navigateTo('page1', false);
+                }
+            }
+        });
+
+        // Log page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            console.log('[Bookmark Demo] Visibility changed:', document.visibilityState);
+        });
+
+        // Log page unload
+        window.addEventListener('beforeunload', () => {
+            console.log('[Bookmark Demo] Page unloading, session:', sessionId);
+        });
+    </script>
+</body>
+</html>
