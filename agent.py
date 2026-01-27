@@ -166,7 +166,7 @@ async def run_agent_session(
         if is_rate_limit_error(error_str):
             # Try to extract retry-after time from error
             retry_seconds = parse_retry_after(error_str)
-            if retry_seconds:
+            if retry_seconds is not None:
                 return "rate_limit", str(retry_seconds)
             else:
                 return "rate_limit", "unknown"
@@ -316,9 +316,9 @@ async def run_autonomous_agent(
 
         # Handle status
         if status == "continue":
-            # Reset retry counters on success
-            rate_limit_retries = 0
+            # Reset error retries on success; rate-limit retries reset only if no signal
             error_retries = 0
+            reset_rate_limit_retries = True
 
             delay_seconds = AUTO_CONTINUE_DELAY_SECONDS
             target_time_str = None
@@ -327,8 +327,18 @@ async def run_autonomous_agent(
             response_lower = response.lower()
             if any(pattern in response_lower for pattern in RATE_LIMIT_PATTERNS):
                 print("Claude Agent SDK indicated rate limit reached.")
+                reset_rate_limit_retries = False
 
-                # Try to parse reset time from response
+                # Try to extract retry-after from response text first
+                retry_seconds = parse_retry_after(response)
+                if retry_seconds is not None:
+                    delay_seconds = retry_seconds
+                else:
+                    # Use exponential backoff when retry-after unknown
+                    delay_seconds = min(60 * (2 ** rate_limit_retries), 3600)
+                    rate_limit_retries += 1
+
+                # Try to parse reset time from response (more specific format)
                 match = re.search(
                     r"(?i)\bresets(?:\s+at)?\s+(\d+)(?::(\d+))?\s*(am|pm)\s*\(([^)]+)\)",
                     response,
@@ -396,6 +406,10 @@ async def run_autonomous_agent(
                     print(f"\nSingle-feature mode: Feature #{feature_id} session complete.")
                 break
 
+            # Reset rate limit retries only if no rate limit signal was detected
+            if reset_rate_limit_retries:
+                rate_limit_retries = 0
+
             await asyncio.sleep(delay_seconds)
 
         elif status == "rate_limit":
@@ -412,7 +426,7 @@ async def run_autonomous_agent(
             await asyncio.sleep(delay_seconds)
 
         elif status == "error":
-            # Non-rate-limit errors: shorter backoff but still exponential
+            # Non-rate-limit errors: linear backoff capped at 5 minutes
             error_retries += 1
             delay_seconds = min(30 * error_retries, 300)  # Max 5 minutes
             print("\nSession encountered an error")
