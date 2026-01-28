@@ -71,9 +71,8 @@ test.describe('UAT Gateway UI Integration', () => {
     await uatButton.click();
     await page.waitForTimeout(500);
 
-    // Check for preset tests - use locator() to avoid strict mode violations
-    await expect(page.locator('button').filter({ hasText: 'Smoke Test' }).first()).toBeVisible();
-    await expect(page.locator('button').filter({ hasText: 'Regression Test' }).first()).toBeVisible();
+    // Check for simplified modal content
+    await expect(page.locator('text=This will run all Playwright tests').or(page.locator('text=Running tests from'))).toBeVisible();
   });
 
   test('should show UAT status in dashboard', async ({ page }) => {
