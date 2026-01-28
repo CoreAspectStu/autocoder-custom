@@ -1,12 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Zap, Clock, TrendingUp, CheckCircle, RefreshCw, Play } from 'lucide-react'
-import { UATTriggerModal } from './UATTriggerModal'
+import { Activity, Zap, Clock, TrendingUp, RefreshCw } from 'lucide-react'
 
 interface QualityMetrics {
-  uat_pass_rate: number
-  uat_total_tests: number
-  uat_failed_tests: number
   devlayer_triage_count: number
   devlayer_approved_count: number
   dev_active_cards: number
@@ -32,7 +28,6 @@ interface PipelineDashboardProps {
 
 export function PipelineDashboard({ project: _project }: PipelineDashboardProps) {
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [showUATModal, setShowUATModal] = useState(false)
 
   // Show warning if no project is selected
   if (!_project) {
@@ -83,22 +78,6 @@ export function PipelineDashboard({ project: _project }: PipelineDashboardProps)
     refetchInterval: autoRefresh ? 5000 : false
   })
 
-  // Fetch active UAT cycles
-  const { data: uatStatus } = useQuery<{
-    is_running: boolean
-    cycle_id?: string
-    progress?: string
-  }>({
-    queryKey: ['uat', 'status', _project],
-    queryFn: async () => {
-      const res = await fetch(`/api/uat/status/${_project}`)
-      if (!res.ok) return { is_running: false }
-      return res.json()
-    },
-    refetchInterval: autoRefresh ? 2000 : false,
-    enabled: !!_project
-  })
-
   const eventColors = {
     uat_failure: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
     devlayer_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
@@ -143,65 +122,11 @@ export function PipelineDashboard({ project: _project }: PipelineDashboardProps)
             <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
             Auto-refresh: {autoRefresh ? 'On' : 'Off'}
           </button>
-          <button
-            onClick={() => setShowUATModal(true)}
-            disabled={uatStatus?.is_running}
-            className={`px-3 py-1.5 text-sm rounded flex items-center gap-2 ${
-              uatStatus?.is_running
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-purple-600 text-white hover:bg-purple-700'
-            }`}
-            title={uatStatus?.is_running ? 'UAT cycle already running' : 'Run UAT test cycle for this project'}
-          >
-            {uatStatus?.is_running ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Running UAT...
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4" />
-                Run UAT Tests
-              </>
-            )}
-          </button>
         </div>
       </div>
 
-      {/* UAT Running Banner */}
-      {uatStatus?.is_running && (
-        <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-blue-900 dark:text-blue-100">
-                UAT Test Cycle Running
-              </h3>
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                Cycle ID: {uatStatus.cycle_id}
-                {uatStatus.progress && ` • Progress: ${uatStatus.progress}`}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* UAT Pass Rate */}
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">UAT Pass Rate</span>
-            <CheckCircle className="w-4 h-4 text-green-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {metrics?.uat_pass_rate ? (metrics.uat_pass_rate * 100).toFixed(1) : 0}%
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {metrics?.uat_total_tests || 0} tests
-          </p>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {/* Pipeline Cards */}
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
@@ -252,11 +177,6 @@ export function PipelineDashboard({ project: _project }: PipelineDashboardProps)
         </h3>
         <div className="flex items-center justify-between text-sm overflow-x-auto">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <span className="font-medium">UAT</span>
-              <span className="text-gray-600 dark:text-gray-400">→</span>
-            </div>
-            <div className="text-2xl">→</div>
             <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
               <span className="font-medium">DevLayer</span>
               <span className="text-gray-600 dark:text-gray-400">→</span>
@@ -265,10 +185,6 @@ export function PipelineDashboard({ project: _project }: PipelineDashboardProps)
             <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <span className="font-medium">Dev</span>
               <span className="text-gray-600 dark:text-gray-400">→</span>
-            </div>
-            <div className="text-2xl">→</div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <span className="font-medium">UAT</span>
             </div>
           </div>
         </div>
@@ -348,19 +264,6 @@ export function PipelineDashboard({ project: _project }: PipelineDashboardProps)
           </p>
         )}
       </div>
-
-      {/* UAT Trigger Modal */}
-      {showUATModal && (
-        <UATTriggerModal
-          project={_project || 'default'}
-          onClose={() => setShowUATModal(false)}
-          onSuccess={(cycleId) => {
-            alert(`UAT test cycle started! Cycle ID: ${cycleId}`)
-            refetchMetrics()
-            refetchStats()
-          }}
-        />
-      )}
     </div>
   )
 }
