@@ -47,8 +47,8 @@ export const THEMES: ThemeOption[] = [
   {
     id: 'business',
     name: 'Business',
-    description: 'Professional navy and gray palette',
-    previewColors: { primary: '#1e3a5f', background: '#f8fafc', accent: '#0d9488' }
+    description: 'Deep navy (#000e4e) and gray monochrome',
+    previewColors: { primary: '#000e4e', background: '#faf8f5', accent: '#6b7280' }
   }
 ]
 
