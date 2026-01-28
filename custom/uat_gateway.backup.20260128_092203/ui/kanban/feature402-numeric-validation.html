@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #402: Numeric Field Validation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .test-section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+
+        .test-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        .form-group input[type="number"]::-webkit-outer-spin-button,
+        .form-group input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .form-group input.invalid {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .form-group input.valid {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .validation-message {
+            margin-top: 8px;
+            font-size: 13px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .validation-message.error {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            display: block;
+        }
+
+        .validation-message.success {
+            background-color: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+            display: block;
+        }
+
+        .form-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-test {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-test:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-reset {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-reset:hover {
+            background: #d1d5db;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .results h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .result-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .result-icon.pass {
+            background: #10b981;
+            color: white;
+        }
+
+        .result-icon.fail {
+            background: #ef4444;
+            color: white;
+        }
+
+        .result-text {
+            flex: 1;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .acceptance-criteria {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .acceptance-criteria h2 {
+            color: #1e40af;
+            margin-bottom: 15px;
+        }
+
+        .acceptance-criteria ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .acceptance-criteria li {
+            padding: 10px 0;
+            border-bottom: 1px solid #dbeafe;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .acceptance-criteria li:last-child {
+            border-bottom: none;
+        }
+
+        .acceptance-criteria .checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #3b82f6;
+            border-radius: 4px;
+            margin-right: 12px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .acceptance-criteria .checkbox.checked {
+            background: #3b82f6;
+        }
+
+        .presets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .preset-btn {
+            padding: 8px 12px;
+            background: #e0e7ff;
+            color: #3730a3;
+            border: 1px solid #6366f1;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: #6366f1;
+            color: white;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Feature #402: Numeric Field Validation</h1>
+            <p>Verify numeric fields accept only numbers with proper validation</p>
+        </div>
+
+        <div class="content">
+            <!-- Acceptance Criteria -->
+            <div class="acceptance-criteria">
+                <h2>✅ Acceptance Criteria</h2>
+                <ul>
+                    <li>
+                        <span class="checkbox" id="ac1">✓</span>
+                        <span><strong>AC1:</strong> Enter text in numeric field - Verify validation prevents input</span>
+                    </li>
+                    <li>
+                        <span class="checkbox" id="ac2">✓</span>
+                        <span><strong>AC2:</strong> Enter decimal number - Verify input is accepted (if field supports decimals)</span>
+                    </li>
+                    <li>
+                        <span class="checkbox" id="ac3">✓</span>
+                        <span><strong>AC3:</strong> Enter integer - Verify input is accepted</span>
+                    </li>
+                    <li>
+                        <span class="checkbox" id="ac4">✓</span>
+                        <span><strong>AC4:</strong> Enter negative number - Verify validation if negatives are allowed</span>
+                    </li>
+                    <li>
+                        <span class="checkbox" id="ac5">✓</span>
+                        <span><strong>AC5:</strong> Verify range is enforced (min/max attributes)</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Test Section 1: Integer Field (Port) -->
+            <div class="test-section">
+                <h2>Test 1: Integer-Only Field (Port Number)</h2>
+                <p style="margin-bottom: 15px; color: #666; font-size: 14px;">
+                    Ports must be integers between 1024-65535. No decimals allowed.
+                </p>
+
+                <div class="form-group">
+                    <label for="port-input">Port Number</label>
+                    <input
+                        type="number"
+                        id="port-input"
+                        min="1024"
+                        max="65535"
+                        step="1"
+                        placeholder="Enter port (1024-65535)"
+                    >
+                    <div class="form-help">Must be an integer between 1024 and 65535</div>
+                    <div class="validation-message" id="port-message"></div>
+                </div>
+
+                <div class="presets">
+                    <button class="preset-btn" onclick="testPort('abc')">Test: Text "abc"</button>
+                    <button class="preset-btn" onclick="testPort('8000.5')">Test: Decimal 8000.5</button>
+                    <button class="preset-btn" onclick="testPort('8000')">Test: Valid 8000</button>
+                    <button class="preset-btn" onclick="testPort('100')">Test: Out of range 100</button>
+                    <button class="preset-btn" onclick="testPort('-5000')">Test: Negative -5000</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-test" onclick="validatePort()">Validate</button>
+                    <button class="btn-reset" onclick="resetPort()">Reset</button>
+                </div>
+
+                <div class="results" id="port-results">
+                    <h3>Validation Results</h3>
+                    <div id="port-results-list"></div>
+                </div>
+            </div>
+
+            <!-- Test Section 2: Decimal Field (Threshold) -->
+            <div class="test-section">
+                <h2>Test 2: Decimal-Supporting Field (Diff Threshold)</h2>
+                <p style="margin-bottom: 15px; color: #666; font-size: 14px;">
+                    Threshold supports decimals between 0.0-1.0 for fine-grained control.
+                </p>
+
+                <div class="form-group">
+                    <label for="threshold-input">Diff Threshold</label>
+                    <input
+                        type="number"
+                        id="threshold-input"
+                        min="0.0"
+                        max="1.0"
+                        step="0.01"
+                        placeholder="Enter threshold (0.0-1.0)"
+                    >
+                    <div class="form-help">Must be a number between 0.0 and 1.0</div>
+                    <div class="validation-message" id="threshold-message"></div>
+                </div>
+
+                <div class="presets">
+                    <button class="preset-btn" onclick="testThreshold('invalid')">Test: Text "invalid"</button>
+                    <button class="preset-btn" onclick="testThreshold('0.5')">Test: Decimal 0.5</button>
+                    <button class="preset-btn" onclick="testThreshold('0.123')">Test: Decimal 0.123</button>
+                    <button class="preset-btn" onclick="testThreshold('0')">Test: Valid 0</button>
+                    <button class="preset-btn" onclick="testThreshold('1.5')">Test: Out of range 1.5</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-test" onclick="validateThreshold()">Validate</button>
+                    <button class="btn-reset" onclick="resetThreshold()">Reset</button>
+                </div>
+
+                <div class="results" id="threshold-results">
+                    <h3>Validation Results</h3>
+                    <div id="threshold-results-list"></div>
+                </div>
+            </div>
+
+            <!-- Test Section 3: Timeout Field (Positive Integer) -->
+            <div class="test-section">
+                <h2>Test 3: Positive Integer Field (Timeout)</h2>
+                <p style="margin-bottom: 15px; color: #666; font-size: 14px;">
+                    Timeout must be positive integer (no negative values allowed).
+                </p>
+
+                <div class="form-group">
+                    <label for="timeout-input">Timeout (seconds)</label>
+                    <input
+                        type="number"
+                        id="timeout-input"
+                        min="1"
+                        max="300"
+                        step="1"
+                        placeholder="Enter timeout (1-300)"
+                    >
+                    <div class="form-help">Must be a positive integer between 1 and 300</div>
+                    <div class="validation-message" id="timeout-message"></div>
+                </div>
+
+                <div class="presets">
+                    <button class="preset-btn" onclick="testTimeout('30.5')">Test: Decimal 30.5</button>
+                    <button class="preset-btn" onclick="testTimeout('30')">Test: Valid 30</button>
+                    <button class="preset-btn" onclick="testTimeout('-10')">Test: Negative -10</button>
+                    <button class="preset-btn" onclick="testTimeout('0')">Test: Zero 0</button>
+                    <button class="preset-btn" onclick="testTimeout('500')">Test: Out of range 500</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-test" onclick="validateTimeout()">Validate</button>
+                    <button class="btn-reset" onclick="resetTimeout()">Reset</button>
+                </div>
+
+                <div class="results" id="timeout-results">
+                    <h3>Validation Results</h3>
+                    <div id="timeout-results-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // Validation Utilities
+        // ============================================================================
+
+        function validateNumericField(value, fieldName, options = {}) {
+            const {
+                min = null,
+                max = null,
+                allowDecimals = false,
+                allowNegative = false,
+                required = false
+            } = options;
+
+            // Check required
+            if (required && (value === '' || value === null || value === undefined)) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} is required`
+                };
+            }
+
+            // Empty but not required
+            if (!required && (value === '' || value === null || value === undefined)) {
+                return {
+                    isValid: true,
+                    message: ''
+                };
+            }
+
+            // Check if it's a number
+            const numValue = Number(value);
+
+            if (isNaN(numValue)) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} must be a valid number`
+                };
+            }
+
+            // Check for decimals
+            if (!allowDecimals && !Number.isInteger(numValue)) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} must be an integer (no decimals)`
+                };
+            }
+
+            // Check for negative
+            if (!allowNegative && numValue < 0) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} must be a positive number`
+                };
+            }
+
+            // Check minimum
+            if (min !== null && numValue < min) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} must be at least ${min} (got ${numValue})`
+                };
+            }
+
+            // Check maximum
+            if (max !== null && numValue > max) {
+                return {
+                    isValid: false,
+                    message: `${fieldName} must be no more than ${max} (got ${numValue})`
+                };
+            }
+
+            return {
+                isValid: true,
+                message: ''
+            };
+        }
+
+        function showValidation(input, messageDiv, result) {
+            // Remove previous classes
+            input.classList.remove('valid', 'invalid');
+            messageDiv.classList.remove('error', 'success');
+
+            if (result.isValid) {
+                input.classList.add('valid');
+                if (result.message) {
+                    messageDiv.textContent = result.message;
+                    messageDiv.classList.add('success');
+                } else {
+                    messageDiv.textContent = '✓ Valid';
+                    messageDiv.classList.add('success');
+                }
+            } else {
+                input.classList.add('invalid');
+                messageDiv.textContent = '✗ ' + result.message;
+                messageDiv.classList.add('error');
+            }
+        }
+
+        function addResult(resultsListId, text, passed) {
+            const resultsList = document.getElementById(resultsListId);
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+
+            const icon = document.createElement('div');
+            icon.className = `result-icon ${passed ? 'pass' : 'fail'}`;
+            icon.textContent = passed ? '✓' : '✗';
+
+            const textSpan = document.createElement('div');
+            textSpan.className = 'result-text';
+            textSpan.textContent = text;
+
+            resultItem.appendChild(icon);
+            resultItem.appendChild(textSpan);
+            resultsList.appendChild(resultItem);
+        }
+
+        function clearResults(resultsListId) {
+            document.getElementById(resultsListId).innerHTML = '';
+        }
+
+        // ============================================================================
+        // Port Validation (Integer, Range 1024-65535)
+        // ============================================================================
+
+        function testPort(value) {
+            document.getElementById('port-input').value = value;
+            validatePort();
+        }
+
+        function validatePort() {
+            const input = document.getElementById('port-input');
+            const messageDiv = document.getElementById('port-message');
+            const value = input.value;
+
+            clearResults('port-results-list');
+
+            // AC1: Text input should be rejected
+            if (isNaN(Number(value))) {
+                addResult('port-results-list', 'AC1: Text input rejected - Port must be a number', true);
+                const result = validateNumericField(value, 'Port', {
+                    min: 1024,
+                    max: 65535,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // AC3: Integer check
+            if (!Number.isInteger(Number(value))) {
+                addResult('port-results-list', 'AC2: Decimal rejected - Port must be an integer', true);
+                const result = validateNumericField(value, 'Port', {
+                    min: 1024,
+                    max: 65535,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // AC4: Negative check
+            if (Number(value) < 0) {
+                addResult('port-results-list', 'AC4: Negative rejected - Port must be positive', true);
+                const result = validateNumericField(value, 'Port', {
+                    min: 1024,
+                    max: 65535,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // AC5: Range check
+            const numValue = Number(value);
+            if (numValue < 1024 || numValue > 65535) {
+                addResult('port-results-list', `AC5: Range enforced - ${numValue} is outside 1024-65535`, true);
+                const result = validateNumericField(value, 'Port', {
+                    min: 1024,
+                    max: 65535,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // All checks passed
+            addResult('port-results-list', `AC1: Numeric value ${numValue} accepted`, true);
+            addResult('port-results-list', `AC3: Integer value accepted`, true);
+            addResult('port-results-list', `AC5: Within valid range (1024-65535)`, true);
+
+            const result = { isValid: true, message: '' };
+            showValidation(input, messageDiv, result);
+        }
+
+        function resetPort() {
+            const input = document.getElementById('port-input');
+            const messageDiv = document.getElementById('port-message');
+
+            input.value = '';
+            input.classList.remove('valid', 'invalid');
+            messageDiv.classList.remove('error', 'success');
+            messageDiv.textContent = '';
+            clearResults('port-results-list');
+        }
+
+        // ============================================================================
+        // Threshold Validation (Decimal Allowed, Range 0.0-1.0)
+        // ============================================================================
+
+        function testThreshold(value) {
+            document.getElementById('threshold-input').value = value;
+            validateThreshold();
+        }
+
+        function validateThreshold() {
+            const input = document.getElementById('threshold-input');
+            const messageDiv = document.getElementById('threshold-message');
+            const value = input.value;
+
+            clearResults('threshold-results-list');
+
+            // AC1: Text input should be rejected
+            if (isNaN(Number(value))) {
+                addResult('threshold-results-list', 'AC1: Text input rejected - Threshold must be a number', true);
+                const result = validateNumericField(value, 'Threshold', {
+                    min: 0.0,
+                    max: 1.0,
+                    allowDecimals: true,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            const numValue = Number(value);
+
+            // AC2: Decimal check (should be allowed for threshold)
+            if (!Number.isInteger(numValue)) {
+                addResult('threshold-results-list', `AC2: Decimal ${numValue} accepted (decimals allowed)`, true);
+            }
+
+            // AC5: Range check
+            if (numValue < 0.0 || numValue > 1.0) {
+                addResult('threshold-results-list', `AC5: Range enforced - ${numValue} is outside 0.0-1.0`, true);
+                const result = validateNumericField(value, 'Threshold', {
+                    min: 0.0,
+                    max: 1.0,
+                    allowDecimals: true,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // All checks passed
+            addResult('threshold-results-list', `AC1: Numeric value ${numValue} accepted`, true);
+            addResult('threshold-results-list', `AC3: Number type accepted`, true);
+            addResult('threshold-results-list', `AC5: Within valid range (0.0-1.0)`, true);
+
+            const result = { isValid: true, message: '' };
+            showValidation(input, messageDiv, result);
+        }
+
+        function resetThreshold() {
+            const input = document.getElementById('threshold-input');
+            const messageDiv = document.getElementById('threshold-message');
+
+            input.value = '';
+            input.classList.remove('valid', 'invalid');
+            messageDiv.classList.remove('error', 'success');
+            messageDiv.textContent = '';
+            clearResults('threshold-results-list');
+        }
+
+        // ============================================================================
+        // Timeout Validation (Positive Integer, Range 1-300)
+        // ============================================================================
+
+        function testTimeout(value) {
+            document.getElementById('timeout-input').value = value;
+            validateTimeout();
+        }
+
+        function validateTimeout() {
+            const input = document.getElementById('timeout-input');
+            const messageDiv = document.getElementById('timeout-message');
+            const value = input.value;
+
+            clearResults('timeout-results-list');
+
+            // AC1: Non-numeric should be rejected
+            if (isNaN(Number(value))) {
+                addResult('timeout-results-list', 'AC1: Non-numeric input rejected', true);
+                const result = validateNumericField(value, 'Timeout', {
+                    min: 1,
+                    max: 300,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            const numValue = Number(value);
+
+            // AC2: Decimals should be rejected
+            if (!Number.isInteger(numValue)) {
+                addResult('timeout-results-list', 'AC2: Decimal rejected - Timeout must be an integer', true);
+                const result = validateNumericField(value, 'Timeout', {
+                    min: 1,
+                    max: 300,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // AC4: Negative/Zero should be rejected
+            if (numValue <= 0) {
+                addResult('timeout-results-list', `AC4: Non-positive value ${numValue} rejected`, true);
+                const result = validateNumericField(value, 'Timeout', {
+                    min: 1,
+                    max: 300,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // AC5: Range check
+            if (numValue > 300) {
+                addResult('timeout-results-list', `AC5: Range enforced - ${numValue} exceeds maximum 300`, true);
+                const result = validateNumericField(value, 'Timeout', {
+                    min: 1,
+                    max: 300,
+                    allowDecimals: false,
+                    allowNegative: false
+                });
+                showValidation(input, messageDiv, result);
+                return;
+            }
+
+            // All checks passed
+            addResult('timeout-results-list', `AC1: Numeric value ${numValue} accepted`, true);
+            addResult('timeout-results-list', `AC3: Integer value accepted`, true);
+            addResult('timeout-results-list', `AC4: Positive value accepted`, true);
+            addResult('timeout-results-list', `AC5: Within valid range (1-300)`, true);
+
+            const result = { isValid: true, message: '' };
+            showValidation(input, messageDiv, result);
+        }
+
+        function resetTimeout() {
+            const input = document.getElementById('timeout-input');
+            const messageDiv = document.getElementById('timeout-message');
+
+            input.value = '';
+            input.classList.remove('valid', 'invalid');
+            messageDiv.classList.remove('error', 'success');
+            messageDiv.textContent = '';
+            clearResults('timeout-results-list');
+        }
+
+        // ============================================================================
+        // Input Event Listeners (Real-time validation)
+        // ============================================================================
+
+        document.getElementById('port-input').addEventListener('input', function() {
+            // Debounce validation
+            clearTimeout(this.validateTimeout);
+            this.validateTimeout = setTimeout(() => {
+                if (this.value) validatePort();
+            }, 300);
+        });
+
+        document.getElementById('threshold-input').addEventListener('input', function() {
+            clearTimeout(this.validateTimeout);
+            this.validateTimeout = setTimeout(() => {
+                if (this.value) validateThreshold();
+            }, 300);
+        });
+
+        document.getElementById('timeout-input').addEventListener('input', function() {
+            clearTimeout(this.validateTimeout);
+            this.validateTimeout = setTimeout(() => {
+                if (this.value) validateTimeout();
+            }, 300);
+        });
+
+        // ============================================================================
+        // Prevent non-numeric input (browser-level enforcement)
+        // ============================================================================
+
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                // Allow: numbers, one decimal point, negative sign (at start)
+                const char = String.fromCharCode(e.which);
+                const currentValue = this.value;
+
+                // Allow control keys
+                if (e.metaKey || e.ctrlKey || e.altKey) {
+                    return;
+                }
+
+                // Allow digits
+                if (/[0-9]/.test(char)) {
+                    return;
+                }
+
+                // Allow one decimal point (if step allows decimals)
+                if (char === '.' && this.step !== '1' && !currentValue.includes('.')) {
+                    return;
+                }
+
+                // Allow negative sign at start
+                if (char === '-' && currentValue === '' && this.min !== undefined && this.min < 0) {
+                    return;
+                }
+
+                // Prevent everything else
+                e.preventDefault();
+            });
+        });
+
+        console.log('Feature #402: Numeric field validation initialized');
+        console.log('All numeric inputs have browser-level enforcement preventing non-numeric characters');
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "workspace_name": "uat-gateway-oversight",
+  "workspace_type": "monitoring",
+  "project": "autocoder",
+  "subproject": "uat-gateway",
+  "created_at": "2026-01-26",
+  "purpose": "BMAD agent oversight for UAT Gateway development by AutoCoder",
+  "participants": ["architect", "dev", "tea", "pm", "sm", "ux-designer"],
+  "coordination": {
+    "approach": "parallel_monitoring",
+    "update_frequency": "on_story_completion",
+    "review_required": true
+  }
+}

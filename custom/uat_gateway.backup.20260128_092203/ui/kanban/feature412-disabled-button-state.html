@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #412: Disabled Button State During Processing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .feature-info {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .feature-info h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .feature-info ul {
+            margin-left: 20px;
+            color: #555;
+            line-height: 1.8;
+        }
+
+        .demo-section {
+            margin-bottom: 40px;
+        }
+
+        .demo-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .button-demo {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+
+        /* Disabled state styling */
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .status-log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .status-log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .status-log-entry .timestamp {
+            color: #6c757d;
+            margin-right: 10px;
+        }
+
+        .status-log-entry.success {
+            color: #28a745;
+        }
+
+        .status-log-entry.info {
+            color: #17a2b8;
+        }
+
+        .status-log-entry.warning {
+            color: #ffc107;
+        }
+
+        .code-example {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .code-example .keyword {
+            color: #66d9ef;
+        }
+
+        .code-example .string {
+            color: #a6e22e;
+        }
+
+        .code-example .comment {
+            color: #75715e;
+        }
+
+        .checklist {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checklist-item.completed {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Feature #412: Disabled Button State During Processing</h1>
+        <p class="subtitle">Feedback & Notification • Verify buttons are disabled during action</p>
+
+        <div class="feature-info">
+            <h3>📋 Acceptance Criteria</h3>
+            <ul>
+                <li><strong>AC1:</strong> Click action button - User can click action button to start an action</li>
+                <li><strong>AC2:</strong> Verify button is disabled - Button becomes disabled during processing</li>
+                <li><strong>AC3:</strong> Verify loading indicator shows - Visual loading indicator appears</li>
+                <li><strong>AC4:</strong> Wait for completion - Wait for action to complete</li>
+                <li><strong>AC5:</strong> Verify button re-enables - Button becomes enabled again after completion</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎮 Interactive Demo</h2>
+
+            <div class="button-demo">
+                <button class="btn btn-primary" id="actionBtn">
+                    <span class="btn-text">Start Action</span>
+                </button>
+                <button class="btn btn-secondary" id="cancelBtn" disabled>
+                    Cancel
+                </button>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+
+            <div class="status-log" id="statusLog">
+                <div class="status-log-entry info">
+                    <span class="timestamp">[Ready]</span>
+                    Click "Start Action" to begin the demo
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>✅ Verification Checklist</h2>
+            <div class="checklist">
+                <div class="checklist-item" data-ac="1">
+                    <input type="checkbox" id="ac1">
+                    <label for="ac1">AC1: Can click action button to start action</label>
+                </div>
+                <div class="checklist-item" data-ac="2">
+                    <input type="checkbox" id="ac2">
+                    <label for="ac2">AC2: Button becomes disabled during processing</label>
+                </div>
+                <div class="checklist-item" data-ac="3">
+                    <input type="checkbox" id="ac3">
+                    <label for="ac3">AC3: Loading indicator appears (progress bar)</label>
+                </div>
+                <div class="checklist-item" data-ac="4">
+                    <input type="checkbox" id="ac4">
+                    <label for="ac4">AC4: Action completes and shows result</label>
+                </div>
+                <div class="checklist-item" data-ac="5">
+                    <input type="checkbox" id="ac5">
+                    <label for="ac5">AC5: Button re-enables after completion</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>💻 Implementation Example</h2>
+            <div class="code-example">
+<span class="comment">// Button disabled state management</span>
+<span class="keyword">const</span> button = document.getElementById(<span class="string">'actionBtn'</span>);
+
+<span class="comment">// 1. Start action - disable button</span>
+button.addEventListener(<span class="string">'click'</span>, () => {
+    button.disabled = <span class="keyword">true</span>;  <span class="comment">// AC2: Button disabled</span>
+    showProgress();                   <span class="comment">// AC3: Show loading indicator</span>
+    performAction();
+});
+
+<span class="comment">// 2. Complete action - re-enable button</span>
+<span class="keyword">function</span> onComplete() {
+    hideProgress();
+    button.disabled = <span class="keyword">false</span>; <span class="comment">// AC5: Button re-enabled</span>
+}
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎯 Key Benefits</h2>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><strong>Prevents Double-Submission:</strong> Disabled buttons can't be clicked multiple times</li>
+                <li><strong>Clear Feedback:</strong> Users know the system is processing their request</li>
+                <li><strong>Professional UX:</strong> Industry-standard pattern for async operations</li>
+                <li><strong>Reduces Errors:</strong> Prevents race conditions and duplicate requests</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const actionBtn = document.getElementById('actionBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const statusLog = document.getElementById('statusLog');
+
+        let progressInterval = null;
+        let currentProgress = 0;
+
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `status-log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
+            statusLog.insertBefore(entry, statusLog.firstChild);
+
+            // Keep only last 20 entries
+            while (statusLog.children.length > 20) {
+                statusLog.removeChild(statusLog.lastChild);
+            }
+        }
+
+        function showProgress() {
+            progressContainer.classList.add('active');
+            currentProgress = 0;
+            updateProgress(0);
+        }
+
+        function updateProgress(value) {
+            currentProgress = value;
+            progressFill.style.width = value + '%';
+            progressText.textContent = value + '%';
+        }
+
+        function hideProgress() {
+            progressContainer.classList.remove('active');
+        }
+
+        function simulateAction() {
+            return new Promise((resolve) => {
+                progressInterval = setInterval(() => {
+                    currentProgress += Math.random() * 15;
+                    if (currentProgress >= 100) {
+                        currentProgress = 100;
+                        updateProgress(100);
+                        clearInterval(progressInterval);
+                        setTimeout(resolve, 500);
+                    } else {
+                        updateProgress(Math.round(currentProgress));
+                    }
+                }, 200);
+            });
+        }
+
+        // AC1: Click action button
+        actionBtn.addEventListener('click', async () => {
+            log('Action started - button should be disabled now', 'success');
+
+            // AC2: Disable button during processing
+            actionBtn.disabled = true;
+            cancelBtn.disabled = false;
+            actionBtn.innerHTML = '<span class="loading-spinner"></span> Processing...';
+
+            // Mark AC1 and AC2 as complete
+            document.querySelector('[data-ac="1"]').classList.add('completed');
+            document.querySelector('[data-ac="1"] input').checked = true;
+
+            // AC3: Show loading indicator
+            showProgress();
+            log('Loading indicator is now visible', 'info');
+            document.querySelector('[data-ac="3"]').classList.add('completed');
+            document.querySelector('[data-ac="3"] input').checked = true;
+
+            // Simulate processing
+            await simulateAction();
+
+            // AC4: Action completed
+            log('Action completed successfully!', 'success');
+            document.querySelector('[data-ac="4"]').classList.add('completed');
+            document.querySelector('[data-ac="4"] input').checked = true;
+
+            // AC5: Re-enable button
+            actionBtn.disabled = false;
+            cancelBtn.disabled = true;
+            actionBtn.innerHTML = '<span class="btn-text">Start Action</span>';
+            hideProgress();
+            log('Button re-enabled - ready for next action', 'info');
+            document.querySelector('[data-ac="5"]').classList.add('completed');
+            document.querySelector('[data-ac="5"] input').checked = true;
+
+            // Auto-uncheck after 2 seconds for re-testing
+            setTimeout(() => {
+                document.querySelectorAll('.checklist-item').forEach(item => {
+                    item.classList.remove('completed');
+                    item.querySelector('input').checked = false;
+                });
+            }, 2000);
+        });
+
+        // Cancel button
+        cancelBtn.addEventListener('click', () => {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+
+            actionBtn.disabled = false;
+            cancelBtn.disabled = true;
+            actionBtn.innerHTML = '<span class="btn-text">Start Action</span>';
+            hideProgress();
+            log('Action cancelled by user', 'warning');
+        });
+
+        // Initial log
+        log('Feature #412 demo loaded - ready to test', 'info');
+    </script>
+</body>
+</html>

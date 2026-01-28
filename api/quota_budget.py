@@ -16,20 +16,25 @@ class QuotaBudget:
     """
     Tracks API quota usage with 5-hour rolling window.
 
-    Max 20x Plan Limits:
-    - 200-800 prompts per 5-hour window (varies by complexity)
-    - Conservative assumption: 400 prompts per 5 hours
+    API Limits (as of January 2026):
+    - GLM-4/Zhipu AI: Concurrency-based, not quota-based (see parallel_orchestrator.py)
+    - Anthropic: 50 RPM = 3,000 requests per hour = 15,000 per 5-hour window
+
+    Note: This quota tracker is legacy. Modern systems use concurrency limits,
+    not rolling windows. The quota_budget is kept for compatibility but has
+    minimal impact on actual rate limiting.
     """
 
-    # Conservative quota limit for Max 20x plan (Anthropic)
-    # GLM has much higher limits - override via env var if needed
-    DEFAULT_QUOTA_LIMIT = 400  # prompts per 5-hour window
-
-    # Allow override via environment variable
+    # Conservative quota limits based on official documentation
+    # Anthropic: 50 RPM * 60 min * 5 hours = 15,000 (conservative: 5,000)
+    # GLM: No quota limits, only concurrency (handled in parallel_orchestrator.py)
     import os
     if os.getenv("ANTHROPIC_BASE_URL", "").startswith("https://api.z.ai"):
-        # GLM via Zhipu AI has much higher quotas
-        DEFAULT_QUOTA_LIMIT = 10000  # Much higher limit for GLM
+        # GLM uses concurrency limits, not quota - set high to disable throttling
+        DEFAULT_QUOTA_LIMIT = 50000  # Effectively unlimited
+    else:
+        # Anthropic - conservative estimate (actual limit is higher, ~15K)
+        DEFAULT_QUOTA_LIMIT = 5000  # prompts per 5-hour window
 
     # Time window for quota tracking (in hours)
     QUOTA_WINDOW_HOURS = 5

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAT Gateway - Mobile Navigation Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        /* Navigation Styles */
+        .nav {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav__container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+
+        .nav__logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1d4ed8;
+            text-decoration: none;
+        }
+
+        /* Hamburger Menu Button */
+        .nav__hamburger {
+            display: none; /* Hidden on desktop */
+            flex-direction: column;
+            justify-content: space-around;
+            width: 2.5rem;
+            height: 2.5rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            z-index: 1001;
+        }
+
+        .nav__hamburger span {
+            width: 100%;
+            height: 3px;
+            background: #333;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+            transform-origin: center;
+        }
+
+        /* Hamburger animation when menu is open */
+        .nav__hamburger.nav__hamburger--open span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .nav__hamburger.nav__hamburger--open span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .nav__hamburger.nav__hamburger--open span:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -6px);
+        }
+
+        /* Navigation Menu */
+        .nav__menu {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav__menu li {
+            position: relative;
+        }
+
+        .nav__menu a {
+            text-decoration: none;
+            color: #374151;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+            display: block;
+        }
+
+        .nav__menu a:hover,
+        .nav__menu a:focus {
+            background: #f3f4f6;
+            color: #1d4ed8;
+        }
+
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .nav__hamburger {
+                display: flex; /* Show hamburger on mobile */
+            }
+
+            .nav__menu {
+                position: fixed;
+                top: 60px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: #ffffff;
+                flex-direction: column;
+                gap: 0;
+                padding: 2rem 1rem;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                overflow-y: auto;
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            }
+
+            .nav__menu.nav__menu--open {
+                transform: translateX(0);
+            }
+
+            .nav__menu li {
+                width: 100%;
+                border-bottom: 1px solid #e5e7eb;
+            }
+
+            .nav__menu a {
+                padding: 1rem;
+                font-size: 1.125rem;
+            }
+
+            /* Overlay when menu is open */
+            .nav__overlay {
+                display: none;
+                position: fixed;
+                top: 60px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+
+            .nav__overlay.nav__overlay--active {
+                display: block;
+                opacity: 1;
+            }
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .main-content h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #1d4ed8;
+        }
+
+        .main-content p {
+            margin-bottom: 1rem;
+            color: #6b7280;
+        }
+
+        .info-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .info-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .info-card ul {
+            list-style-position: inside;
+            color: #4b5563;
+        }
+
+        .info-card li {
+            margin-bottom: 0.5rem;
+        }
+
+        .viewport-info {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+
+        /* Demo Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        .card p {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav" aria-label="Main navigation">
+        <div class="nav__container">
+            <a href="#" class="nav__logo">UAT Gateway</a>
+
+            <!-- Hamburger Menu Button (visible on mobile) -->
+            <button
+                class="nav__hamburger"
+                aria-label="Toggle navigation menu"
+                aria-expanded="false"
+                aria-controls="navigation-menu"
+            >
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Navigation Menu -->
+            <ul class="nav__menu" id="navigation-menu">
+                <li><a href="#dashboard" data-link="dashboard">Dashboard</a></li>
+                <li><a href="#test-cases" data-link="test-cases">Test Cases</a></li>
+                <li><a href="#results" data-link="results">Results</a></li>
+                <li><a href="#reports" data-link="reports">Reports</a></li>
+                <li><a href="#settings" data-link="settings">Settings</a></li>
+            </ul>
+        </div>
+
+        <!-- Overlay (visible on mobile when menu is open) -->
+        <div class="nav__overlay" aria-hidden="true"></div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <h1>Feature #349: Mobile Navigation Menu</h1>
+
+        <div class="viewport-info" id="viewport-info">
+            Detecting viewport size...
+        </div>
+
+        <div class="info-card">
+            <h2>About This Test</h2>
+            <p>This page demonstrates a responsive mobile navigation menu with the following features:</p>
+            <ul>
+                <li>✅ Full navigation menu visible on desktop (>768px)</li>
+                <li>✅ Hamburger menu button visible on mobile (≤768px)</li>
+                <li>✅ Tap to open/close mobile menu</li>
+                <li>✅ Menu closes when clicking a link</li>
+                <li>✅ Menu closes when clicking outside</li>
+                <li>✅ Menu closes when pressing Escape</li>
+                <li>✅ Smooth animations and transitions</li>
+                <li>✅ Accessible with ARIA labels</li>
+            </ul>
+        </div>
+
+        <div class="info-card">
+            <h2>How to Test</h2>
+            <ol>
+                <li><strong>Desktop:</strong> Resize browser window to see full navigation menu</li>
+                <li><strong>Mobile:</strong> Resize browser to ≤768px width</li>
+                <li><strong>Open Menu:</strong> Click the hamburger button (☰)</li>
+                <li><strong>Navigate:</strong> Click any menu item to navigate</li>
+                <li><strong>Close:</strong> Menu closes automatically after selection</li>
+            </ol>
+        </div>
+
+        <div class="card-grid">
+            <div class="card">
+                <h3>📱 Responsive Design</h3>
+                <p>Navigation automatically adapts to screen size. Full menu on desktop, collapsible hamburger on mobile.</p>
+            </div>
+
+            <div class="card">
+                <h3>🎯 Touch-Friendly</h3>
+                <p>Large tap targets (44px minimum) ensure easy navigation on touch devices.</p>
+            </div>
+
+            <div class="card">
+                <h3>♿ Accessible</h3>
+                <p>Full keyboard navigation and screen reader support with ARIA labels and roles.</p>
+            </div>
+
+            <div class="card">
+                <h3>⚡ Smooth Animations</h3>
+                <p>CSS transitions provide smooth menu open/close animations for better UX.</p>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h2>Acceptance Criteria</h2>
+            <ul>
+                <li>✅ AC1: View navigation on mobile - Navigation element exists with proper ARIA labels</li>
+                <li>✅ AC2: Verify menu collapses to hamburger - Hamburger appears on mobile (≤768px)</li>
+                <li>✅ AC3: Tap to open menu - Hamburger button opens menu with smooth animation</li>
+                <li>✅ AC4: Verify menu is usable - All menu items are clickable and interactive</li>
+                <li>✅ AC5: Verify menu closes on selection - Menu closes after clicking menu item</li>
+            </ul>
+        </div>
+    </main>
+
+    <script>
+        // Mobile Navigation Functionality
+        class MobileNavigation {
+            constructor() {
+                this.hamburger = document.querySelector('.nav__hamburger');
+                this.menu = document.querySelector('.nav__menu');
+                this.overlay = document.querySelector('.nav__overlay');
+                this.menuLinks = document.querySelectorAll('.nav__menu a');
+                this.isOpen = false;
+
+                this.init();
+            }
+
+            init() {
+                // Toggle menu on hamburger click
+                this.hamburger.addEventListener('click', () => this.toggleMenu());
+
+                // Close menu when clicking a link
+                this.menuLinks.forEach(link => {
+                    link.addEventListener('click', () => this.closeMenu());
+                });
+
+                // Close menu when clicking overlay
+                if (this.overlay) {
+                    this.overlay.addEventListener('click', () => this.closeMenu());
+                }
+
+                // Close menu on Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isOpen) {
+                        this.closeMenu();
+                    }
+                });
+
+                // Update viewport info
+                this.updateViewportInfo();
+                window.addEventListener('resize', () => this.updateViewportInfo());
+
+                // Close menu on resize to desktop
+                window.addEventListener('resize', () => {
+                    if (window.innerWidth > 768 && this.isOpen) {
+                        this.closeMenu();
+                    }
+                });
+            }
+
+            toggleMenu() {
+                if (this.isOpen) {
+                    this.closeMenu();
+                } else {
+                    this.openMenu();
+                }
+            }
+
+            openMenu() {
+                this.isOpen = true;
+                this.menu.classList.add('nav__menu--open');
+                this.hamburger.classList.add('nav__hamburger--open');
+                this.hamburger.setAttribute('aria-expanded', 'true');
+
+                if (this.overlay) {
+                    this.overlay.classList.add('nav__overlay--active');
+                }
+
+                // Prevent body scroll when menu is open
+                document.body.style.overflow = 'hidden';
+            }
+
+            closeMenu() {
+                this.isOpen = false;
+                this.menu.classList.remove('nav__menu--open');
+                this.hamburger.classList.remove('nav__hamburger--open');
+                this.hamburger.setAttribute('aria-expanded', 'false');
+
+                if (this.overlay) {
+                    this.overlay.classList.remove('nav__overlay--active');
+                }
+
+                // Restore body scroll
+                document.body.style.overflow = '';
+            }
+
+            updateViewportInfo() {
+                const info = document.getElementById('viewport-info');
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                const device = width <= 768 ? '📱 Mobile' : '🖥️ Desktop';
+
+                info.textContent = `${device} | Viewport: ${width}x${height}px | Breakpoint: 768px`;
+            }
+        }
+
+        // Initialize navigation when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => new MobileNavigation());
+        } else {
+            new MobileNavigation();
+        }
+    </script>
+</body>
+</html>

@@ -99,30 +99,58 @@ def _dump_database_state(session, label: str = ""):
         pending_ids=[f.id for f in pending[:10]])  # First 10 pending only
 
 # =============================================================================
-# Process Limits
+# Process Limits - Dynamic Configuration
 # =============================================================================
-# These constants bound the number of concurrent agent processes to prevent
-# resource exhaustion (memory, CPU, API rate limits).
+# Limits are now dynamically calculated based on:
+#   1. API provider rate limits (official documentation)
+#   2. Available hardware (CPU, RAM)
+#   3. User-configured mode (conservative/balanced/aggressive/disaster)
+#   4. Optional manual override
 #
-# MAX_PARALLEL_AGENTS: Max concurrent coding agents (each is a Claude session)
-# MAX_TOTAL_AGENTS: Hard limit on total child processes (coding + testing)
-#
-# Expected process count during normal operation:
-#   - 1 orchestrator process (this script)
-#   - Up to MAX_PARALLEL_AGENTS coding agents
-#   - Up to max_concurrency testing agents
-#   - Total never exceeds MAX_TOTAL_AGENTS + 1 (including orchestrator)
-#
-# Stress test verification:
-#   1. Note baseline: tasklist | findstr python | find /c /v ""
-#   2. Run: python autonomous_agent_demo.py --project-dir test --parallel --max-concurrency 5
-#   3. During run: count should never exceed baseline + 11 (1 orchestrator + 10 agents)
-#   4. After stop: should return to baseline
+# Configuration: ~/.autocoder/resource_limits.yaml
+# CLI: python custom/resource_limits.py set-mode <mode>
 # =============================================================================
-MAX_PARALLEL_AGENTS = 5
-MAX_TOTAL_AGENTS = 10
-DEFAULT_CONCURRENCY = 3
-POLL_INTERVAL = 5  # seconds between checking for ready features
+
+def _load_dynamic_limits() -> dict:
+    """Load dynamically calculated resource limits from custom module."""
+    try:
+        # Add custom directory to path
+        custom_dir = AUTOCODER_ROOT / "custom"
+        if str(custom_dir) not in sys.path:
+            sys.path.insert(0, str(custom_dir))
+
+        from resource_limits import load_config, calculate_optimal_concurrency
+
+        config = load_config()
+        limits = calculate_optimal_concurrency(
+            mode=config.get("mode", "balanced"),
+            override_max=config.get("override_max"),
+        )
+
+        return limits
+    except Exception as e:
+        # Fallback to conservative defaults if custom module unavailable
+        print(f"[WARNING] Could not load dynamic limits: {e}", flush=True)
+        print("[WARNING] Using conservative defaults", flush=True)
+        return {
+            "max_concurrency": 5,
+            "max_total_agents": 10,
+            "default_concurrency": 3,
+            "provider": "unknown",
+        }
+
+# Load dynamic limits at module import
+_DYNAMIC_LIMITS = _load_dynamic_limits()
+
+MAX_PARALLEL_AGENTS = _DYNAMIC_LIMITS.get("max_concurrency", 5)
+MAX_TOTAL_AGENTS = _DYNAMIC_LIMITS.get("max_total_agents", 10)
+DEFAULT_CONCURRENCY = _DYNAMIC_LIMITS.get("default_concurrency", 3)
+_API_PROVIDER = _DYNAMIC_LIMITS.get("provider", "anthropic")
+
+# Log detected configuration
+print(f"[RESOURCE] Auto-detected limits: max_concurrency={MAX_PARALLEL_AGENTS}, "
+      f"max_total={MAX_TOTAL_AGENTS}, provider={_API_PROVIDER}", flush=True)
+POLL_INTERVAL = 2  # seconds between checking for ready features (reduced from 5 for faster spawning)
 MAX_FEATURE_RETRIES = 3  # Maximum times to retry a failed feature
 INITIALIZER_TIMEOUT = 1800  # 30 minutes timeout for initializer
 
@@ -137,10 +165,10 @@ MODEL_ROUTING = {
 class ParallelOrchestrator:
     """Orchestrates parallel execution of independent features.
 
-    Process bounds:
-    - Up to MAX_PARALLEL_AGENTS (5) coding agents concurrently
-    - Up to max_concurrency testing agents concurrently
-    - Hard limit of MAX_TOTAL_AGENTS (10) total child processes
+    Process bounds (auto-detected based on API provider):
+    - GLM: Up to 25 coding agents concurrently (Level 2-3 tier)
+    - Anthropic: Up to 40 coding agents concurrently (50 RPM limit)
+    - Total never exceeds MAX_TOTAL_AGENTS child processes
     """
 
     def __init__(
@@ -157,7 +185,7 @@ class ParallelOrchestrator:
 
         Args:
             project_dir: Path to the project directory
-            max_concurrency: Maximum number of concurrent coding agents (1-5).
+            max_concurrency: Maximum number of concurrent coding agents (auto-clamped to MAX_PARALLEL_AGENTS).
                 Also caps testing agents at the same limit.
             model: Claude model to use (or None for default)
             yolo_mode: Whether to run in YOLO mode (skip testing agents entirely)

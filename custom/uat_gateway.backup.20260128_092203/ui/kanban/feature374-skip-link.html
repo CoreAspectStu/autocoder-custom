@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #374 - Skip to Content Link</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        /* Skip to content link for accessibility (WCAG 2.1 - Success Criterion 2.4.1) */
+        /* Hidden until focused, allowing keyboard users to bypass navigation */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #1d4ed8;
+            color: #ffffff;
+            padding: 8px 16px;
+            text-decoration: none;
+            z-index: 10000;
+            font-weight: 500;
+            font-size: 14px;
+            border-radius: 0 0 4px 0;
+            transition: top 0.3s ease;
+        }
+
+        .skip-link:focus {
+            top: 0;
+            outline: 3px solid #1e40af;
+            outline-offset: 2px;
+        }
+
+        /* Ensure main content can receive focus when skip link is activated */
+        main:focus {
+            outline: 3px solid #1d4ed8;
+            outline-offset: 4px;
+        }
+
+        /* Focus visible for keyboard navigation */
+        *:focus-visible {
+            outline: 3px solid #1d4ed8;
+            outline-offset: 2px;
+        }
+
+        /* Header/Navigation styles */
+        header {
+            background: white;
+            border-bottom: 2px solid #e5e7eb;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        nav a {
+            color: #1d4ed8;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        nav a:hover, nav a:focus {
+            background: #eff6ff;
+        }
+
+        nav a.active {
+            background: #1d4ed8;
+            color: white;
+        }
+
+        /* Main content styles */
+        main {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #1d4ed8;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        h2 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        p {
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #1d4ed8;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .test-steps {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .test-steps ol {
+            margin-left: 20px;
+        }
+
+        .test-steps li {
+            margin-bottom: 10px;
+            line-height: 1.8;
+        }
+
+        .demo-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .keyboard-hint {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+
+        kbd {
+            background: white;
+            border: 2px solid #d1d5db;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-family: monospace;
+            font-size: 0.9em;
+            box-shadow: 0 2px 0 #d1d5db;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #10b981;
+        }
+
+        .footer-nav {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            display: flex;
+            gap: 20px;
+        }
+
+        .footer-nav a {
+            color: #1d4ed8;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #1d4ed8;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .footer-nav a:hover, .footer-nav a:focus {
+            background: #1d4ed8;
+            color: white;
+        }
+
+        .checkbox-group {
+            margin: 20px 0;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .checkbox-item:hover {
+            background: #eff6ff;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 12px;
+            margin-top: 4px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            flex: 1;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <!-- Skip to content link for accessibility (WCAG 2.1) -->
+    <!-- This is the feature we are testing! -->
+    <a class="skip-link" href="#main-content">
+        Skip to main content
+    </a>
+
+    <!-- Navigation that will be skipped -->
+    <header role="banner">
+        <nav role="navigation" aria-label="Main navigation">
+            <a href="#" class="active">Home</a>
+            <a href="#">About</a>
+            <a href="#">Services</a>
+            <a href="#">Contact</a>
+            <a href="#">Help</a>
+        </nav>
+    </header>
+
+    <!-- Main content (target of skip link) -->
+    <main id="main-content" role="main" tabindex="-1">
+        <h1>Feature #374: Skip to Content Link</h1>
+
+        <div class="info-box">
+            <strong><span class="status-indicator"></span>WCAG 2.1 Compliance</strong>
+            <p>This page demonstrates a properly implemented "Skip to Content" link that complies with WCAG 2.1 Success Criterion 2.4.1 - "Bypass Blocks".</p>
+        </div>
+
+        <div class="section">
+            <h2>What is a Skip Link?</h2>
+            <p>A skip link (or "skip to content" link) is an accessibility feature that allows keyboard users to bypass repetitive navigation and jump directly to the main content of a page. This is especially helpful for:</p>
+            <ul>
+                <li>Screen reader users who don't want to hear navigation on every page</li>
+                <li>Keyboard-only users who want to avoid tabbing through long navigation menus</li>
+                <li>Users with motor disabilities who find repetitive navigation tedious</li>
+            </ul>
+        </div>
+
+        <div class="keyboard-hint">
+            <strong>💡 Keyboard Test:</strong> Try pressing <kbd>Tab</kbd> on this page. The first element you'll focus is the "Skip to main content" link at the top. Press <kbd>Enter</kbd> to activate it and jump directly to this main content area!
+        </div>
+
+        <div class="section">
+            <h2>Acceptance Criteria Verification</h2>
+            <div class="test-steps">
+                <h3>Manual Test Steps:</h3>
+                <ol>
+                    <li><strong>Press Tab on page load</strong> - Focus should move to skip link</li>
+                    <li><strong>Verify skip link appears</strong> - Blue "Skip to main content" link should be visible at top</li>
+                    <li><strong>Activate skip link</strong> - Press Enter when skip link is focused</li>
+                    <li><strong>Verify focus moves to main content</strong> - Focus should be on main content area</li>
+                    <li><strong>Verify navigation is skipped</strong> - Navigation links should NOT be focused</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Interactive Checklist</h2>
+            <p>Use this checklist to verify all acceptance criteria:</p>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ac1" tabindex="0">
+                    <label for="ac1"><strong>AC1:</strong> Press Tab on page load - Skip link receives focus</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ac2" tabindex="0">
+                    <label for="ac2"><strong>AC2:</strong> Verify skip link appears - Link becomes visible when focused</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ac3" tabindex="0">
+                    <label for="ac3"><strong>AC3:</strong> Activate skip link - Pressing Enter activates the link</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ac4" tabindex="0">
+                    <label for="ac4"><strong>AC4:</strong> Verify focus moves to main content - Focus indicator on main content</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ac5" tabindex="0">
+                    <label for="ac5"><strong>AC5:</strong> Verify navigation is skipped - Navigation links not visited</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Technical Implementation</h2>
+            <div class="demo-card">
+                <h3>HTML Structure:</h3>
+                <pre style="background: #1f2937; color: #f3f4f6; padding: 15px; border-radius: 4px; overflow-x: auto;"><code>&lt;a class="skip-link" href="#main-content"&gt;
+    Skip to main content
+&lt;/a&gt;
+
+&lt;nav&gt;
+    &lt;!-- Navigation links --&gt;
+&lt;/nav&gt;
+
+&lt;main id="main-content" tabindex="-1"&gt;
+    &lt;!-- Main content --&gt;
+&lt;/main&gt;</code></pre>
+            </div>
+
+            <div class="demo-card">
+                <h3>CSS Styling:</h3>
+                <pre style="background: #1f2937; color: #f3f4f6; padding: 15px; border-radius: 4px; overflow-x: auto;"><code>.skip-link {
+    position: absolute;
+    top: -40px;  /* Hidden above viewport */
+    left: 0;
+    background: #1d4ed8;
+    color: #ffffff;
+    padding: 8px 16px;
+    z-index: 10000;
+}
+
+.skip-link:focus {
+    top: 0;  /* Visible when focused */
+    outline: 3px solid #1e40af;
+}
+
+main:focus {
+    outline: 3px solid #1d4ed8;  /* Focus indicator */
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Key Implementation Details</h2>
+            <div class="demo-card">
+                <h3>✅ Correct Implementation:</h3>
+                <ul>
+                    <li><strong>Hidden by default:</strong> <code>top: -40px</code> positions link above viewport</li>
+                    <li><strong>Visible on focus:</strong> <code>:focus</code> pseudoclass moves it to <code>top: 0</code></li>
+                    <li><strong>High z-index:</strong> <code>z-index: 10000</code> ensures it appears above all content</li>
+                    <li><strong>Smooth transition:</strong> <code>transition: top 0.3s</code> for smooth appearance</li>
+                    <li><strong>Target tabindex:</strong> <code>main tabindex="-1"</code> allows it to receive focus</li>
+                    <li><strong>Focus indicator:</strong> Clear outline on main when focused</li>
+                    <li><strong>High contrast:</strong> Blue background (#1d4ed8) with white text meets WCAG AAA</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Demonstration Content</h2>
+            <p>This is the main content area. When you activate the skip link, you should jump directly here without having to tab through all the navigation links above.</p>
+
+            <p>The skip link is positioned at the very beginning of the document (right after the opening <code>&lt;body&gt;</code> tag), making it the first focusable element when you press Tab.</p>
+
+            <p><strong>Try it now:</strong></p>
+            <ol>
+                <li>Press <kbd>Shift</kbd> + <kbd>Tab</kbd> to move focus backward</li>
+                <li>Keep pressing until you reach the navigation</li>
+                <li>Press <kbd>Tab</kbd> once - you should see the skip link appear</li>
+                <li>Press <kbd>Enter</kbd> - focus should jump back to this main content</li>
+            </ol>
+
+            <p>This demonstrates how the skip link allows users to bypass the navigation and jump directly to the main content, improving accessibility for keyboard and screen reader users.</p>
+        </div>
+
+        <div class="section">
+            <h2>Additional Resources</h2>
+            <ul>
+                <li><a href="https://www.w3.org/WAI/WCAG21/Understanding/bypass-blocks.html" target="_blank" rel="noopener">WCAG 2.1: Understanding Success Criterion 2.4.1</a></li>
+                <li><a href="https://web.dev/accessible-nav-buttons/" target="_blank" rel="noopener">Web Dev: Accessible Navigation</a></li>
+                <li><a href="https://www.a11yproject.com/posts/2013-01-11-skip-nav-links/" target="_blank" rel="noopener">A11y Project: Skip Navigation Links</a></li>
+            </ul>
+        </div>
+
+        <div class="footer-nav">
+            <a href="uat-card.html">← Back to UAT Cards</a>
+            <a href="#">Test Next Feature →</a>
+        </div>
+    </main>
+
+    <script>
+        // Log focus events for testing
+        const skipLink = document.querySelector('.skip-link');
+        const mainContent = document.querySelector('#main-content');
+
+        skipLink.addEventListener('focus', () => {
+            console.log('✓ Skip link focused');
+        });
+
+        skipLink.addEventListener('click', () => {
+            console.log('✓ Skip link activated');
+        });
+
+        mainContent.addEventListener('focus', () => {
+            console.log('✓ Main content focused (skip link worked!)');
+            // Announce to screen readers
+            mainContent.setAttribute('aria-live', 'polite');
+        });
+
+        // Save checkbox state
+        document.querySelectorAll('.checkbox-item input').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const id = e.target.id;
+                const checked = e.target.checked;
+                localStorage.setItem(`feature374_${id}`, checked);
+                console.log(`AC ${id.slice(2)}: ${checked ? 'PASS' : 'FAIL'}`);
+            });
+
+            // Restore saved state
+            const savedState = localStorage.getItem(`feature374_${checkbox.id}`);
+            if (savedState === 'true') {
+                checkbox.checked = true;
+            }
+        });
+
+        // Instructions on page load
+        console.log('%cFeature #374: Skip to Content Link', 'font-size: 18px; font-weight: bold; color: #1d4ed8;');
+        console.log('%cTest Instructions:', 'font-weight: bold;');
+        console.log('1. Press Tab - skip link should appear at top');
+        console.log('2. Press Enter - focus should jump to main content');
+        console.log('3. Navigation should be skipped');
+        console.log('%cCheck browser console for focus event logs', 'color: #10b981;');
+    </script>
+</body>
+</html>

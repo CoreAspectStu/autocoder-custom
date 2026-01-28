@@ -16,6 +16,7 @@ from .features import router as features_router
 from .filesystem import router as filesystem_router
 from .messages import router as messages_router
 from .devlayer import router as devlayer_router
+from .devlayer_quality import router as quality_gate_router
 from .projects import router as projects_router
 from .schedules import router as schedules_router
 from .settings import router as settings_router
@@ -23,6 +24,8 @@ from .spec_creation import router as spec_creation_router
 from .status import router as status_router
 from .systemd import router as systemd_router
 from .terminal import router as terminal_router
+from .reports import router as reports_router
+from .uat_gateway import router as uat_gateway_router
 
 __all__ = [
     "projects_router",
@@ -42,5 +45,8 @@ __all__ = [
     "terminal_router",
     "messages_router",
     "devlayer_router",
+    "quality_gate_router",
     "autoscaler_router",
+    "reports_router",
+    "uat_gateway_router",
 ]

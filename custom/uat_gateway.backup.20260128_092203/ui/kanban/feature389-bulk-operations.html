@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAT Gateway - Bulk Operations Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .acceptance-criteria {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .acceptance-criteria h3 {
+            color: #1f2937;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .criterion {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .criterion input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .criterion label {
+            cursor: pointer;
+            color: #374151;
+        }
+
+        .criterion.completed label {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+
+        /* Bulk Actions Bar */
+        .bulk-actions-bar {
+            background: #3b82f6;
+            border-radius: 12px;
+            padding: 16px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: space-between;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .bulk-actions-bar.visible {
+            display: flex;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bulk-actions-info {
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .bulk-actions-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .bulk-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bulk-btn.delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .bulk-btn.delete:hover {
+            background: #dc2626;
+        }
+
+        .bulk-btn.archive {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .bulk-btn.archive:hover {
+            background: #d97706;
+        }
+
+        .bulk-btn.cancel {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .bulk-btn.cancel:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .bulk-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Test Results List */
+        .results-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .select-all-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .select-all-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .select-all-container label {
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+        }
+
+        .test-result {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .test-result:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .test-result.selected {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+
+        .test-result-checkbox {
+            margin-top: 2px;
+        }
+
+        .test-result-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .test-result-content {
+            flex: 1;
+        }
+
+        .test-result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .test-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .test-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .test-status.passed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .test-status.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .test-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        /* Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .modal p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.confirm {
+            background: #ef4444;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #dc2626;
+        }
+
+        .modal-btn.cancel {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #d1d5db;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1f2937;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            display: none;
+            align-items: center;
+            gap: 12px;
+            z-index: 1001;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.visible {
+            display: flex;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .toast.success {
+            background: #10b981;
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Feature #389: Bulk Operations Work</h1>
+            <p>Verify bulk actions on multiple test results</p>
+
+            <div class="acceptance-criteria">
+                <h3>Acceptance Criteria</h3>
+                <div class="criterion">
+                    <input type="checkbox" id="ac1">
+                    <label for="ac1">AC1: Select multiple test results - Checkboxes allow multi-select</label>
+                </div>
+                <div class="criterion">
+                    <input type="checkbox" id="ac2">
+                    <label for="ac2">AC2: Apply bulk action - Bulk actions bar appears when items selected</label>
+                </div>
+                <div class="criterion">
+                    <input type="checkbox" id="ac3">
+                    <label for="ac3">AC3: Verify action applies to all - All selected items processed</label>
+                </div>
+                <div class="criterion">
+                    <input type="checkbox" id="ac4">
+                    <label for="ac4">AC4: Verify confirmation is shown - Confirmation dialog before action</label>
+                </div>
+                <div class="criterion">
+                    <input type="checkbox" id="ac5">
+                    <label for="ac5">AC5: Verify all items are updated - Items reflect changes after action</label>
+                </div>
+            </div>
+        </header>
+
+        <!-- Bulk Actions Bar -->
+        <div class="bulk-actions-bar" id="bulkActionsBar">
+            <div class="bulk-actions-info">
+                <span id="selectedCount">0</span> items selected
+            </div>
+            <div class="bulk-actions-buttons">
+                <button class="bulk-btn archive" onclick="confirmBulkArchive()" aria-label="Archive selected items">
+                    📦 Archive
+                </button>
+                <button class="bulk-btn delete" onclick="confirmBulkDelete()" aria-label="Delete selected items">
+                    🗑️ Delete
+                </button>
+                <button class="bulk-btn cancel" onclick="clearSelection()" aria-label="Clear selection">
+                    ✖️ Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div class="results-container">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <label for="selectAll">Select All</label>
+            </div>
+
+            <div id="resultsList">
+                <div class="loading">Loading test results...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <h2 id="modalTitle">Confirm Bulk Action</h2>
+            <p id="modalMessage">Are you sure you want to proceed?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-btn confirm" id="modalConfirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <span id="toastIcon">✅</span>
+        <span id="toastMessage">Action completed successfully</span>
+    </div>
+
+    <script>
+        // State
+        let testResults = [];
+        let selectedIds = new Set();
+        let currentAction = null;
+
+        const API_BASE = 'http://localhost:4001';
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadTestResults();
+        });
+
+        // Load mock test results
+        function loadTestResults() {
+            // Generate mock test results for demo
+            testResults = Array.from({ length: 10 }, (_, i) => ({
+                test_id: `test_${Date.now()}_${i}`,
+                test_name: `Test Scenario #${i + 1}`,
+                status: i % 3 === 0 ? 'failed' : 'passed',
+                duration_ms: Math.floor(Math.random() * 5000) + 100,
+                timestamp: new Date().toISOString()
+            }));
+
+            displayResults();
+        }
+
+        // Display test results
+        function displayResults() {
+            const container = document.getElementById('resultsList');
+
+            if (testResults.length === 0) {
+                container.innerHTML = '<div class="empty-state">No test results found</div>';
+                return;
+            }
+
+            const html = testResults.map(result => `
+                <div class="test-result ${selectedIds.has(result.test_id) ? 'selected' : ''}" data-test-id="${result.test_id}">
+                    <div class="test-result-checkbox">
+                        <input
+                            type="checkbox"
+                            class="result-checkbox"
+                            data-test-id="${result.test_id}"
+                            ${selectedIds.has(result.test_id) ? 'checked' : ''}
+                            onchange="toggleSelection('${result.test_id}')"
+                            aria-label="Select ${result.test_name}"
+                        >
+                    </div>
+                    <div class="test-result-content">
+                        <div class="test-result-header">
+                            <div class="test-name">${escapeHtml(result.test_name)}</div>
+                            <div class="test-status ${result.status}">
+                                ${result.status === 'passed' ? '✅ PASSED' : '❌ FAILED'}
+                            </div>
+                        </div>
+                        <div class="test-meta">
+                            <span>🆔 ${result.test_id}</span>
+                            <span>⏱️ ${result.duration_ms}ms</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+            updateBulkActionsBar();
+        }
+
+        // Toggle selection of a single result
+        function toggleSelection(testId) {
+            if (selectedIds.has(testId)) {
+                selectedIds.delete(testId);
+            } else {
+                selectedIds.add(testId);
+            }
+
+            // Update UI
+            const resultRow = document.querySelector(`[data-test-id="${testId}"]`);
+            if (resultRow) {
+                resultRow.classList.toggle('selected', selectedIds.has(testId));
+            }
+
+            // Update select all checkbox
+            const selectAllCheckbox = document.getElementById('selectAll');
+            selectAllCheckbox.checked = selectedIds.size === testResults.length && testResults.length > 0;
+
+            updateBulkActionsBar();
+        }
+
+        // Toggle select all
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.result-checkbox');
+
+            if (selectAllCheckbox.checked) {
+                // Select all
+                checkboxes.forEach(cb => {
+                    const testId = cb.dataset.testId;
+                    selectedIds.add(testId);
+                    cb.checked = true;
+
+                    const resultRow = document.querySelector(`[data-test-id="${testId}"]`);
+                    if (resultRow) resultRow.classList.add('selected');
+                });
+            } else {
+                // Deselect all
+                checkboxes.forEach(cb => {
+                    const testId = cb.dataset.testId;
+                    selectedIds.delete(testId);
+                    cb.checked = false;
+
+                    const resultRow = document.querySelector(`[data-test-id="${testId}"]`);
+                    if (resultRow) resultRow.classList.remove('selected');
+                });
+            }
+
+            updateBulkActionsBar();
+        }
+
+        // Update bulk actions bar visibility and count
+        function updateBulkActionsBar() {
+            const bulkBar = document.getElementById('bulkActionsBar');
+            const selectedCount = document.getElementById('selectedCount');
+
+            if (selectedIds.size > 0) {
+                bulkBar.classList.add('visible');
+                selectedCount.textContent = selectedIds.size;
+            } else {
+                bulkBar.classList.remove('visible');
+            }
+        }
+
+        // Clear selection
+        function clearSelection() {
+            selectedIds.clear();
+
+            const checkboxes = document.querySelectorAll('.result-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                const testId = cb.dataset.testId;
+                const resultRow = document.querySelector(`[data-test-id="${testId}"]`);
+                if (resultRow) resultRow.classList.remove('selected');
+            });
+
+            document.getElementById('selectAll').checked = false;
+            updateBulkActionsBar();
+        }
+
+        // Confirm bulk delete
+        function confirmBulkDelete() {
+            currentAction = 'delete';
+            showModal(
+                'Confirm Bulk Delete',
+                `Are you sure you want to delete ${selectedIds.size} test result(s)? This action cannot be undone.`,
+                'Delete',
+                executeBulkDelete
+            );
+        }
+
+        // Confirm bulk archive
+        function confirmBulkArchive() {
+            currentAction = 'archive';
+            showModal(
+                'Confirm Bulk Archive',
+                `Are you sure you want to archive ${selectedIds.size} test result(s)?`,
+                'Archive',
+                executeBulkArchive
+            );
+        }
+
+        // Execute bulk delete
+        async function executeBulkDelete() {
+            const testIds = Array.from(selectedIds);
+
+            try {
+                // For demo purposes, simulate API call
+                await simulateBulkAction('delete', testIds);
+
+                // Remove deleted items from list
+                testResults = testResults.filter(r => !selectedIds.has(r.test_id));
+
+                // Show success message
+                showToast(`Successfully deleted ${testIds.length} test result(s)`, 'success');
+
+                // Mark acceptance criteria
+                markCriterion('ac3');
+                markCriterion('ac4');
+                markCriterion('ac5');
+
+                // Clear selection and refresh display
+                clearSelection();
+
+            } catch (error) {
+                showToast(`Failed to delete: ${error.message}`, 'error');
+            }
+        }
+
+        // Execute bulk archive
+        async function executeBulkArchive() {
+            const testIds = Array.from(selectedIds);
+
+            try {
+                // For demo purposes, simulate API call
+                await simulateBulkAction('archive', testIds);
+
+                // Update status of archived items
+                testResults.forEach(result => {
+                    if (selectedIds.has(result.test_id)) {
+                        result.archived = true;
+                    }
+                });
+
+                // Show success message
+                showToast(`Successfully archived ${testIds.length} test result(s)`, 'success');
+
+                // Mark acceptance criteria
+                markCriterion('ac3');
+                markCriterion('ac4');
+                markCriterion('ac5');
+
+                // Clear selection and refresh display
+                clearSelection();
+
+            } catch (error) {
+                showToast(`Failed to archive: ${error.message}`, 'error');
+            }
+        }
+
+        // Simulate bulk action (for demo)
+        async function simulateBulkAction(action, testIds) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    console.log(`${action.toUpperCase()} ${testIds.length} items:`, testIds);
+                    resolve({ success: true });
+                }, 1000);
+            });
+        }
+
+        // Show modal
+        function showModal(title, message, confirmText, onConfirm) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('modalConfirmBtn').textContent = confirmText;
+
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            confirmBtn.onclick = () => {
+                onConfirm();
+                closeModal();
+            };
+
+            document.getElementById('confirmModal').classList.add('visible');
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('confirmModal').classList.remove('visible');
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toast.className = `toast ${type}`;
+            toastIcon.textContent = type === 'success' ? '✅' : '❌';
+            toastMessage.textContent = message;
+
+            toast.classList.add('visible');
+
+            setTimeout(() => {
+                toast.classList.remove('visible');
+            }, 3000);
+        }
+
+        // Mark acceptance criterion as completed
+        function markCriterion(id) {
+            const checkbox = document.getElementById(id);
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+                checkbox.closest('.criterion').classList.add('completed');
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-mark AC1 and AC2 when user interacts
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('result-checkbox')) {
+                markCriterion('ac1');
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('bulk-btn')) {
+                markCriterion('ac2');
+            }
+        });
+    </script>
+</body>
+</html>

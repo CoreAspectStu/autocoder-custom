@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #373: Sidebar Toggle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Layout Container */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            transition: transform 0.3s ease, width 0.3s ease;
+            z-index: 50;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            pointer-events: auto;
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-280px);
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-title {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav-item {
+            margin-bottom: 8px;
+        }
+
+        .sidebar-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .sidebar-nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .sidebar-nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .sidebar-nav-icon {
+            font-size: 20px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            transition: margin-left 0.3s ease;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
+        /* Header with Toggle Button */
+        .header {
+            background: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .toggle-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        }
+
+        .toggle-button:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        .toggle-button:active {
+            transform: scale(0.95);
+        }
+
+        .toggle-button:focus {
+            outline: 3px solid rgba(102, 126, 234, 0.5);
+            outline-offset: 2px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a202c;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 30px;
+            flex: 1;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            font-size: 24px;
+            color: #1a202c;
+            margin-bottom: 20px;
+        }
+
+        .card p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .status-indicator.collapsed {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .status-indicator.expanded {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .demo-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .demo-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .demo-button.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .demo-button.primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .demo-button.secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .demo-button.secondary:hover {
+            background: #cbd5e0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 280px;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .main-content.expanded {
+                margin-left: 0;
+            }
+
+            .sidebar.collapsed {
+                transform: translateX(-280px);
+            }
+
+            .page-title {
+                font-size: 20px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+        }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Smooth transitions for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            .sidebar,
+            .main-content,
+            .toggle-button {
+                transition: none;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+            <div class="sidebar-header">
+                <div class="sidebar-title">
+                    <span>🚀</span>
+                    <span>UAT Gateway</span>
+                </div>
+            </div>
+
+            <nav>
+                <ul class="sidebar-nav">
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link active">
+                            <span class="sidebar-nav-icon">📊</span>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link">
+                            <span class="sidebar-nav-icon">🧪</span>
+                            <span>Tests</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link">
+                            <span class="sidebar-nav-icon">📋</span>
+                            <span>Journeys</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link">
+                            <span class="sidebar-nav-icon">📈</span>
+                            <span>Results</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link">
+                            <span class="sidebar-nav-icon">⚙️</span>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-nav-item">
+                        <a href="#" class="sidebar-nav-link">
+                            <span class="sidebar-nav-icon">📖</span>
+                            <span>Documentation</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <button
+                        class="toggle-button"
+                        id="toggleButton"
+                        aria-label="Toggle sidebar"
+                        aria-expanded="true"
+                        aria-controls="sidebar"
+                        title="Toggle sidebar">
+                        <span id="toggleIcon">☰</span>
+                    </button>
+                    <h1 class="page-title">Feature #373: Sidebar Toggle</h1>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <div class="user-avatar">U</div>
+                        <div class="user-name">Test User</div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content">
+                <div class="card">
+                    <h2>Sidebar Toggle Demo</h2>
+                    <p>
+                        This feature demonstrates a fully functional sidebar that can be collapsed
+                        and expanded using the toggle button in the header.
+                    </p>
+                    <p>
+                        The sidebar state persists across page refreshes using localStorage,
+                        ensuring a consistent user experience.
+                    </p>
+
+                    <div class="status-indicator expanded" id="statusIndicator">
+                        <span>●</span>
+                        <span id="statusText">Sidebar is currently expanded</span>
+                    </div>
+
+                    <div class="demo-buttons">
+                        <button class="demo-button primary" id="collapseBtn">
+                            Collapse Sidebar
+                        </button>
+                        <button class="demo-button secondary" id="expandBtn">
+                            Expand Sidebar
+                        </button>
+                        <button class="demo-button secondary" id="resetBtn">
+                            Reset to Default
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Acceptance Criteria</h2>
+                    <ul style="color: #4a5568; line-height: 2;">
+                        <li>✅ Click collapse button - Sidebar collapses smoothly</li>
+                        <li>✅ Verify sidebar collapses - Main content expands to fill space</li>
+                        <li>✅ Verify main content expands - Content uses full width</li>
+                        <li>✅ Click expand button - Sidebar expands smoothly</li>
+                        <li>✅ Verify sidebar expands - Main content adjusts back</li>
+                        <li>✅ Verify state persists - State saved to localStorage</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h2>Features</h2>
+                    <p><strong>Smooth Animations:</strong> CSS transitions provide smooth collapse/expand animations</p>
+                    <p><strong>State Persistence:</strong> Sidebar state saved to localStorage and restored on page load</p>
+                    <p><strong>Accessibility:</strong> Proper ARIA labels, roles, and keyboard navigation support</p>
+                    <p><strong>Responsive Design:</strong> Works seamlessly on desktop and mobile devices</p>
+                    <p><strong>Visual Feedback:</strong> Clear status indicator shows current sidebar state</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Screen reader announcements -->
+    <div id="srAnnouncements" class="sr-only" role="status" aria-live="polite"></div>
+
+    <script>
+        // DOM Elements
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const toggleButton = document.getElementById('toggleButton');
+        const toggleIcon = document.getElementById('toggleIcon');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const collapseBtn = document.getElementById('collapseBtn');
+        const expandBtn = document.getElementById('expandBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const srAnnouncements = document.getElementById('srAnnouncements');
+
+        // Constants
+        const STORAGE_KEY = 'sidebar_collapsed';
+
+        /**
+         * Announce changes to screen readers
+         */
+        function announce(message) {
+            srAnnouncements.textContent = message;
+            setTimeout(() => {
+                srAnnouncements.textContent = '';
+            }, 1000);
+        }
+
+        /**
+         * Update UI based on sidebar state
+         */
+        function updateUI() {
+            const isCollapsed = sidebar.classList.contains('collapsed');
+
+            // Update ARIA attributes
+            toggleButton.setAttribute('aria-expanded', !isCollapsed);
+
+            // Update icon
+            toggleIcon.textContent = isCollapsed ? '☰' : '✕';
+
+            // Update status indicator
+            if (isCollapsed) {
+                statusIndicator.className = 'status-indicator collapsed';
+                statusText.textContent = 'Sidebar is currently collapsed';
+            } else {
+                statusIndicator.className = 'status-indicator expanded';
+                statusText.textContent = 'Sidebar is currently expanded';
+            }
+
+            // Update button states
+            collapseBtn.disabled = isCollapsed;
+            expandBtn.disabled = !isCollapsed;
+
+            if (isCollapsed) {
+                collapseBtn.style.opacity = '0.5';
+                collapseBtn.style.cursor = 'not-allowed';
+                expandBtn.style.opacity = '1';
+                expandBtn.style.cursor = 'pointer';
+            } else {
+                collapseBtn.style.opacity = '1';
+                collapseBtn.style.cursor = 'pointer';
+                expandBtn.style.opacity = '0.5';
+                expandBtn.style.cursor = 'not-allowed';
+            }
+        }
+
+        /**
+         * Collapse sidebar
+         */
+        function collapseSidebar() {
+            sidebar.classList.add('collapsed');
+            mainContent.classList.add('expanded');
+            localStorage.setItem(STORAGE_KEY, 'true');
+            updateUI();
+            announce('Sidebar collapsed');
+        }
+
+        /**
+         * Expand sidebar
+         */
+        function expandSidebar() {
+            sidebar.classList.remove('collapsed');
+            mainContent.classList.remove('expanded');
+            localStorage.setItem(STORAGE_KEY, 'false');
+            updateUI();
+            announce('Sidebar expanded');
+        }
+
+        /**
+         * Toggle sidebar state
+         */
+        function toggleSidebar() {
+            const isCollapsed = sidebar.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                expandSidebar();
+            } else {
+                collapseSidebar();
+            }
+        }
+
+        /**
+         * Reset sidebar to default (expanded) state
+         */
+        function resetSidebar() {
+            localStorage.removeItem(STORAGE_KEY);
+            sidebar.classList.remove('collapsed');
+            mainContent.classList.remove('expanded');
+            updateUI();
+            announce('Sidebar reset to default expanded state');
+        }
+
+        /**
+         * Initialize sidebar state from localStorage
+         */
+        function initializeSidebar() {
+            const savedState = localStorage.getItem(STORAGE_KEY);
+
+            if (savedState === 'true') {
+                sidebar.classList.add('collapsed');
+                mainContent.classList.add('expanded');
+            } else {
+                sidebar.classList.remove('collapsed');
+                mainContent.classList.remove('expanded');
+            }
+
+            updateUI();
+        }
+
+        // Event Listeners
+        toggleButton.addEventListener('click', toggleSidebar);
+        collapseBtn.addEventListener('click', collapseSidebar);
+        expandBtn.addEventListener('click', expandSidebar);
+        resetBtn.addEventListener('click', resetSidebar);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + B to toggle sidebar (common shortcut)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+                e.preventDefault();
+                toggleSidebar();
+            }
+
+            // Escape to collapse sidebar
+            if (e.key === 'Escape' && !sidebar.classList.contains('collapsed')) {
+                collapseSidebar();
+            }
+        });
+
+        // Initialize on page load
+        initializeSidebar();
+
+        // Log for testing purposes
+        console.log('Feature #373: Sidebar Toggle initialized');
+        console.log('Current state:', sidebar.classList.contains('collapsed') ? 'collapsed' : 'expanded');
+        console.log('Keyboard shortcuts: Ctrl/Cmd+B to toggle, Escape to collapse');
+    </script>
+</body>
+</html>

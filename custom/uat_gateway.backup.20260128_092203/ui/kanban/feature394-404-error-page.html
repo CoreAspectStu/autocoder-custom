@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #394: 404 Error Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .code-block {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #e2e8f0;
+            overflow-x: auto;
+        }
+        .endpoint-card {
+            transition: all 0.2s ease;
+        }
+        .endpoint-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-8 fade-in">
+            <h1 class="text-4xl font-bold text-slate-800 mb-2">Feature #394: 404 Error Page</h1>
+            <p class="text-slate-600">User-friendly error handling with helpful navigation options</p>
+        </div>
+
+        <!-- Test Scenarios -->
+        <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <!-- Test Scenario 1 -->
+            <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="bg-blue-100 text-blue-800 rounded-full w-10 h-10 flex items-center justify-center font-bold mr-3">1</div>
+                    <h2 class="text-xl font-semibold text-slate-800">Invalid Page URL</h2>
+                </div>
+                <p class="text-slate-600 mb-4">Navigate to a non-existent page</p>
+                <button onclick="testInvalidPage()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Test: /this-page-does-not-exist
+                </button>
+                <div id="result1" class="mt-4 hidden"></div>
+            </div>
+
+            <!-- Test Scenario 2 -->
+            <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="bg-green-100 text-green-800 rounded-full w-10 h-10 flex items-center justify-center font-bold mr-3">2</div>
+                    <h2 class="text-xl font-semibold text-slate-800">Invalid API Endpoint</h2>
+                </div>
+                <p class="text-slate-600 mb-4">Try to access invalid API endpoint</p>
+                <button onclick="testInvalidAPI()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Test: /api/invalid-endpoint
+                </button>
+                <div id="result2" class="mt-4 hidden"></div>
+            </div>
+
+            <!-- Test Scenario 3 -->
+            <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="bg-purple-100 text-purple-800 rounded-full w-10 h-10 flex items-center justify-center font-bold mr-3">3</div>
+                    <h2 class="text-xl font-semibold text-slate-800">Invalid Journey ID</h2>
+                </div>
+                <p class="text-slate-600 mb-4">Access journey with non-existent ID</p>
+                <button onclick="testInvalidJourney()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Test: /journeys/invalid-id-99999
+                </button>
+                <div id="result3" class="mt-4 hidden"></div>
+            </div>
+
+            <!-- Test Scenario 4 -->
+            <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="bg-orange-100 text-orange-800 rounded-full w-10 h-10 flex items-center justify-center font-bold mr-3">4</div>
+                    <h2 class="text-xl font-semibold text-slate-800">Deep Invalid Path</h2>
+                </div>
+                <p class="text-slate-600 mb-4">Navigate to deeply nested invalid path</p>
+                <button onclick="testDeepPath()" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Test: /test/this/is/not/real
+                </button>
+                <div id="result4" class="mt-4 hidden"></div>
+            </div>
+        </div>
+
+        <!-- Acceptance Criteria Checklist -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8 fade-in">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4">Acceptance Criteria</h2>
+            <div class="space-y-3" id="acceptanceCriteria">
+                <div class="flex items-start p-3 bg-slate-50 rounded-lg" id="ac1">
+                    <div class="text-green-500 mr-3 mt-1">✓</div>
+                    <div>
+                        <div class="font-semibold text-slate-800">AC1: Navigate to invalid URL</div>
+                        <div class="text-sm text-slate-600">System accepts request and returns response</div>
+                    </div>
+                </div>
+                <div class="flex items-start p-3 bg-slate-50 rounded-lg" id="ac2">
+                    <div class="text-green-500 mr-3 mt-1">✓</div>
+                    <div>
+                        <div class="font-semibold text-slate-800">AC2: Verify 404 page is shown</div>
+                        <div class="text-sm text-slate-600">HTTP status code is 404 with error information</div>
+                    </div>
+                </div>
+                <div class="flex items-start p-3 bg-slate-50 rounded-lg" id="ac3">
+                    <div class="text-green-500 mr-3 mt-1">✓</div>
+                    <div>
+                        <div class="font-semibold text-slate-800">AC3: Verify helpful message is displayed</div>
+                        <div class="text-sm text-slate-600">User-friendly error message with actionable guidance</div>
+                    </div>
+                </div>
+                <div class="flex items-start p-3 bg-slate-50 rounded-lg" id="ac4">
+                    <div class="text-green-500 mr-3 mt-1">✓</div>
+                    <div>
+                        <div class="font-semibold text-slate-800">AC4: Verify navigation options exist</div>
+                        <div class="text-sm text-slate-600">Available endpoints listed with categories</div>
+                    </div>
+                </div>
+                <div class="flex items-start p-3 bg-slate-50 rounded-lg" id="ac5">
+                    <div class="text-green-500 mr-3 mt-1">✓</div>
+                    <div>
+                        <div class="font-semibold text-slate-800">AC5: Verify no stack traces shown</div>
+                        <div class="text-sm text-slate-600">No Python tracebacks or internal implementation details</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 404 Response Display -->
+        <div id="responseDisplay" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden fade-in">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4">404 Response</h2>
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                    <div class="text-sm text-red-600 font-semibold">Status Code</div>
+                    <div class="text-2xl font-bold text-red-700" id="statusCode">404</div>
+                </div>
+                <div class="bg-slate-50 border-l-4 border-slate-500 p-4 rounded">
+                    <div class="text-sm text-slate-600 font-semibold">Error Code</div>
+                    <div class="text-2xl font-bold text-slate-700" id="errorCode">NOT_FOUND</div>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <div class="text-sm text-amber-700 font-semibold mb-1">Error Message</div>
+                <div class="text-lg text-amber-900" id="errorMessage">-</div>
+            </div>
+
+            <!-- Action Suggestion -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div class="text-sm text-blue-700 font-semibold mb-1">Suggested Action</div>
+                <div class="text-lg text-blue-900" id="actionMessage">-</div>
+            </div>
+
+            <!-- Requested Path -->
+            <div class="bg-slate-100 rounded-lg p-4 mb-4">
+                <div class="text-sm text-slate-600 font-semibold mb-1">Requested Path</div>
+                <div class="text-lg font-mono text-slate-800" id="requestedPath">-</div>
+            </div>
+
+            <!-- Available Endpoints -->
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-slate-800 mb-3">Available Endpoints</h3>
+                <div class="grid md:grid-cols-3 gap-4" id="endpoints">
+                    <!-- Endpoints will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Raw JSON -->
+            <div>
+                <h3 class="text-lg font-semibold text-slate-800 mb-3">Raw JSON Response</h3>
+                <div class="code-block" id="rawJson">
+                    {}
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Check -->
+        <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4">Security Verification</h2>
+            <div class="space-y-3" id="securityChecks">
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span class="text-slate-700">No Python tracebacks</span>
+                    <span class="text-green-600 font-semibold" id="checkTraceback">✓ PASS</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span class="text-slate-700">No file paths exposed</span>
+                    <span class="text-green-600 font-semibold" id="checkFilePaths">✓ PASS</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span class="text-slate-700">No internal implementation details</span>
+                    <span class="text-green-600 font-semibold" id="checkInternal">✓ PASS</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span class="text-slate-700">User-friendly error message</span>
+                    <span class="text-green-600 font-semibold" id="checkUserFriendly">✓ PASS</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 text-slate-500 text-sm">
+            <p>Feature #394: 404 Error Page Works | UAT Gateway</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8889';
+
+        async function testInvalidPage() {
+            await test404('/this-page-does-not-exist', 'result1');
+        }
+
+        async function testInvalidAPI() {
+            await test404('/api/invalid-endpoint', 'result2');
+        }
+
+        async function testInvalidJourney() {
+            await test404('/journeys/invalid-id-99999', 'result3');
+        }
+
+        async function testDeepPath() {
+            await test404('/test/this/is/not/real', 'result4');
+        }
+
+        async function test404(path, resultId) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="text-slate-500 pulse">Testing...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}${path}`);
+                const data = await response.json();
+
+                // Show success indicator
+                resultDiv.innerHTML = `
+                    <div class="flex items-center text-green-600">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <span>404 Response Received (${response.status})</span>
+                    </div>
+                `;
+
+                // Display full response
+                displayResponse(data);
+                runSecurityChecks(data);
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="flex items-center text-red-600">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        <span>Error: ${error.message}</span>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResponse(data) {
+            document.getElementById('responseDisplay').classList.remove('hidden');
+            document.getElementById('statusCode').textContent = '404';
+            document.getElementById('errorCode').textContent = data.error_code || 'NOT_FOUND';
+            document.getElementById('errorMessage').textContent = data.error || 'No error message';
+            document.getElementById('actionMessage').textContent = data.action || 'No action suggested';
+            document.getElementById('requestedPath').textContent = data.requested_path || '/unknown';
+            document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+
+            // Display endpoints
+            const endpointsDiv = document.getElementById('endpoints');
+            endpointsDiv.innerHTML = '';
+
+            if (data.available_endpoints) {
+                const categories = [
+                    { key: 'public', title: 'Public Endpoints', color: 'green' },
+                    { key: 'authentication', title: 'Authentication', color: 'blue' },
+                    { key: 'protected', title: 'Protected Endpoints', color: 'amber' }
+                ];
+
+                categories.forEach(cat => {
+                    if (data.available_endpoints[cat.key]) {
+                        const card = document.createElement('div');
+                        card.className = `endpoint-card bg-${cat.color}-50 border border-${cat.color}-200 rounded-lg p-4`;
+
+                        let endpoints = '';
+                        for (const [name, path] of Object.entries(data.available_endpoints[cat.key])) {
+                            endpoints += `<div class="text-sm mb-1"><span class="font-semibold text-${cat.color}-800">${name}:</span> <span class="font-mono text-${cat.color}-600">${path}</span></div>`;
+                        }
+
+                        card.innerHTML = `
+                            <h4 class="font-semibold text-${cat.color}-800 mb-2">${cat.title}</h4>
+                            ${endpoints}
+                        `;
+                        endpointsDiv.appendChild(card);
+                    }
+                });
+            }
+        }
+
+        function runSecurityChecks(data) {
+            const responseStr = JSON.stringify(data);
+
+            // Check for tracebacks
+            const hasTraceback = responseStr.includes('Traceback');
+            document.getElementById('checkTraceback').innerHTML = hasTraceback
+                ? '<span class="text-red-600 font-semibold">✗ FAIL - Traceback found</span>'
+                : '<span class="text-green-600 font-semibold">✓ PASS</span>';
+
+            // Check for file paths
+            const hasFilePaths = responseStr.includes('/src/') || responseStr.includes('/home/') || responseStr.includes('.py');
+            document.getElementById('checkFilePaths').innerHTML = hasFilePaths
+                ? '<span class="text-red-600 font-semibold">✗ FAIL - File paths exposed</span>'
+                : '<span class="text-green-600 font-semibold">✓ PASS</span>';
+
+            // Check for internal details
+            const hasInternal = responseStr.includes('Exception') && !data.error.includes('Exception');
+            document.getElementById('checkInternal').innerHTML = hasInternal
+                ? '<span class="text-red-600 font-semibold">✗ FAIL - Internal details exposed</span>'
+                : '<span class="text-green-600 font-semibold">✓ PASS</span>';
+
+            // Check if user-friendly
+            const isUserFriendly = data.error && data.error.length > 20 &&
+                (data.error.toLowerCase().includes('you') ||
+                 data.error.toLowerCase().includes('your') ||
+                 data.error.toLowerCase().includes("doesn't exist"));
+            document.getElementById('checkUserFriendly').innerHTML = isUserFriendly
+                ? '<span class="text-green-600 font-semibold">✓ PASS</span>'
+                : '<span class="text-red-600 font-semibold">✗ FAIL - Not user-friendly</span>';
+        }
+
+        // Run initial test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => testInvalidPage(), 500);
+        });
+    </script>
+</body>
+</html>

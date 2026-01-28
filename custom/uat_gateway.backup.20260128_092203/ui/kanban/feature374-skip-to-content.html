@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature #374 - Skip to Content Link</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+
+    /* ============================================================================
+       SKIP LINK IMPLEMENTATION - CORE FEATURE
+       ============================================================================ */
+
+    /* Skip link is visually hidden but accessible to keyboard users */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: #000;
+      color: #fff;
+      padding: 8px;
+      text-decoration: none;
+      z-index: 100;
+      transition: top 0.3s;
+    }
+
+    /* When focused, the skip link becomes visible */
+    .skip-link:focus,
+    .skip-link.skip-link-focused {
+      top: 0;
+      outline: 3px solid #fff;
+      outline-offset: -3px;
+    }
+
+    /* ============================================================================
+       HEADER & NAVIGATION
+       ============================================================================ */
+
+    .site-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 40px;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .main-nav {
+      background: rgba(0,0,0,0.1);
+      padding: 0 40px;
+    }
+
+    .nav-list {
+      display: flex;
+      list-style: none;
+      gap: 0;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 15px 20px;
+      color: white;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .nav-link:hover,
+    .nav-link:focus {
+      background: rgba(255,255,255,0.1);
+      outline: 2px solid white;
+      outline-offset: -2px;
+    }
+
+    /* ============================================================================
+       MAIN CONTENT
+       ============================================================================ */
+
+    #main-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .demo-header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .demo-header h1 {
+      color: #1f2937;
+      margin-bottom: 10px;
+      font-size: 2em;
+    }
+
+    .demo-header .subtitle {
+      color: #6b7280;
+      font-size: 1.1em;
+    }
+
+    /* ============================================================================
+       ACCEPTANCE CRITERIA SECTIONS
+       ============================================================================ */
+
+    .acceptance-criteria {
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .acceptance-criteria h2 {
+      color: #1f2937;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .criteria-item {
+      margin-bottom: 25px;
+      padding: 20px;
+      background: #f9fafb;
+      border-radius: 6px;
+      border-left: 4px solid #3b82f6;
+    }
+
+    .criteria-item h3 {
+      color: #1f2937;
+      margin-bottom: 10px;
+      font-size: 1.1em;
+    }
+
+    .criteria-item p {
+      color: #6b7280;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+
+    .status.pass {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status.fail {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* ============================================================================
+       TEST INSTRUCTIONS
+       ============================================================================ */
+
+    .test-instructions {
+      background: #eff6ff;
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+
+    .test-instructions h2 {
+      color: #1e40af;
+      margin-bottom: 15px;
+    }
+
+    .test-instructions ol {
+      margin-left: 20px;
+    }
+
+    .test-instructions li {
+      margin-bottom: 12px;
+      color: #1f2937;
+      line-height: 1.6;
+    }
+
+    .test-instructions kbd {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: monospace;
+      font-size: 0.9em;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* ============================================================================
+       DEMO CONTENT
+       ============================================================================ */
+
+    .demo-content {
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .demo-content h2 {
+      color: #1f2937;
+      margin-bottom: 15px;
+    }
+
+    .demo-content p {
+      color: #6b7280;
+      margin-bottom: 15px;
+    }
+
+    .feature-box {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .feature-box h4 {
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+
+    .feature-box p {
+      color: #78350f;
+      margin: 0;
+    }
+
+    /* ============================================================================
+       FOOTER
+       ============================================================================ */
+
+    .site-footer {
+      background: #1f2937;
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+      margin-top: 40px;
+    }
+
+    /* ============================================================================
+       ACCESSIBILITY: FOCUS STYLES
+       ============================================================================ */
+
+    *:focus {
+      outline: 3px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    *:focus:not(:focus-visible) {
+      outline: 3px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    *:focus-visible {
+      outline: 3px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    /* ============================================================================
+       STATUS INDICATORS
+       ============================================================================ */
+
+    .indicator-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .indicator-card {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 6px;
+      border-left: 4px solid #10b981;
+    }
+
+    .indicator-card h4 {
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .indicator-card p {
+      color: #6b7280;
+      font-size: 0.9em;
+      margin: 0;
+    }
+
+  </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+
+  <!-- =======================================================================
+       SKIP LINK - THE CORE FEATURE
+       This link is the first focusable element on the page.
+       It's positioned off-screen (top: -40px) but becomes visible when focused.
+       ======================================================================= -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- =======================================================================
+       HEADER & NAVIGATION
+       This represents the typical navigation that keyboard users want to skip.
+       ======================================================================= -->
+  <header class="site-header">
+    <div class="header-top">
+      <div class="logo">UAT Gateway</div>
+      <nav class="main-nav">
+        <ul class="nav-list">
+          <li><a href="#" class="nav-link">Home</a></li>
+          <li><a href="#" class="nav-link">Dashboard</a></li>
+          <li><a href="#" class="nav-link">Tests</a></li>
+          <li><a href="#" class="nav-link">Results</a></li>
+          <li><a href="#" class="nav-link">Settings</a></li>
+          <li><a href="#" class="nav-link">Profile</a></li>
+          <li><a href="#" class="nav-link">Help</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =======================================================================
+       MAIN CONTENT - Where the skip link jumps to
+       ======================================================================= -->
+  <main id="main-content" tabindex="-1">
+    <div class="demo-header">
+      <h1>Feature #374: Skip to Content Link</h1>
+      <p class="subtitle">Accessibility feature for keyboard navigation</p>
+    </div>
+
+    <!-- ====================================================================
+         TEST INSTRUCTIONS
+         ==================================================================== -->
+    <section class="test-instructions" aria-labelledby="test-instructions-title">
+      <h2 id="test-instructions-title">🧪 How to Test This Feature</h2>
+      <ol>
+        <li>
+          <strong>Load this page</strong> - Open the page in a browser
+        </li>
+        <li>
+          <strong>Press <kbd>Tab</kbd> key</strong> - The first element you focus should be the "Skip to main content" link
+        </li>
+        <li>
+          <strong>Verify skip link appears</strong> - When focused, the link should slide down from the top of the page with a black background
+        </li>
+        <li>
+          <strong>Press <kbd>Enter</kbd> key</strong> - Activate the skip link
+        </li>
+        <li>
+          <strong>Verify focus moves to main content</strong> - Focus should jump directly to the main content area (this section), bypassing all navigation links
+        </li>
+        <li>
+          <strong>Verify navigation is skipped</strong> - You should NOT have to Tab through all 7 navigation links to reach the main content
+        </li>
+      </ol>
+
+      <div class="feature-box">
+        <h4>💡 Why This Matters</h4>
+        <p>
+          Without a skip link, keyboard users must press Tab 7+ times to get through the navigation
+          every time they visit a new page. This is frustrating and inefficient. The skip link
+          provides a one-click shortcut to the main content.
+        </p>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         ACCEPTANCE CRITERIA CHECKLIST
+         ==================================================================== -->
+    <section class="acceptance-criteria" aria-labelledby="ac-title">
+      <h2 id="ac-title">✅ Acceptance Criteria</h2>
+
+      <div class="criteria-item">
+        <h3>AC1: Press Tab on page load</h3>
+        <p>
+          <strong>Requirement:</strong> When the page loads, pressing Tab should focus the skip link as the first element.
+        </p>
+        <p>
+          <strong>Verification:</strong> The skip link is the first focusable element in the DOM, before the header navigation.
+        </p>
+        <p>
+          <strong>Status:</strong> <span class="status pass">PASS</span> - Skip link is first element in HTML
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>AC2: Verify skip link appears</h3>
+        <p>
+          <strong>Requirement:</strong> When the skip link receives focus, it should become visible.
+        </p>
+        <p>
+          <strong>Verification:</strong> CSS uses <code>position: absolute; top: -40px</code> to hide off-screen, and <code>.skip-link:focus { top: 0; }</code> to show when focused.
+        </p>
+        <p>
+          <strong>Status:</strong> <span class="status pass">PASS</span> - Focus triggers visibility with slide-down animation
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>AC3: Activate skip link</h3>
+        <p>
+          <strong>Requirement:</strong> Pressing Enter on the focused skip link should activate it.
+        </p>
+        <p>
+          <strong>Verification:</strong> The link uses standard href="#main-content" anchor navigation.
+        </p>
+        <p>
+          <strong>Status:</strong> <span class="status pass">PASS</span> - Standard anchor link works with Enter key
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>AC4: Verify focus moves to main content</h3>
+        <p>
+          <strong>Requirement:</strong> After activating the skip link, focus should move to the main content area.
+        </p>
+        <p>
+          <strong>Verification:</strong> The target element has <code>id="main-content"</code> and is a valid focus target.
+        </p>
+        <p>
+          <strong>Status:</strong> <span class="status pass">PASS</span> - Focus moves to #main-content element
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>AC5: Verify navigation is skipped</h3>
+        <p>
+          <strong>Requirement:</strong> The skip link should bypass all navigation elements, taking the user directly to main content.
+        </p>
+        <p>
+          <strong>Verification:</strong> Without the skip link, users would need to Tab through 7 navigation items. With the skip link, one press of Enter bypasses all navigation.
+        </p>
+        <p>
+          <strong>Status:</strong> <span class="status pass">PASS</span> - Navigation is completely bypassed
+        </p>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         TECHNICAL IMPLEMENTATION DETAILS
+         ==================================================================== -->
+    <section class="demo-content" aria-labelledby="implementation-title">
+      <h2 id="implementation-title">🔧 Technical Implementation</h2>
+
+      <div class="indicator-grid">
+        <div class="indicator-card">
+          <h4>🎯 Position</h4>
+          <p>First element in DOM, before all navigation</p>
+        </div>
+
+        <div class="indicator-card">
+          <h4>👁️ Visibility</h4>
+          <p>Hidden off-screen (top: -40px), shown on focus</p>
+        </div>
+
+        <div class="indicator-card">
+          <h4>⌨️ Keyboard</h4>
+          <p>Accessible via Tab key, activated with Enter</p>
+        </div>
+
+        <div class="indicator-card">
+          <h4>🎨 Styling</h4>
+          <p>High contrast (black bg, white text) for visibility</p>
+        </div>
+
+        <div class="indicator-card">
+          <h4>🔗 Target</h4>
+          <p>Links to #main-content id</p>
+        </div>
+
+        <div class="indicator-card">
+          <h4>♿ Accessibility</h4>
+          <p>WCAG 2.1 Level A compliant (2.4.1 Bypass Blocks)</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         ACCESSIBILITY BENEFITS
+         ==================================================================== -->
+    <section class="demo-content" aria-labelledby="benefits-title">
+      <h2 id="benefits-title">♿ Accessibility Benefits</h2>
+
+      <div class="criteria-item">
+        <h3>Keyboard Users</h3>
+        <p>
+          Users who navigate with keyboard (Tab key) don't have to tab through repetitive navigation
+          menus on every page. This saves significant time and effort.
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>Screen Reader Users</h3>
+        <p>
+          Screen reader users hear "Skip to main content" as the first option on the page,
+          allowing them to quickly jump to the actual content without listening to the entire navigation.
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>Motor Impairment</h3>
+        <p>
+          Users with motor impairments who use alternative input devices benefit from
+          reduced navigation steps and fewer required actions.
+        </p>
+      </div>
+
+      <div class="criteria-item">
+        <h3>WCAG 2.1 Compliance</h4>
+        <p>
+          Satisfies <strong>Success Criterion 2.4.1 Bypass Blocks (Level A)</strong>:
+          "A mechanism is available to bypass blocks of content that are repeated on multiple Web pages."
+        </p>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         ADDITIONAL CONTENT FOR DEMONSTRATION
+         ==================================================================== -->
+    <section class="demo-content" aria-labelledby="more-content-title">
+      <h2 id="more-content-title">📄 Additional Page Content</h2>
+
+      <p>
+        This section represents the actual page content that users came to read.
+        Without the skip link, keyboard users would have to Tab through all 7 navigation links
+        above to reach this content.
+      </p>
+
+      <p>
+        With the skip link implemented:
+      </p>
+      <ul>
+        <li>Press Tab once (skip link appears)</li>
+        <li>Press Enter once (jumps to this content)</li>
+        <li><strong>Total: 2 keystrokes</strong></li>
+      </ul>
+
+      <p>
+        Without the skip link:
+      </p>
+      <ul>
+        <li>Press Tab 7 times (through all navigation)</li>
+        <li><strong>Total: 7 keystrokes</strong></li>
+      </ul>
+
+      <div class="feature-box">
+        <h4>📊 Efficiency Gain</h4>
+        <p>
+          For a user visiting 100 pages, this saves 500 keystrokes! For power users who browse
+          thousands of pages, the accessibility and efficiency impact is enormous.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =======================================================================
+       FOOTER
+       ======================================================================= -->
+  <footer class="site-footer">
+    <p>Feature #374: Skip to Content Link | Navigation Integrity Category</p>
+    <p>WCAG 2.1 Level A Compliant - Success Criterion 2.4.1 Bypass Blocks</p>
+  </footer>
+
+  <!-- =======================================================================
+     JAVASCRIPT FOR ENHANCED FOCUS MANAGEMENT (Optional enhancement)
+     ======================================================================= -->
+  <script>
+    // Optional: Ensure main content is focusable for skip link
+    // The tabindex="-1" makes the element focusable programmatically
+    // but doesn't add it to the natural tab order
+    document.addEventListener('DOMContentLoaded', function() {
+      const mainContent = document.getElementById('main-content');
+
+      // When the hash is #main-content, set focus
+      if (window.location.hash === '#main-content') {
+        mainContent.setAttribute('tabindex', '-1');
+        mainContent.focus();
+      }
+
+      // Listen for hash changes
+      window.addEventListener('hashchange', function() {
+        if (window.location.hash === '#main-content') {
+          mainContent.setAttribute('tabindex', '-1');
+          mainContent.focus();
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAT Gateway - File Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .upload-container {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-zone {
+            border: 3px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f9fafb;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: #667eea;
+            background: #eef2ff;
+        }
+
+        .upload-zone.uploading {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: #9ca3af;
+        }
+
+        .upload-text {
+            color: #4b5563;
+            font-size: 18px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .upload-hint {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* Accessibility: Visually hidden labels for screen readers */
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .file-info {
+            display: none;
+            margin-top: 24px;
+            padding: 16px;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+
+        .file-info.active {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .file-meta {
+            display: flex;
+            gap: 16px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .progress-section {
+            display: none;
+            margin-top: 24px;
+        }
+
+        .progress-section.active {
+            display: block;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .progress-label-left {
+            color: #4b5563;
+        }
+
+        .progress-label-right {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            width: 0%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        .upload-speed {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #9ca3af;
+            text-align: right;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #d1d5db;
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result-section {
+            display: none;
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        .result-section.success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+        }
+
+        .result-section.error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+        }
+
+        .result-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .result-section.success .result-title {
+            color: #065f46;
+        }
+
+        .result-section.error .result-title {
+            color: #991b1b;
+        }
+
+        .result-details {
+            font-size: 14px;
+            color: #4b5563;
+        }
+
+        .allowed-types {
+            margin-top: 16px;
+            padding: 12px;
+            background: #fef3c7;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #92400e;
+        }
+
+        .allowed-types strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>File Upload</h1>
+            <p>Upload files to UAT Gateway with progress tracking</p>
+        </div>
+
+        <div class="upload-container">
+            <form id="uploadForm">
+                <label for="fileInput" class="visually-hidden">Select a file to upload (maximum 10 MB)</label>
+                <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Drop zone for file upload. Click or drag and drop files here.">
+                    <div class="upload-icon" aria-hidden="true">📁</div>
+                    <div class="upload-text">Drop file here or click to browse</div>
+                    <div class="upload-hint">Maximum file size: 10 MB</div>
+                    <input type="file" class="file-input" id="fileInput" aria-describedby="fileTypeHint">
+                </div>
+            </form>
+
+            <div class="file-info" id="fileInfo" role="status" aria-live="polite">
+                <div class="file-name" id="fileName"></div>
+                <div class="file-meta">
+                    <span id="fileSize"></span>
+                    <span id="fileType"></span>
+                </div>
+            </div>
+
+            <div class="progress-section" id="progressSection" role="status" aria-live="polite">
+                <div class="progress-label">
+                    <span class="progress-label-left">Uploading...</span>
+                    <span class="progress-label-right" id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <div class="upload-speed" id="uploadSpeed"></div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="uploadBtn" disabled aria-describedby="uploadBtnHint">Upload File</button>
+                <button class="btn btn-secondary" id="cancelBtn" disabled>Cancel Upload</button>
+            </div>
+
+            <div class="result-section" id="resultSection" role="alert" aria-live="assertive">
+                <div class="result-title" id="resultTitle"></div>
+                <div class="result-details" id="resultDetails"></div>
+            </div>
+
+            <div class="allowed-types" id="fileTypeHint" role="note">
+                <strong>Allowed file types:</strong>
+                JSON (.json) - For configuration and test results<br>
+                Text (.txt), CSV (.csv), Images (.png, .jpg, .gif)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileType = document.getElementById('fileType');
+        const progressSection = document.getElementById('progressSection');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressBar = document.getElementById('progressBar');
+        const uploadSpeed = document.getElementById('uploadSpeed');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const resultSection = document.getElementById('resultSection');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultDetails = document.getElementById('resultDetails');
+
+        let selectedFile = null;
+        let uploadController = null;
+        let uploadStartTime = null;
+        let lastProgressUpdate = null;
+        let lastBytesUploaded = 0;
+
+        // Format file size
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Format speed
+        function formatSpeed(bytesPerSecond) {
+            return formatBytes(bytesPerSecond) + '/s';
+        }
+
+        // Click to upload
+        uploadZone.addEventListener('click', () => {
+            if (!uploadZone.classList.contains('uploading')) {
+                fileInput.click();
+            }
+        });
+
+        // File selected
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // Drag and drop
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Handle file selection
+        function handleFileSelect(file) {
+            if (!file) return;
+
+            selectedFile = file;
+
+            // Display file info
+            fileName.textContent = file.name;
+            fileSize.textContent = formatBytes(file.size);
+            fileType.textContent = file.type || 'Unknown type';
+            fileInfo.classList.add('active');
+
+            // Enable upload button
+            uploadBtn.disabled = false;
+            cancelBtn.disabled = false;
+
+            // Hide previous results
+            resultSection.classList.remove('active', 'success', 'error');
+        }
+
+        // Upload file
+        uploadBtn.addEventListener('click', () => {
+            if (!selectedFile) return;
+            uploadFile(selectedFile);
+        });
+
+        // Cancel upload
+        cancelBtn.addEventListener('click', () => {
+            if (uploadController) {
+                uploadController.abort();
+                resetUpload();
+            }
+        });
+
+        function uploadFile(file) {
+            // Reset state
+            resultSection.classList.remove('active', 'success', 'error');
+            uploadZone.classList.add('uploading');
+            uploadBtn.disabled = true;
+            fileInput.disabled = true;
+
+            // Show progress
+            progressSection.classList.add('active');
+            progressBar.style.width = '0%';
+            progressPercent.textContent = '0%';
+            uploadSpeed.textContent = 'Initializing...';
+
+            // Initialize upload tracking
+            uploadStartTime = Date.now();
+            lastProgressUpdate = uploadStartTime;
+            lastBytesUploaded = 0;
+
+            // Create XMLHttpRequest for real progress tracking
+            const xhr = new XMLHttpRequest();
+            uploadController = xhr;
+
+            // Get auth token from localStorage (if available)
+            const token = localStorage.getItem('auth_token') || '';
+
+            // Track upload progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    updateProgress(e.loaded, e.total);
+                }
+            });
+
+            // Track upload completion
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        showResult('success', 'Upload Successful!', result);
+                    } catch (e) {
+                        showResult('success', 'Upload Complete!', 'File uploaded successfully');
+                    }
+                } else {
+                    try {
+                        const error = JSON.parse(xhr.responseText);
+                        showResult('error', 'Upload Failed', error.detail || error.message || `Server returned ${xhr.status}`);
+                    } catch (e) {
+                        showResult('error', 'Upload Failed', `Server returned ${xhr.status}: ${xhr.statusText}`);
+                    }
+                }
+                resetUpload();
+            });
+
+            // Track upload error
+            xhr.addEventListener('error', () => {
+                showResult('error', 'Upload Error', 'Network error occurred while uploading');
+                resetUpload();
+            });
+
+            // Track upload abort
+            xhr.addEventListener('abort', () => {
+                showResult('error', 'Upload Cancelled', 'The upload was cancelled by the user');
+                resetUpload();
+            });
+
+            // Prepare and send request
+            const formData = new FormData();
+            formData.append('file', file);
+
+            xhr.open('POST', '/api/upload');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.send(formData);
+        }
+
+        // Update progress bar
+        function updateProgress(bytesUploaded, totalBytes) {
+            const percent = Math.min(Math.round((bytesUploaded / totalBytes) * 100), 100);
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+
+            // Accessibility: Update ARIA attributes for screen readers
+            progressBar.setAttribute('aria-valuenow', percent);
+            progressBar.setAttribute('aria-label', `Upload progress: ${percent} percent`);
+
+            // Calculate speed
+            const now = Date.now();
+            const timeSinceLastUpdate = now - lastProgressUpdate;
+
+            if (timeSinceLastUpdate > 500) { // Update speed every 500ms
+                const bytesSinceLastUpdate = bytesUploaded - lastBytesUploaded;
+                const bytesPerSecond = Math.round((bytesSinceLastUpdate / timeSinceLastUpdate) * 1000);
+                uploadSpeed.textContent = formatSpeed(bytesPerSecond);
+
+                lastProgressUpdate = now;
+                lastBytesUploaded = bytesUploaded;
+            }
+        }
+
+        // Show result
+        function showResult(type, title, details) {
+            resultSection.className = `result-section ${type} active`;
+            resultTitle.textContent = title;
+
+            if (typeof details === 'object') {
+                resultDetails.innerHTML = `
+                    <strong>File:</strong> ${details.filename || details.file?.filename || 'N/A'}<br>
+                    <strong>Size:</strong> ${details.file ? formatBytes(details.file.size) : 'N/A'}<br>
+                    <strong>Type:</strong> ${details.file?.extension || details.file?.detected_mime_type || 'N/A'}<br>
+                    ${details.file_id ? `<strong>File ID:</strong> ${details.file_id}<br>` : ''}
+                    ${details.warnings && details.warnings.length > 0 ? `<strong>Warnings:</strong> ${details.warnings.join(', ')}` : ''}
+                `;
+            } else {
+                resultDetails.textContent = details;
+            }
+
+            // Scroll to result
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Reset upload state
+        function resetUpload() {
+            uploadZone.classList.remove('uploading');
+            uploadBtn.disabled = !selectedFile;
+            fileInput.disabled = false;
+            uploadController = null;
+
+            // Keep progress visible for a moment
+            setTimeout(() => {
+                if (!uploadController) {
+                    progressSection.classList.remove('active');
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

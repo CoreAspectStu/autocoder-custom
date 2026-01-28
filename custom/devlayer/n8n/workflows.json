@@ -1,0 +1,417 @@
+{
+  "workflows": [
+    {
+      "name": "UAT Failure to DevLayer",
+      "description": "Automatically create DevLayer card when UAT test fails",
+      "active": true,
+      "nodes": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "position": [250, 300],
+          "parameters": {
+            "httpMethod": "POST",
+            "path": "uat-failure",
+            "responseMode": "responseNode"
+          }
+        },
+        {
+          "name": "Validate Payload",
+          "type": "n8n-nodes-base.set",
+          "position": [450, 300],
+          "parameters": {
+            "values": {
+              "string": [
+                {
+                  "name": "scenario_id",
+                  "value": "={{ $json.body.evidence.scenario_id }}"
+                },
+                {
+                  "name": "error_message",
+                  "value": "={{ $json.body.evidence.error_message }}"
+                },
+                {
+                  "name": "project_id",
+                  "value": "={{ $json.body.project_id }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create DevLayer Card",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [650, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "http://localhost:8889/api/devlayer/bug",
+            "authentication": "none",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "evidence",
+                  "value": "={{ $json.body.evidence }}"
+                },
+                {
+                  "name": "title",
+                  "value": "={{ $json.body.title }}"
+                },
+                {
+                  "name": "uat_card_id",
+                  "value": "={{ $json.body.uat_card_id }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Slack Notification",
+          "type": "n8n-nodes-base.slack",
+          "position": [850, 300],
+          "parameters": {
+            "resource": "message",
+            "operation": "post",
+            "channel": "#autocoder",
+            "text": "=🐞 *UAT Test Failed*\nScenario: {{ $json.evidence.scenario_id }}\nError: {{ $json.evidence.error_message }}\nCard: {{ $json.card_id }}"
+          }
+        },
+        {
+          "name": "Respond to Webhook",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "position": [1050, 300],
+          "parameters": {
+            "respondWith": "json",
+            "responseBody": "={{ { \"success\": true, \"card_id\": $json.card_id } }}"
+          }
+        }
+      ],
+      "connections": {
+        "Webhook": {
+          "main": [[{"node": "Validate Payload"}]]
+        },
+        "Validate Payload": {
+          "main": [[{"node": "Create DevLayer Card"}]]
+        },
+        "Create DevLayer Card": {
+          "main": [[{"node": "Send Slack Notification"}]]
+        },
+        "Send Slack Notification": {
+          "main": [[{"node": "Respond to Webhook"}]]
+        }
+      }
+    },
+    {
+      "name": "DevLayer Approval to Dev",
+      "description": "Create Dev card when DevLayer bug is approved",
+      "active": true,
+      "nodes": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "position": [250, 300],
+          "parameters": {
+            "httpMethod": "POST",
+            "path": "devlayer-approval",
+            "responseMode": "responseNode"
+          }
+        },
+        {
+          "name": "Get Card Details",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [450, 300],
+          "parameters": {
+            "method": "GET",
+            "url": "=http://localhost:8889/api/devlayer/cards/{{ $json.body.card_id }}"
+          }
+        },
+        {
+          "name": "Create Dev Card",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [650, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "http://localhost:4000/api/cards",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "type",
+                  "value": "bug"
+                },
+                {
+                  "name": "title",
+                  "value": "=🐛 UAT Bug Fix ({{ $json.id }})"
+                },
+                {
+                  "name": "description",
+                  "value": "={{ $json.description }}\n\nSeverity: {{ $json.severity }}\nCategory: {{ $json.category }}\n\nLinked UAT Card: {{ $json.uat_card_id }}\nLinked DevLayer Card: {{ $json.id }}"
+                },
+                {
+                  "name": "devlayer_card_id",
+                  "value": "={{ $json.id }}"
+                },
+                {
+                  "name": "uat_card_id",
+                  "value": "={{ $json.uat_card_id }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update DevLayer Card",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [850, 300],
+          "parameters": {
+            "method": "PATCH",
+            "url": "=http://localhost:8889/api/devlayer/cards/{{ $json.body.card_id }}",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "dev_card_id",
+                  "value": "={{ $json.card_id }}"
+                },
+                {
+                  "name": "status",
+                  "value": "assigned"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Slack Notification",
+          "type": "n8n-nodes-base.slack",
+          "position": [1050, 300],
+          "parameters": {
+            "resource": "message",
+            "operation": "post",
+            "channel": "#autocoder",
+            "text": "=✅ *Bug Approved for Dev*\nSeverity: {{ $json.severity }}\nDevLayer Card: {{ $json.devlayer_card_id }}\nDev Card: {{ $json.card_id }}"
+          }
+        },
+        {
+          "name": "Respond to Webhook",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "position": [1250, 300],
+          "parameters": {
+            "respondWith": "json",
+            "responseBody": "={{ { \"success\": true, \"dev_card_id\": $json.card_id } }}"
+          }
+        }
+      ],
+      "connections": {
+        "Webhook": {
+          "main": [[{"node": "Get Card Details"}]]
+        },
+        "Get Card Details": {
+          "main": [[{"node": "Create Dev Card"}]]
+        },
+        "Create Dev Card": {
+          "main": [[{"node": "Update DevLayer Card"}]]
+        },
+        "Update DevLayer Card": {
+          "main": [[{"node": "Send Slack Notification"}]]
+        },
+        "Send Slack Notification": {
+          "main": [[{"node": "Respond to Webhook"}]]
+        }
+      }
+    },
+    {
+      "name": "Dev Complete to UAT Retest",
+      "description": "Trigger UAT retest when Dev card is complete",
+      "active": true,
+      "nodes": [
+        {
+          "name": "Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "position": [250, 300],
+          "parameters": {
+            "httpMethod": "POST",
+            "path": "dev-complete",
+            "responseMode": "responseNode"
+          }
+        },
+        {
+          "name": "Get Linked Cards",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [450, 300],
+          "parameters": {
+            "method": "GET",
+            "url": "=http://localhost:8889/api/cards/{{ $json.body.dev_card_id }}/linked"
+          }
+        },
+        {
+          "name": "Calculate Affected Scenarios",
+          "type": "n8n-nodes-base.code",
+          "position": [650, 300],
+          "parameters": {
+            "code": "// Calculate affected scenarios based on code coverage\nconst links = $input.all();\nconst affectedScenarios = ['all']; // In production, use actual coverage data\nreturn [{ json: { affected_scenarios: affectedScenarios } }];"
+          }
+        },
+        {
+          "name": "Trigger UAT Retest",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [850, 300],
+          "parameters": {
+            "method": "POST",
+            "url": "=http://localhost:8889/api/uat/retest/{{ $json.devlayer_card_id }}",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "scenarios",
+                  "value": "={{ $json.affected_scenarios }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Wait for Retest Results",
+          "type": "n8n-nodes-base.wait",
+          "position": [1050, 300],
+          "parameters": {
+            "amount": 5,
+            "unit": "minutes"
+          }
+        },
+        {
+          "name": "Get Retest Results",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [1250, 300],
+          "parameters": {
+            "method": "GET",
+            "url": "=http://localhost:8889/api/uat/results/{{ $json.devlayer_card_id }}"
+          }
+        },
+        {
+          "name": "Process Results",
+          "type": "n8n-nodes-base.if",
+          "position": [1450, 300],
+          "parameters": {
+            "conditions": {
+              "boolean": [
+                {
+                  "value1": "={{ $json.passed }}",
+                  "value2": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Archive Cards",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [1650, 200],
+          "parameters": {
+            "method": "POST",
+            "url": "=http://localhost:8889/api/devlayer/archive",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "card_ids",
+                  "value": "={{ $json.card_ids }}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Return to Dev",
+          "type": "n8n-nodes-base.httpRequest",
+          "position": [1650, 400],
+          "parameters": {
+            "method": "PATCH",
+            "url": "=http://localhost:8889/api/devlayer/cards/{{ $json.devlayer_card_id }}",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "status",
+                  "value": "triage"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Success Notification",
+          "type": "n8n-nodes-base.slack",
+          "position": [1850, 200],
+          "parameters": {
+            "resource": "message",
+            "operation": "post",
+            "channel": "#autocoder",
+            "text": "=✨ *UAT Retest Passed - Archiving Cards*\nDevLayer: {{ $json.devlayer_card_id }}\nDev: {{ $json.dev_card_id }}"
+          }
+        },
+        {
+          "name": "Send Failure Notification",
+          "type": "n8n-nodes-base.slack",
+          "position": [1850, 400],
+          "parameters": {
+            "resource": "message",
+            "operation": "post",
+            "channel": "#autocoder",
+            "text": "=❌ *UAT Retest Failed - Returning to Dev*\nDevLayer: {{ $json.devlayer_card_id }}\nNew Failures: {{ $json.new_failures.length }}"
+          }
+        },
+        {
+          "name": "Respond to Webhook",
+          "type": "n8n-nodes-base.respondToWebhook",
+          "position": [2050, 300],
+          "parameters": {
+            "respondWith": "json",
+            "responseBody": "={{ { \"success\": true, \"retest_completed\": true } }}"
+          }
+        }
+      ],
+      "connections": {
+        "Webhook": {
+          "main": [[{"node": "Get Linked Cards"}]]
+        },
+        "Get Linked Cards": {
+          "main": [[{"node": "Calculate Affected Scenarios"}]]
+        },
+        "Calculate Affected Scenarios": {
+          "main": [[{"node": "Trigger UAT Retest"}]]
+        },
+        "Trigger UAT Retest": {
+          "main": [[{"node": "Wait for Retest Results"}]]
+        },
+        "Wait for Retest Results": {
+          "main": [[{"node": "Get Retest Results"}]]
+        },
+        "Get Retest Results": {
+          "main": [[{"node": "Process Results"}]]
+        },
+        "Process Results": {
+          "main": [
+            [{"node": "Archive Cards"}],
+            [{"node": "Return to Dev"}]
+          ]
+        },
+        "Archive Cards": {
+          "main": [[{"node": "Send Success Notification"}]]
+        },
+        "Return to Dev": {
+          "main": [[{"node": "Send Failure Notification"}]]
+        },
+        "Send Success Notification": {
+          "main": [[{"node": "Respond to Webhook"}]]
+        },
+        "Send Failure Notification": {
+          "main": [[{"node": "Respond to Webhook"}]]
+        }
+      }
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

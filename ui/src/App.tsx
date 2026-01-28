@@ -24,10 +24,13 @@ import { DevServerControl } from './components/DevServerControl'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
-import { TabLayout } from './components/TabLayout'
 import { getDependencyGraph } from './lib/api'
 import { Loader2, Settings, Moon, Sun, Radio } from 'lucide-react'
 import type { Feature } from './lib/types'
+
+// Quality Gate Components
+import { QualityGateBoard } from './components/QualityGateBoard'
+import { PipelineDashboard } from './components/PipelineDashboard'
 
 const STORAGE_KEY = 'autocoder-selected-project'
 const DARK_MODE_KEY = 'autocoder-dark-mode'
@@ -77,6 +80,7 @@ function App() {
       return false
     }
   })
+  const [qualityGateView, setQualityGateView] = useState<'board' | 'dashboard'>('board')
 
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
@@ -364,16 +368,39 @@ function App() {
         style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
       >
         {devLayerMode ? (
-          <div style={{ height: 'calc(100vh - 180px)' }}>
-            <TabLayout
-              selectedProject={selectedProject}
-              features={features}
-              onFeatureClick={setSelectedFeature}
-              onAddFeature={() => setShowAddFeature(true)}
-              onExpandProject={() => setShowExpandProject(true)}
-              hasSpec={hasSpec}
-              onCreateSpec={() => setShowSpecChat(true)}
-            />
+          <div className="space-y-6">
+            {/* Quality Gate View Toggle */}
+            <div className="flex justify-center">
+              <div className="inline-flex bg-neo-card border-2 border-neo-border rounded-lg p-1">
+                <button
+                  onClick={() => setQualityGateView('board')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    qualityGateView === 'board'
+                      ? 'bg-neo-primary text-white'
+                      : 'text-neo-text hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Board
+                </button>
+                <button
+                  onClick={() => setQualityGateView('dashboard')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    qualityGateView === 'dashboard'
+                      ? 'bg-neo-primary text-white'
+                      : 'text-neo-text hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Pipeline Dashboard
+                </button>
+              </div>
+            </div>
+
+            {/* Quality Gate Board or Pipeline Dashboard */}
+            {qualityGateView === 'board' ? (
+              <QualityGateBoard project={selectedProject ?? undefined} />
+            ) : (
+              <PipelineDashboard project={selectedProject ?? undefined} />
+            )}
           </div>
         ) : !selectedProject ? (
           <div className="neo-empty-state mt-12">

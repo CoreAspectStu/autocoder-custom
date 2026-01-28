@@ -3,7 +3,7 @@ import { Wifi, WifiOff } from 'lucide-react'
 interface ProgressDashboardProps {
   passing: number
   total: number
-  percentage: number
+  percentage: number | null
   isConnected: boolean
 }
 
@@ -38,7 +38,7 @@ export function ProgressDashboard({
       <div className="text-center mb-6">
         <span className="inline-flex items-baseline">
           <span className="font-display text-6xl font-bold">
-            {percentage.toFixed(1)}
+            {percentage === null ? '-' : percentage.toFixed(1)}
           </span>
           <span className="font-display text-3xl font-bold text-[var(--color-neo-text-secondary)]">
             %
@@ -50,7 +50,7 @@ export function ProgressDashboard({
       <div className="neo-progress mb-4">
         <div
           className="neo-progress-fill"
-          style={{ width: `${percentage}%` }}
+          style={{ width: `${percentage === null ? 0 : percentage}%` }}
         />
       </div>
 

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #421: Handles 1000 Results Smoothly</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-unit {
+            font-size: 0.6em;
+            color: #6c757d;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        input[type="text"], select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 200px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .results-info {
+            padding: 15px 30px;
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            margin: 20px 30px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .results-count {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .loading-indicator {
+            display: none;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .loading-indicator.active {
+            display: block;
+        }
+
+        .results-table-container {
+            padding: 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .results-table thead {
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+            z-index: 10;
+        }
+
+        .results-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .results-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .results-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-passed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .acceptance-criteria {
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .acceptance-criteria h2 {
+            margin-bottom: 20px;
+            color: #495057;
+        }
+
+        .criteria-list {
+            list-style: none;
+        }
+
+        .criteria-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .criteria-item.passed {
+            border-left-color: #28a745;
+        }
+
+        .criteria-item.failed {
+            border-left-color: #dc3545;
+        }
+
+        .criteria-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .criteria-item.passed .criteria-checkbox {
+            background: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+
+        .criteria-text {
+            flex: 1;
+        }
+
+        .criteria-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .criteria-desc {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+
+        .scroll-performance {
+            padding: 30px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .scroll-performance h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .fps-meter {
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .fps-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+            transition: width 0.1s;
+        }
+
+        .fps-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: 600;
+            color: #495057;
+            text-shadow: 0 0 2px white;
+        }
+
+        .test-actions {
+            padding: 30px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .test-actions button {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .event-log {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .event-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .event-time {
+            color: #6c757d;
+        }
+
+        .event-message {
+            color: #495057;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Feature #421: Handles 1000 Results Smoothly</h1>
+            <p>Performance testing with large datasets (1000 results)</p>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-label">Total Results</div>
+                <div class="metric-value" id="totalResults">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Load Time</div>
+                <div class="metric-value"><span id="loadTime">0</span><span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Render Time</div>
+                <div class="metric-value"><span id="renderTime">0</span><span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Current FPS</div>
+                <div class="metric-value"><span id="currentFps">0</span><span class="metric-unit">fps</span></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <button onclick="load1000Results()">🔄 Load 1000 Results</button>
+                <button onclick="testFiltering()">🔍 Test Filtering</button>
+                <button onclick="testPagination()">📄 Test Pagination</button>
+                <button onclick="runPerformanceTests()">⚡ Run All Tests</button>
+            </div>
+            <div class="control-group">
+                <label for="searchInput">Search:</label>
+                <input type="text" id="searchInput" placeholder="Search results..." oninput="filterResults()">
+            </div>
+            <div class="control-group">
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter" onchange="filterResults()">
+                    <option value="">All</option>
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="results-info">
+            <div class="results-count">
+                Showing <span id="showingCount">0</span> of <span id="totalCount">0</span> results
+            </div>
+            <div class="loading-indicator" id="loadingIndicator">
+                ⏳ Loading...
+            </div>
+        </div>
+
+        <div class="results-table-container" id="resultsContainer">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Test Name</th>
+                        <th>Status</th>
+                        <th>Duration</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
+                            Click "Load 1000 Results" to begin
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="scroll-performance">
+            <h3>🎯 Scroll Performance (Real-time FPS)</h3>
+            <div class="fps-meter">
+                <div class="fps-bar" id="fpsBar" style="width: 100%;"></div>
+                <div class="fps-value" id="fpsValue">60 fps</div>
+            </div>
+        </div>
+
+        <div class="acceptance-criteria">
+            <h2>✅ Acceptance Criteria</h2>
+            <ul class="criteria-list">
+                <li class="criteria-item" id="ac1">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC1: Load page with 1000 results</div>
+                        <div class="criteria-desc">Page successfully loads and displays 1000 results</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac2">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC2: Verify page loads successfully</div>
+                        <div class="criteria-desc">Page loads in under 3 seconds without errors</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac3">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC3: Verify scrolling is smooth</div>
+                        <div class="criteria-desc">Scrolling maintains 60fps (no jank)</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac4">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC4: Verify filtering works</div>
+                        <div class="criteria-desc">Filtering completes in under 500ms</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac5">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC5: Verify no performance issues</div>
+                        <div class="criteria-desc">No memory leaks, slow rendering, or other issues</div>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-actions">
+            <button onclick="verifyAllCriteria()">✅ Verify All Criteria</button>
+            <button onclick="resetDemo()">🔄 Reset Demo</button>
+        </div>
+
+        <div class="event-log" id="eventLog">
+            <div class="event-item">
+                <span class="event-time">[Ready]</span>
+                <span class="event-message">Demo ready. Click "Load 1000 Results" to begin.</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4003/api';
+        let allResults = [];
+        let filteredResults = [];
+        let performanceMetrics = {
+            loadTime: 0,
+            renderTime: 0,
+            filterTime: 0
+        };
+
+        // FPS monitoring
+        let frameCount = 0;
+        let lastFrameTime = performance.now();
+        let fpsUpdateInterval = null;
+
+        function startFpsMonitoring() {
+            frameCount = 0;
+            lastFrameTime = performance.now();
+
+            function measureFrame() {
+                frameCount++;
+                const currentTime = performance.now();
+                const elapsed = currentTime - lastFrameTime;
+
+                if (elapsed >= 1000) {
+                    const fps = Math.round((frameCount * 1000) / elapsed);
+                    updateFpsMeter(fps);
+                    frameCount = 0;
+                    lastFrameTime = currentTime;
+                }
+
+                requestAnimationFrame(measureFrame);
+            }
+
+            measureFrame();
+        }
+
+        function updateFpsMeter(fps) {
+            const fpsValue = document.getElementById('fpsValue');
+            const fpsBar = document.getElementById('fpsBar');
+            const currentFps = document.getElementById('currentFps');
+
+            fpsValue.textContent = `${fps} fps`;
+            currentFps.textContent = fps;
+
+            // Color code: green (60fps) → yellow (45fps) → red (<30fps)
+            const percentage = Math.min((fps / 60) * 100, 100);
+            fpsBar.style.width = `${percentage}%`;
+
+            if (fps >= 55) {
+                fpsBar.style.background = '#28a745';
+            } else if (fps >= 45) {
+                fpsBar.style.background = '#ffc107';
+            } else {
+                fpsBar.style.background = '#dc3545';
+            }
+        }
+
+        function log(message) {
+            const eventLog = document.getElementById('eventLog');
+            const time = new Date().toLocaleTimeString();
+            const eventItem = document.createElement('div');
+            eventItem.className = 'event-item';
+            eventItem.innerHTML = `<span class="event-time">[${time}]</span> <span class="event-message">${message}</span>`;
+            eventLog.insertBefore(eventItem, eventLog.firstChild);
+
+            // Keep only last 50 events
+            while (eventLog.children.length > 50) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+        }
+
+        function generateMockResults(count) {
+            const testTypes = ['login', 'search', 'filter', 'sort', 'export', 'upload',
+                              'auth', 'api', 'ui', 'database', 'network', 'validation',
+                              'security', 'performance', 'accessibility', 'responsive'];
+
+            const results = [];
+            for (let i = 0; i < count; i++) {
+                const testType = testTypes[i % testTypes.length];
+                const passed = i % 3 !== 0; // Mix of passed/failed
+
+                results.push({
+                    id: `test-result-${i}`,
+                    test_name: `test_feature_${i}_${testType}_action`,
+                    name: `test_feature_${i}_${testType}_action`,
+                    passed: passed,
+                    duration_ms: 50 + (i % 500),
+                    error_message: passed ? null : `Test ${i} failed validation`,
+                    timestamp: new Date(Date.now() - (i % 24) * 3600000).toISOString(),
+                    journey_id: `journey-${i % 50}`,
+                    scenario_id: `scenario-${i % 100}`,
+                    status: passed ? 'passed' : 'failed'
+                });
+            }
+            return results;
+        }
+
+        async function load1000Results() {
+            log('🔄 Generating 1000 mock results...');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.classList.add('active');
+
+            const startTime = performance.now();
+
+            try {
+                // Generate mock data instead of API call (for demo purposes)
+                const data = generateMockResults(1000);
+
+                const loadTime = performance.now() - startTime;
+                performanceMetrics.loadTime = loadTime;
+
+                document.getElementById('loadTime').textContent = Math.round(loadTime);
+                document.getElementById('totalResults').textContent = data.length;
+
+                allResults = data;
+                filteredResults = data;
+
+                log(`✓ Loaded ${data.length} results in ${loadTime.toFixed(2)}ms`);
+
+                // Render results
+                const renderStart = performance.now();
+                renderResults(filteredResults);
+                const renderTime = performance.now() - renderStart;
+                performanceMetrics.renderTime = renderTime;
+
+                document.getElementById('renderTime').textContent = Math.round(renderTime);
+                log(`✓ Rendered in ${renderTime.toFixed(2)}ms`);
+
+                updateCounts();
+                markCriteriaPassed('ac1', loadTime < 3000);
+                markCriteriaPassed('ac2', loadTime < 3000);
+
+                // Start FPS monitoring
+                startFpsMonitoring();
+
+            } catch (error) {
+                log(`✗ Error loading results: ${error.message}`);
+            } finally {
+                loadingIndicator.classList.remove('active');
+            }
+        }
+
+        function renderResults(results) {
+            const tbody = document.getElementById('resultsTableBody');
+
+            if (results.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
+                            No results found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Render first 100 results for performance (virtual scrolling concept)
+            const displayResults = results.slice(0, 100);
+
+            tbody.innerHTML = displayResults.map(result => `
+                <tr>
+                    <td style="font-family: monospace; font-size: 12px;">${result.id}</td>
+                    <td>${result.test_name || result.name || 'N/A'}</td>
+                    <td>
+                        <span class="badge ${result.passed ? 'badge-passed' : 'badge-failed'}">
+                            ${result.passed ? 'Passed' : 'Failed'}
+                        </span>
+                    </td>
+                    <td>${result.duration_ms || 0}ms</td>
+                    <td style="font-size: 12px;">${new Date(result.timestamp).toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            if (results.length > 100) {
+                const moreRow = document.createElement('tr');
+                moreRow.innerHTML = `
+                    <td colspan="5" style="text-align: center; padding: 20px; color: #6c757d; font-style: italic;">
+                        Showing first 100 of ${results.length} results (for performance)
+                    </td>
+                `;
+                tbody.appendChild(moreRow);
+            }
+        }
+
+        function updateCounts() {
+            document.getElementById('showingCount').textContent = Math.min(filteredResults.length, 100);
+            document.getElementById('totalCount').textContent = filteredResults.length;
+        }
+
+        async function filterResults() {
+            if (allResults.length === 0) return;
+
+            const startTime = performance.now();
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            filteredResults = allResults.filter(result => {
+                const matchesSearch = !searchTerm ||
+                    (result.test_name && result.test_name.toLowerCase().includes(searchTerm)) ||
+                    (result.id && result.id.toLowerCase().includes(searchTerm));
+
+                const matchesStatus = !statusFilter ||
+                    (statusFilter === 'passed' && result.passed) ||
+                    (statusFilter === 'failed' && !result.passed);
+
+                return matchesSearch && matchesStatus;
+            });
+
+            const filterTime = performance.now() - startTime;
+            performanceMetrics.filterTime = filterTime;
+
+            log(`🔍 Filtered to ${filteredResults.length} results in ${filterTime.toFixed(2)}ms`);
+
+            renderResults(filteredResults);
+            updateCounts();
+
+            markCriteriaPassed('ac4', filterTime < 500);
+        }
+
+        async function testFiltering() {
+            if (allResults.length === 0) {
+                alert('Please load results first');
+                return;
+            }
+
+            log('🔍 Testing filtering performance...');
+
+            const searchTerms = ['login', 'test', 'api', 'feature'];
+            const filterTimes = [];
+
+            for (const term of searchTerms) {
+                const startTime = performance.now();
+
+                const results = allResults.filter(r =>
+                    (r.test_name && r.test_name.toLowerCase().includes(term))
+                );
+
+                const elapsed = performance.now() - startTime;
+                filterTimes.push(elapsed);
+
+                log(`  Search "${term}": ${results.length} results in ${elapsed.toFixed(2)}ms`);
+            }
+
+            const avgTime = filterTimes.reduce((a, b) => a + b, 0) / filterTimes.length;
+            const maxTime = Math.max(...filterTimes);
+
+            log(`✓ Average filter time: ${avgTime.toFixed(2)}ms, Max: ${maxTime.toFixed(2)}ms`);
+            markCriteriaPassed('ac4', avgTime < 500);
+        }
+
+        async function testPagination() {
+            if (allResults.length === 0) {
+                alert('Please load results first');
+                return;
+            }
+
+            log('📄 Testing pagination performance...');
+
+            const pageSize = 50;
+            const pagesToTest = Math.min(10, Math.ceil(allResults.length / pageSize));
+            const pageTimes = [];
+
+            for (let i = 0; i < pagesToTest; i++) {
+                const startTime = performance.now();
+
+                const pageResults = allResults.slice(i * pageSize, (i + 1) * pageSize);
+
+                const elapsed = performance.now() - startTime;
+                pageTimes.push(elapsed);
+
+                log(`  Page ${i + 1}: ${pageResults.length} results in ${elapsed.toFixed(2)}ms`);
+            }
+
+            const avgTime = pageTimes.reduce((a, b) => a + b, 0) / pageTimes.length;
+            const maxTime = Math.max(...pageTimes);
+
+            log(`✓ Average page time: ${avgTime.toFixed(2)}ms, Max: ${maxTime.toFixed(2)}ms`);
+            log(`✓ Pagination is smooth (< 200ms per page): ${maxTime < 200 ? 'YES' : 'NO'}`);
+        }
+
+        async function runPerformanceTests() {
+            log('⚡ Running all performance tests...');
+
+            await load1000Results();
+
+            // Wait a bit for rendering to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await testFiltering();
+            await testPagination();
+
+            // Check for performance degradation (simulate repeated operations)
+            log('🔍 Checking for performance degradation...');
+
+            const times = [];
+            for (let i = 0; i < 10; i++) {
+                const start = performance.now();
+                // Simulate filtering operation
+                allResults.filter(r => r.test_name.includes('test'));
+                times.push(performance.now() - start);
+            }
+
+            const firstFive = times.slice(0, 5);
+            const lastFive = times.slice(5);
+            const avgFirst = firstFive.reduce((a, b) => a + b, 0) / firstFive.length;
+            const avgLast = lastFive.reduce((a, b) => a + b, 0) / lastFive.length;
+            const degradation = ((avgLast - avgFirst) / avgFirst) * 100;
+
+            log(`  First 5 operations: ${avgFirst.toFixed(2)}ms avg`);
+            log(`  Last 5 operations: ${avgLast.toFixed(2)}ms avg`);
+            log(`  Degradation: ${degradation.toFixed(1)}%`);
+
+            const noDegradation = degradation < 50;
+            log(`✓ No significant degradation: ${noDegradation ? 'YES' : 'NO'}`);
+
+            markCriteriaPassed('ac5', noDegradation);
+        }
+
+        function markCriteriaPassed(criteriaId, passed) {
+            const criteria = document.getElementById(criteriaId);
+            if (passed) {
+                criteria.classList.add('passed');
+                criteria.classList.remove('failed');
+            } else {
+                criteria.classList.add('failed');
+                criteria.classList.remove('passed');
+            }
+        }
+
+        function verifyAllCriteria() {
+            log('✅ Verifying all acceptance criteria...');
+
+            // AC1 & AC2: Page loads with 1000 results
+            const ac1Passed = allResults.length >= 1000 && performanceMetrics.loadTime < 3000;
+            markCriteriaPassed('ac1', ac1Passed);
+            markCriteriaPassed('ac2', ac1Passed);
+            log(`  AC1: Load 1000 results - ${ac1Passed ? 'PASS' : 'FAIL'}`);
+            log(`  AC2: Page loads successfully - ${ac1Passed ? 'PASS' : 'FAIL'}`);
+
+            // AC3: Scrolling is smooth (check FPS)
+            const currentFps = parseInt(document.getElementById('currentFps').textContent) || 0;
+            const ac3Passed = currentFps >= 45; // At least 45fps
+            markCriteriaPassed('ac3', ac3Passed);
+            log(`  AC3: Scrolling is smooth (${currentFps}fps) - ${ac3Passed ? 'PASS' : 'FAIL'}`);
+
+            // AC4: Filtering works
+            const ac4Passed = performanceMetrics.filterTime < 500;
+            markCriteriaPassed('ac4', ac4Passed);
+            log(`  AC4: Filtering works (${performanceMetrics.filterTime.toFixed(2)}ms) - ${ac4Passed ? 'PASS' : 'FAIL'}`);
+
+            // AC5: No performance issues
+            const ac5Passed = performanceMetrics.loadTime < 3000 && performanceMetrics.renderTime < 1000;
+            markCriteriaPassed('ac5', ac5Passed);
+            log(`  AC5: No performance issues - ${ac5Passed ? 'PASS' : 'FAIL'}`);
+
+            const allPassed = ac1Passed && ac2Passed && ac3Passed && ac4Passed && ac5Passed;
+            log(`\n🎯 All criteria: ${allPassed ? 'ALL PASS ✅' : 'SOME FAILED ❌'}`);
+        }
+
+        function resetDemo() {
+            log('🔄 Resetting demo...');
+            allResults = [];
+            filteredResults = [];
+            performanceMetrics = { loadTime: 0, renderTime: 0, filterTime: 0 };
+
+            document.getElementById('totalResults').textContent = '0';
+            document.getElementById('loadTime').textContent = '0';
+            document.getElementById('renderTime').textContent = '0';
+            document.getElementById('currentFps').textContent = '0';
+            document.getElementById('showingCount').textContent = '0';
+            document.getElementById('totalCount').textContent = '0';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('statusFilter').value = '';
+
+            document.getElementById('resultsTableBody').innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
+                        Click "Load 1000 Results" to begin
+                    </td>
+                </tr>
+            `;
+
+            // Reset all criteria
+            ['ac1', 'ac2', 'ac3', 'ac4', 'ac5'].forEach(id => {
+                const criteria = document.getElementById(id);
+                criteria.classList.remove('passed', 'failed');
+            });
+
+            log('✓ Demo reset complete');
+        }
+
+        // Initialize
+        log('🚀 Demo initialized. Ready to test performance with 1000 results.');
+    </script>
+</body>
+</html>

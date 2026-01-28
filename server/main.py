@@ -40,12 +40,15 @@ from .routers import (
     filesystem_router,
     messages_router,
     projects_router,
+    quality_gate_router,
     schedules_router,
     settings_router,
     spec_creation_router,
     status_router,
     systemd_router,
     terminal_router,
+    uat_gateway_router,
+    reports_router,
 )
 from .schemas import SetupStatus
 from .services.assistant_chat_session import cleanup_all_sessions as cleanup_assistant_sessions
@@ -146,8 +149,11 @@ app.include_router(terminal_router)
 app.include_router(status_router)
 app.include_router(messages_router)
 app.include_router(devlayer_router)
+app.include_router(quality_gate_router)
+app.include_router(uat_gateway_router)
 app.include_router(systemd_router)
 app.include_router(autoscaler_router)
+app.include_router(reports_router)
 
 
 # ============================================================================

@@ -174,20 +174,50 @@ def send_progress_webhook(passing: int, total: int, project_dir: Path) -> None:
                 name = feature.get("name", f"Feature #{feature_id}")
                 category = feature.get("category", "")
                 if category:
-                    completed_tests.append(f"{category} {name}")
+                    completed_tests.append(f"• `{category}` {name}")
                 else:
-                    completed_tests.append(name)
+                    completed_tests.append(f"• {name}")
+
+        # Calculate progress bar
+        percentage = round((passing / total) * 100, 1) if total > 0 else 0
+        progress_blocks = int(percentage / 5)
+        progress_bar = "█" * progress_blocks + "░" * (20 - progress_blocks)
+
+        # Build formatted message for Slack
+        new_count = passing - previous
+        plural = "s" if new_count != 1 else ""
+
+        if completed_tests:
+            # Show up to 5 new features, truncate if more
+            features_list = completed_tests[:5]
+            if len(completed_tests) > 5:
+                features_list.append(f"• ... and {len(completed_tests) - 5} more")
+
+            features_text = "\n".join(features_list)
+        else:
+            features_text = "_Bulk progress update_"
+
+        message = (
+            f"🚀 *AutoCoder Progress Update*\n"
+            f"```"
+            f"{progress_bar} {percentage}%"
+            f"```\n"
+            f"*{passing}* of *{total}* features passing (+{new_count} feature{plural} this session)\n"
+            f"\n*Recently completed:*\n{features_text}\n"
+            f"📁 Project: `{project_dir.name}`"
+        )
 
         payload = {
             "event": "test_progress",
             "passing": passing,
             "total": total,
-            "percentage": round((passing / total) * 100, 1) if total > 0 else 0,
+            "percentage": percentage,
             "previous_passing": previous,
-            "tests_completed_this_session": passing - previous,
+            "tests_completed_this_session": new_count,
             "completed_tests": completed_tests,
             "project": project_dir.name,
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "formatted_message": message,
         }
 
         try:

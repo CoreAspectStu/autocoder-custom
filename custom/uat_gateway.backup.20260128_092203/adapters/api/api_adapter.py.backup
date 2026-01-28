@@ -1,0 +1,914 @@
+"""
+API Adapter - Discover and test API endpoints from backend code
+
+This module is responsible for:
+- Scanning backend code to discover API endpoints
+- Extracting HTTP methods, routes, and parameters
+- Validating response schemas
+- Testing authentication
+- Testing error handling
+- Measuring response times
+"""
+
+import ast
+import re
+import time
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Set, Tuple
+from dataclasses import dataclass, field
+from enum import Enum
+import sys
+import json
+import requests
+from datetime import datetime
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.utils.logger import get_logger
+
+
+# ============================================================================
+# Data Models
+# ============================================================================
+
+class HTTPMethod(Enum):
+    """HTTP methods"""
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
+
+
+@dataclass
+class APIEndpoint:
+    """Represents a discovered API endpoint"""
+    path: str  # e.g., '/api/users/:id'
+    method: HTTPMethod  # GET, POST, etc.
+    route: str  # The base route (e.g., '/api/users')
+    parameters: List[str] = field(default_factory=list)  # ['id', 'name']
+    query_params: List[str] = field(default_factory=list)  # ['page', 'limit']
+    body_params: List[str] = field(default_factory=list)  # ['email', 'password']
+    file: str = ""  # Source file where endpoint was found
+    line: int = 0  # Line number in source file
+    middleware: List[str] = field(default_factory=list)  # ['auth', 'validate']
+    description: str = ""  # Description from comments
+
+
+@dataclass
+class DiscoveryResult:
+    """Result of endpoint discovery"""
+    endpoints: List[APIEndpoint] = field(default_factory=list)
+    files_scanned: int = 0
+    endpoints_found: int = 0
+    errors: List[str] = field(default_factory=list)
+    frameworks_detected: List[str] = field(default_factory=list)
+
+
+@dataclass
+class APIMeasurement:
+    """Represents a single API response time measurement"""
+    endpoint_path: str  # e.g., '/api/users'
+    method: str  # 'GET', 'POST', etc.
+    response_time_ms: float  # Response time in milliseconds
+    status_code: int  # HTTP status code
+    timestamp: datetime  # When the measurement was taken
+    success: bool  # Whether the request succeeded
+    error: Optional[str] = None  # Error message if failed
+    response_size: int = 0  # Size of response in bytes
+
+
+@dataclass
+class PerformanceStats:
+    """Performance statistics for API endpoints"""
+    endpoint_path: str
+    method: str
+    total_requests: int = 0
+    successful_requests: int = 0
+    failed_requests: int = 0
+    avg_response_time_ms: float = 0.0
+    min_response_time_ms: float = float('inf')
+    max_response_time_ms: float = 0.0
+    slow_requests_count: int = 0  # Requests exceeding threshold
+    last_measurement: Optional[datetime] = None
+
+
+@dataclass
+class APITestResult:
+    """Result of testing an API endpoint"""
+    endpoint: APIEndpoint
+    success: bool
+    status_code: Optional[int] = None
+    response_time_ms: Optional[float] = None
+    error: Optional[str] = None
+    response_body: Optional[str] = None
+
+
+@dataclass
+class ErrorTestCase:
+    """Represents a single error test case"""
+    endpoint: APIEndpoint
+    invalid_data: Dict[str, Any]  # Invalid payload to send
+    expected_status: Optional[int] = None  # Expected error status code
+    description: str = ""  # Description of what's being tested
+
+
+@dataclass
+class ErrorTestResult:
+    """Result of testing error handling"""
+    endpoint: APIEndpoint
+    test_case: ErrorTestCase
+    success: bool  # True if error was properly returned
+    status_code: int  # Actual status code received
+    response_body: Dict[str, Any]  # Response data
+    error_message: str  # Error message from response
+    is_helpful: bool  # True if error message is helpful
+    documentation: str = ""  # Documentation of the error response
+    timestamp: str = ""
+    duration_ms: float = 0.0
+
+
+# ============================================================================
+# API Adapter
+# ============================================================================
+
+class APIAdapter:
+    """
+    Discover API endpoints from backend code
+
+    Supports:
+    - Express.js (app.get, router.post, etc.)
+    - Fastify (fastify.get, fastify.post, etc.)
+    - Koa (router.get, router.post, etc.)
+    - Python Flask (@app.route)
+    - Python FastAPI (@app.get, @router.post)
+    """
+
+    def __init__(
+        self,
+        backend_path: Optional[str] = None,
+        frameworks: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None
+    ):
+        """
+        Initialize the API adapter
+
+        Args:
+            backend_path: Path to backend code directory
+            frameworks: List of frameworks to detect (default: auto-detect)
+            exclude_patterns: Patterns to exclude (e.g., ['node_modules', 'test'])
+        """
+        self.logger = get_logger(__name__)
+        self.backend_path = Path(backend_path) if backend_path else None
+        self.frameworks = frameworks or []
+        self.exclude_patterns = exclude_patterns or ['node_modules', '__pycache__', '.git', 'dist', 'build']
+
+        # Framework detection patterns
+        self.framework_patterns = {
+            'express': [
+                (r'app\.(get|post|put|delete|patch)\(', 'Express app'),
+                (r'router\.(get|post|put|delete|patch)\(', 'Express router'),
+                (r'express\(\)', 'Express'),
+            ],
+            'fastify': [
+                (r'fastify\.(get|post|put|delete|patch)\(', 'Fastify'),
+                (r'fastify\.route\(', 'Fastify route'),
+            ],
+            'koa': [
+                (r'router\.(get|post|put|delete|patch)\(', 'Koa Router'),
+                (r'koa-router', 'Koa Router'),
+            ],
+            'flask': [
+                (r'@app\.route', 'Flask'),
+                (r'@.*\.route\(', 'Flask blueprint'),
+                (r'flask\.', 'Flask'),
+            ],
+            'fastapi': [
+                (r'@app\.(get|post|put|delete|patch)', 'FastAPI'),
+                (r'@router\.(get|post|put|delete|patch)', 'FastAPI router'),
+                (r'from fastapi import', 'FastAPI'),
+            ],
+        }
+
+        # HTTP method patterns
+        self.method_patterns = {
+            'get': HTTPMethod.GET,
+            'post': HTTPMethod.POST,
+            'put': HTTPMethod.PUT,
+            'delete': HTTPMethod.DELETE,
+            'patch': HTTPMethod.PATCH,
+            'head': HTTPMethod.HEAD,
+            'options': HTTPMethod.OPTIONS,
+        }
+
+    def discover_endpoints(self, backend_path: Optional[str] = None) -> DiscoveryResult:
+        """
+        Scan backend code and discover API endpoints
+
+        Args:
+            backend_path: Path to backend code (overrides init value)
+
+        Returns:
+            DiscoveryResult with discovered endpoints
+        """
+        result = DiscoveryResult()
+
+        # Use provided path or default
+        scan_path = Path(backend_path) if backend_path else self.backend_path
+
+        if not scan_path or not scan_path.exists():
+            result.errors.append(f"Backend path not found: {scan_path}")
+            self.logger.error(f"Backend path not found: {scan_path}")
+            return result
+
+        self.logger.info(f"Scanning backend code in: {scan_path}")
+
+        # Detect frameworks if not specified
+        if not self.frameworks:
+            self.frameworks = self._detect_frameworks(scan_path)
+            result.frameworks_detected = self.frameworks
+
+        if not self.frameworks:
+            result.errors.append("No supported frameworks detected")
+            self.logger.warning("No supported frameworks detected")
+            return result
+
+        self.logger.info(f"Detected frameworks: {', '.join(self.frameworks)}")
+
+        # Scan files based on framework
+        for framework in self.frameworks:
+            if framework in ['express', 'fastify', 'koa']:
+                endpoints = self._scan_javascript_files(scan_path, framework)
+            elif framework in ['flask', 'fastapi']:
+                endpoints = self._scan_python_files(scan_path, framework)
+            else:
+                self.logger.warning(f"Unsupported framework: {framework}")
+                continue
+
+            result.endpoints.extend(endpoints)
+
+        # Update statistics
+        result.files_scanned = len(list(scan_path.rglob('*')))
+        result.endpoints_found = len(result.endpoints)
+
+        self.logger.info(
+            f"Discovery complete: {result.endpoints_found} endpoints "
+            f"found in {result.files_scanned} files"
+        )
+
+        return result
+
+    def _detect_frameworks(self, scan_path: Path) -> List[str]:
+        """
+        Detect which backend frameworks are used
+
+        Args:
+            scan_path: Path to scan
+
+        Returns:
+            List of detected framework names
+        """
+        detected = set()
+
+        # Check package.json for Node.js frameworks
+        package_json = scan_path / 'package.json'
+        if package_json.exists():
+            content = package_json.read_text()
+            if 'express' in content.lower():
+                detected.add('express')
+            if 'fastify' in content.lower():
+                detected.add('fastify')
+            if 'koa' in content.lower() or 'koa-router' in content:
+                detected.add('koa')
+
+        # Check requirements.txt or pyproject.toml for Python frameworks
+        requirements_txt = scan_path / 'requirements.txt'
+        pyproject_toml = scan_path / 'pyproject.toml'
+
+        for dep_file in [requirements_txt, pyproject_toml]:
+            if dep_file.exists():
+                content = dep_file.read_text()
+                if 'flask' in content.lower():
+                    detected.add('flask')
+                if 'fastapi' in content.lower():
+                    detected.add('fastapi')
+
+        # Scan source files for framework imports
+        for js_file in scan_path.rglob('*.js'):
+            if self._should_exclude_file(js_file):
+                continue
+            try:
+                content = js_file.read_text()
+                if 'express' in content:
+                    detected.add('express')
+                if 'fastify' in content:
+                    detected.add('fastify')
+                if 'koa' in content:
+                    detected.add('koa')
+            except Exception:
+                pass
+
+        for py_file in scan_path.rglob('*.py'):
+            if self._should_exclude_file(py_file):
+                continue
+            try:
+                content = py_file.read_text()
+                if 'flask' in content:
+                    detected.add('flask')
+                if 'fastapi' in content:
+                    detected.add('fastapi')
+            except Exception:
+                pass
+
+        return list(detected)
+
+    def _scan_javascript_files(
+        self,
+        scan_path: Path,
+        framework: str
+    ) -> List[APIEndpoint]:
+        """
+        Scan JavaScript files for API endpoints
+
+        Args:
+            scan_path: Path to scan
+            framework: Framework name (express, fastify, koa)
+
+        Returns:
+            List of discovered endpoints
+        """
+        endpoints = []
+
+        for js_file in scan_path.rglob('*.js'):
+            if self._should_exclude_file(js_file):
+                continue
+
+            try:
+                file_endpoints = self._extract_from_javascript(js_file, framework)
+                endpoints.extend(file_endpoints)
+            except Exception as e:
+                self.logger.warning(f"Error scanning {js_file}: {e}")
+
+        return endpoints
+
+    def _extract_from_javascript(
+        self,
+        js_file: Path,
+        framework: str
+    ) -> List[APIEndpoint]:
+        """
+        Extract endpoints from a JavaScript file
+
+        Args:
+            js_file: Path to JavaScript file
+            framework: Framework name
+
+        Returns:
+            List of endpoints found in file
+        """
+        endpoints = []
+
+        try:
+            content = js_file.read_text()
+            lines = content.split('\n')
+
+            for line_num, line in enumerate(lines, 1):
+                # Match patterns like: app.get('/path', handler)
+                # or: router.post('/path', handler)
+                if framework == 'express':
+                    matches = re.finditer(
+                        r'(app|router)\.(get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+                        line
+                    )
+                elif framework == 'fastify':
+                    matches = re.finditer(
+                        r'(fastify|app)\.(get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+                        line
+                    )
+                elif framework == 'koa':
+                    matches = re.finditer(
+                        r'router\.(get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+                        line
+                    )
+                else:
+                    continue
+
+                for match in matches:
+                    method_str = match.group(2).lower()
+                    path = match.group(3)
+
+                    # Extract parameters from path
+                    parameters = self._extract_path_parameters(path)
+
+                    endpoint = APIEndpoint(
+                        path=path,
+                        method=self.method_patterns.get(method_str, HTTPMethod.GET),
+                        route=self._extract_base_route(path),
+                        parameters=parameters,
+                        file=str(js_file.relative_to(self.backend_path)),
+                        line=line_num,
+                    )
+
+                    endpoints.append(endpoint)
+
+        except Exception as e:
+            self.logger.warning(f"Error parsing {js_file}: {e}")
+
+        return endpoints
+
+    def _scan_python_files(
+        self,
+        scan_path: Path,
+        framework: str
+    ) -> List[APIEndpoint]:
+        """
+        Scan Python files for API endpoints
+
+        Args:
+            scan_path: Path to scan
+            framework: Framework name (flask, fastapi)
+
+        Returns:
+            List of discovered endpoints
+        """
+        endpoints = []
+
+        for py_file in scan_path.rglob('*.py'):
+            if self._should_exclude_file(py_file):
+                continue
+
+            try:
+                file_endpoints = self._extract_from_python(py_file, framework)
+                endpoints.extend(file_endpoints)
+            except Exception as e:
+                self.logger.warning(f"Error scanning {py_file}: {e}")
+
+        return endpoints
+
+    def _extract_from_python(
+        self,
+        py_file: Path,
+        framework: str
+    ) -> List[APIEndpoint]:
+        """
+        Extract endpoints from a Python file
+
+        Args:
+            py_file: Path to Python file
+            framework: Framework name
+
+        Returns:
+            List of endpoints found in file
+        """
+        endpoints = []
+
+        try:
+            content = py_file.read_text()
+            lines = content.split('\n')
+
+            # Look for decorator patterns
+            for line_num, line in enumerate(lines, 1):
+                if framework == 'flask':
+                    # Match: @app.route('/path', methods=['GET'])
+                    matches = re.finditer(
+                        r'@.*\.route\s*\(\s*["\']([^"\']+)["\'][^)]*\)',
+                        line
+                    )
+                elif framework == 'fastapi':
+                    # Match: @app.get('/path') or @router.post('/path')
+                    matches = re.finditer(
+                        r'@.*\.(get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+                        line
+                    )
+                else:
+                    continue
+
+                for match in matches:
+                    if framework == 'flask':
+                        path = match.group(1)
+                        # Look ahead for methods parameter
+                        methods_line = ' '.join(lines[max(0, line_num-2):line_num+2])
+                        methods_match = re.search(r'methods\s*=\s*\[([^\]]+)\]', methods_line)
+                        if methods_match:
+                            methods_str = methods_match.group(1)
+                            method_names = re.findall(r'["\'](GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)["\']', methods_str)
+                        else:
+                            method_names = ['GET']  # Default for Flask
+                    else:  # fastapi
+                        method_str = match.group(1).lower()
+                        path = match.group(2)
+                        method_names = [method_str]
+
+                    # Extract parameters from path
+                    parameters = self._extract_path_parameters(path)
+
+                    for method_name in method_names:
+                        endpoint = APIEndpoint(
+                            path=path,
+                            method=self.method_patterns.get(method_name.lower(), HTTPMethod.GET),
+                            route=self._extract_base_route(path),
+                            parameters=parameters,
+                            file=str(py_file.relative_to(self.backend_path)),
+                            line=line_num,
+                        )
+
+                        endpoints.append(endpoint)
+
+        except Exception as e:
+            self.logger.warning(f"Error parsing {py_file}: {e}")
+
+        return endpoints
+
+    def _extract_path_parameters(self, path: str) -> List[str]:
+        """
+        Extract parameter names from route path
+
+        Examples:
+            '/users/:id' -> ['id']
+            '/posts/:postId/comments/:commentId' -> ['postId', 'commentId']
+            '/api/users/<int:user_id>' -> ['user_id']
+
+        Args:
+            path: Route path
+
+        Returns:
+            List of parameter names
+        """
+        parameters = []
+
+        # Express/Koa style: /users/:id
+        if ':' in path:
+            parameters = re.findall(r':(\w+)', path)
+
+        # Flask style: /users/<int:id> or /users/<user_id>
+        elif '<' in path and '>' in path:
+            parameters = re.findall(r'<(?:\w+:)?(\w+)>', path)
+
+        # FastAPI style: /users/{user_id}
+        elif '{' in path and '}' in path:
+            parameters = re.findall(r'\{(\w+)\}', path)
+
+        return parameters
+
+    def _extract_base_route(self, path: str) -> str:
+        """
+        Extract base route from path (without parameters)
+
+        Examples:
+            '/users/:id' -> '/users'
+            '/api/v1/posts/:postId/comments' -> '/api/v1/posts/comments'
+
+        Args:
+            path: Full route path
+
+        Returns:
+            Base route
+        """
+        # Remove parameter sections
+        base = re.sub(r'/[:<][\w]+[>}]', '', path)
+        base = re.sub(r'/\{[\w]+\}', '', base)
+
+        # Ensure leading slash
+        if not base.startswith('/'):
+            base = '/' + base
+
+        return base
+
+    def _should_exclude_file(self, file_path: Path) -> bool:
+        """
+        Check if file should be excluded from scanning
+
+        Args:
+            file_path: File path to check
+
+        Returns:
+            True if file should be excluded
+        """
+        # Check against exclude patterns
+        for pattern in self.exclude_patterns:
+            if pattern in str(file_path):
+                return True
+
+        return False
+
+    def get_endpoint_summary(self, endpoints: List[APIEndpoint]) -> Dict[str, Any]:
+        """
+        Generate summary statistics for discovered endpoints
+
+        Args:
+            endpoints: List of discovered endpoints
+
+        Returns:
+            Summary statistics
+        """
+        if not endpoints:
+            return {
+                'total': 0,
+                'by_method': {},
+                'by_route': {},
+                'unique_parameters': set(),
+            }
+
+        by_method = {}
+        by_route = {}
+        all_params = set()
+
+        for endpoint in endpoints:
+            # Count by method
+            method_name = endpoint.method.value
+            by_method[method_name] = by_method.get(method_name, 0) + 1
+
+            # Count by route
+            by_route[endpoint.route] = by_route.get(endpoint.route, 0) + 1
+
+            # Collect parameters
+            all_params.update(endpoint.parameters)
+
+        return {
+            'total': len(endpoints),
+            'by_method': by_method,
+            'by_route': by_route,
+            'unique_parameters': list(all_params),
+        }
+
+    # ========================================================================
+    # API Testing and Response Time Measurement
+    # ========================================================================
+
+    def test_endpoint(
+        self,
+        endpoint: APIEndpoint,
+        base_url: str,
+        timeout: int = 30,
+        headers: Optional[Dict[str, str]] = None,
+        auth: Optional[Tuple[str, str]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        body: Optional[Dict[str, Any]] = None
+    ) -> APITestResult:
+        """
+        Test an API endpoint and measure response time
+
+        Args:
+            endpoint: The endpoint to test
+            base_url: Base URL for the API (e.g., 'http://localhost:4001')
+            timeout: Request timeout in seconds
+            headers: HTTP headers to include
+            auth: Basic auth tuple (username, password)
+            params: Query parameters
+            body: Request body for POST/PUT/PATCH
+
+        Returns:
+            APITestResult with timing and status information
+        """
+        result = APITestResult(endpoint=endpoint, success=False)
+
+        # Construct full URL
+        url = f"{base_url.rstrip('/')}{endpoint.path}"
+
+        try:
+            # Prepare request arguments
+            request_kwargs = {
+                'timeout': timeout,
+                'headers': headers or {},
+            }
+
+            if auth:
+                request_kwargs['auth'] = auth
+            if params:
+                request_kwargs['params'] = params
+            if body and endpoint.method in [HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.PATCH]:
+                request_kwargs['json'] = body
+
+            # Measure response time
+            start_time = time.time()
+
+            response = requests.request(
+                method=endpoint.method.value,
+                url=url,
+                **request_kwargs
+            )
+
+            end_time = time.time()
+            response_time_ms = (end_time - start_time) * 1000
+
+            # Update result
+            result.success = response.status_code < 400
+            result.status_code = response.status_code
+            result.response_time_ms = response_time_ms
+
+            try:
+                result.response_body = response.text
+            except Exception:
+                result.response_body = None
+
+            self.logger.info(
+                f"{endpoint.method.value} {endpoint.path} - "
+                f"Status: {response.status_code}, "
+                f"Time: {response_time_ms:.2f}ms"
+            )
+
+        except requests.exceptions.Timeout:
+            result.error = f"Request timeout after {timeout}s"
+            self.logger.warning(f"Timeout: {endpoint.method.value} {endpoint.path}")
+
+        except requests.exceptions.ConnectionError as e:
+            result.error = f"Connection error: {str(e)}"
+            self.logger.warning(f"Connection error: {endpoint.method.value} {endpoint.path}")
+
+        except Exception as e:
+            result.error = f"Request failed: {str(e)}"
+            self.logger.error(f"Request failed: {endpoint.method.value} {endpoint.path}: {e}")
+
+        return result
+
+    def measure_endpoint(
+        self,
+        endpoint: APIEndpoint,
+        base_url: str,
+        timeout: int = 30,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[Dict[str, Any]] = None
+    ) -> Optional[APIMeasurement]:
+        """
+        Measure response time for an endpoint
+
+        Args:
+            endpoint: The endpoint to measure
+            base_url: Base URL for the API
+            timeout: Request timeout in seconds
+            headers: HTTP headers to include
+            params: Query parameters
+
+        Returns:
+            APIMeasurement with timing data, or None if request failed
+        """
+        # Construct full URL
+        url = f"{base_url.rstrip('/')}{endpoint.path}"
+
+        try:
+            # Measure response time
+            start_time = time.time()
+
+            response = requests.get(
+                url,
+                timeout=timeout,
+                headers=headers or {},
+                params=params
+            )
+
+            end_time = time.time()
+            response_time_ms = (end_time - start_time) * 1000
+
+            # Create measurement
+            measurement = APIMeasurement(
+                endpoint_path=endpoint.path,
+                method=endpoint.method.value,
+                response_time_ms=response_time_ms,
+                status_code=response.status_code,
+                timestamp=datetime.now(),
+                success=response.status_code < 400,
+                error=None if response.status_code < 400 else f"HTTP {response.status_code}",
+                response_size=len(response.content)
+            )
+
+            self.logger.debug(
+                f"Measured {endpoint.method.value} {endpoint.path}: "
+                f"{response_time_ms:.2f}ms (Status: {response.status_code})"
+            )
+
+            return measurement
+
+        except Exception as e:
+            self.logger.error(f"Failed to measure {endpoint.path}: {e}")
+            return None
+
+    def track_performance(
+        self,
+        measurements: List[APIMeasurement],
+        slow_threshold_ms: float = 1000.0
+    ) -> Dict[str, PerformanceStats]:
+        """
+        Track performance statistics from measurements
+
+        Args:
+            measurements: List of API measurements
+            slow_threshold_ms: Threshold for flagging slow requests (ms)
+
+        Returns:
+            Dictionary mapping endpoint paths to PerformanceStats
+        """
+        stats_by_endpoint: Dict[str, PerformanceStats] = {}
+
+        for measurement in measurements:
+            key = f"{measurement.method} {measurement.endpoint_path}"
+
+            if key not in stats_by_endpoint:
+                stats_by_endpoint[key] = PerformanceStats(
+                    endpoint_path=measurement.endpoint_path,
+                    method=measurement.method
+                )
+
+            stats = stats_by_endpoint[key]
+
+            # Update counters
+            stats.total_requests += 1
+            if measurement.success:
+                stats.successful_requests += 1
+            else:
+                stats.failed_requests += 1
+
+            # Update response time statistics
+            rt = measurement.response_time_ms
+            stats.avg_response_time_ms = (
+                (stats.avg_response_time_ms * (stats.total_requests - 1) + rt)
+                / stats.total_requests
+            )
+
+            if rt < stats.min_response_time_ms:
+                stats.min_response_time_ms = rt
+            if rt > stats.max_response_time_ms:
+                stats.max_response_time_ms = rt
+
+            # Flag slow requests
+            if rt > slow_threshold_ms:
+                stats.slow_requests_count += 1
+
+            # Update last measurement timestamp
+            if stats.last_measurement is None or measurement.timestamp > stats.last_measurement:
+                stats.last_measurement = measurement.timestamp
+
+        return stats_by_endpoint
+
+    def get_slow_requests(
+        self,
+        measurements: List[APIMeasurement],
+        threshold_ms: float = 1000.0
+    ) -> List[APIMeasurement]:
+        """
+        Get list of slow requests exceeding threshold
+
+        Args:
+            measurements: List of API measurements
+            threshold_ms: Response time threshold in milliseconds
+
+        Returns:
+            List of measurements exceeding threshold
+        """
+        slow_requests = [
+            m for m in measurements
+            if m.response_time_ms > threshold_ms
+        ]
+
+        # Sort by response time (slowest first)
+        slow_requests.sort(key=lambda m: m.response_time_ms, reverse=True)
+
+        return slow_requests
+
+    def generate_performance_report(
+        self,
+        stats: Dict[str, PerformanceStats]
+    ) -> str:
+        """
+        Generate a human-readable performance report
+
+        Args:
+            stats: Performance statistics by endpoint
+
+        Returns:
+            Formatted report string
+        """
+        if not stats:
+            return "No performance data available."
+
+        lines = [
+            "=" * 70,
+            "API Performance Report",
+            "=" * 70,
+            ""
+        ]
+
+        for key, stat in stats.items():
+            lines.append(f"{stat.method} {stat.endpoint_path}")
+            lines.append("-" * 70)
+            lines.append(f"  Total Requests:     {stat.total_requests}")
+            lines.append(f"  Successful:         {stat.successful_requests}")
+            lines.append(f"  Failed:             {stat.failed_requests}")
+            lines.append(f"  Avg Response Time:  {stat.avg_response_time_ms:.2f}ms")
+            lines.append(f"  Min Response Time:  {stat.min_response_time_ms:.2f}ms")
+            lines.append(f"  Max Response Time:  {stat.max_response_time_ms:.2f}ms")
+            lines.append(f"  Slow Requests:      {stat.slow_requests_count}")
+
+            if stat.last_measurement:
+                lines.append(f"  Last Measurement:   {stat.last_measurement.strftime('%Y-%m-%d %H:%M:%S')}")
+
+            # Calculate success rate
+            if stat.total_requests > 0:
+                success_rate = (stat.successful_requests / stat.total_requests) * 100
+                lines.append(f"  Success Rate:       {success_rate:.1f}%")
+
+            lines.append("")
+
+        return "\n".join(lines)

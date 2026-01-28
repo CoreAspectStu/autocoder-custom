@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #425: Smooth Animations at 60fps</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .fps-counter {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .fps-counter.fps-good {
+            color: #00ff00;
+        }
+
+        .fps-counter.fps-ok {
+            color: #ffaa00;
+        }
+
+        .fps-counter.fps-bad {
+            color: #ff0000;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .demo-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .demo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .demo-card h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+        }
+
+        /* Smooth fade animation */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-element {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: fadeIn 0.3s ease-out;
+            will-change: opacity, transform;
+        }
+
+        /* Smooth slide animation */
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .slide-element {
+            padding: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: slideIn 0.4s ease-out;
+            will-change: transform, opacity;
+        }
+
+        /* Smooth scale animation */
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .scale-element {
+            padding: 20px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            will-change: transform, opacity;
+        }
+
+        /* Smooth rotation animation */
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .rotate-element {
+            width: 60px;
+            height: 60px;
+            margin: 20px auto;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            border-radius: 8px;
+            animation: rotate 2s linear infinite;
+            will-change: transform;
+        }
+
+        /* Smooth pulse animation */
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        .pulse-element {
+            padding: 20px;
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: pulse 2s ease-in-out infinite;
+            will-change: transform, opacity;
+        }
+
+        /* Smooth progress bar */
+        .progress-bar-container {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            transition: width 0.3s ease-out;
+            will-change: width;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* Smooth button hover */
+        .smooth-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transition: all 0.2s ease;
+            will-change: transform, box-shadow;
+            margin: 5px;
+        }
+
+        .smooth-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .smooth-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Smooth loading spinner */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            will-change: transform;
+        }
+
+        /* Smooth bounce animation */
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .bounce-element {
+            padding: 20px;
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            color: #333;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: bounce 1s ease-in-out infinite;
+            will-change: transform;
+        }
+
+        /* Metrics display */
+        .metrics {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .metrics h3 {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .metric-label {
+            color: #888;
+        }
+
+        .metric-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+
+        .metric-value.warning {
+            color: #ffaa00;
+        }
+
+        .metric-value.error {
+            color: #ff0000;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="fps-counter" id="fpsCounter">60 FPS</div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Feature #425: Smooth Animations at 60fps</h1>
+            <p>Verify animations run smoothly without jank or stuttering</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>Animation Performance Monitor</h2>
+                <div class="metrics" id="metrics">
+                    <h3>Real-time Performance Metrics</h3>
+                    <div class="metric-row">
+                        <span class="metric-label">Current FPS:</span>
+                        <span class="metric-value" id="currentFps">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Average FPS:</span>
+                        <span class="metric-value" id="avgFps">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Min FPS:</span>
+                        <span class="metric-value" id="minFps">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Max FPS:</span>
+                        <span class="metric-value" id="maxFps">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Frame Time:</span>
+                        <span class="metric-value" id="frameTime">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Jank Events:</span>
+                        <span class="metric-value" id="jankEvents">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Smoothness:</span>
+                        <span class="metric-value" id="smoothness">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Animation Types</h2>
+                <div class="demo-grid">
+                    <div class="demo-card">
+                        <h3>Fade In</h3>
+                        <div class="fade-element">Fade Animation</div>
+                        <button class="smooth-button" onclick="triggerFade()">Trigger Fade</button>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3>Slide In</h3>
+                        <div class="slide-element">Slide Animation</div>
+                        <button class="smooth-button" onclick="triggerSlide()">Trigger Slide</button>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3>Scale In</h3>
+                        <div class="scale-element">Scale Animation</div>
+                        <button class="smooth-button" onclick="triggerScale()">Trigger Scale</button>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3>Rotation</h3>
+                        <div class="rotate-element"></div>
+                        <button class="smooth-button" onclick="toggleRotate()">Toggle Rotate</button>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3>Pulse</h3>
+                        <div class="pulse-element">Pulse Animation</div>
+                        <button class="smooth-button" onclick="togglePulse()">Toggle Pulse</button>
+                    </div>
+
+                    <div class="demo-card">
+                        <h3>Bounce</h3>
+                        <div class="bounce-element">Bounce Animation</div>
+                        <button class="smooth-button" onclick="toggleBounce()">Toggle Bounce</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Interactive Elements</h2>
+                <div class="demo-card">
+                    <h3>Progress Bar Animation</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+                    </div>
+                    <button class="smooth-button" onclick="startProgress()">Start Progress</button>
+                    <button class="smooth-button" onclick="resetProgress()">Reset</button>
+                </div>
+
+                <div class="demo-card" style="margin-top: 20px;">
+                    <h3>Loading Spinner</h3>
+                    <div class="spinner" id="spinner"></div>
+                    <button class="smooth-button" onclick="toggleSpinner()">Toggle Spinner</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Performance Test</h2>
+                <div class="demo-card">
+                    <h3>Stress Test: Multiple Animations</h3>
+                    <p>Run 50 simultaneous animations to test performance</p>
+                    <button class="smooth-button" onclick="runStressTest()">Run Stress Test</button>
+                    <button class="smooth-button" onclick="clearStressTest()">Clear</button>
+                    <div id="stressTestContainer" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Performance monitoring
+        const frameTimes = [];
+        let lastFrameTime = performance.now();
+        let jankCount = 0;
+        const jankThreshold = 33.33; // 2 frames at 60fps
+
+        function updateFPS() {
+            const now = performance.now();
+            const frameTime = now - lastFrameTime;
+            lastFrameTime = now;
+
+            frameTimes.push(frameTime);
+            if (frameTimes.length > 60) {
+                frameTimes.shift();
+            }
+
+            // Calculate FPS
+            const avgFrameTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+            const fps = 1000 / avgFrameTime;
+
+            // Detect jank
+            if (frameTime > jankThreshold) {
+                jankCount++;
+            }
+
+            // Calculate metrics
+            const minFrameTime = Math.min(...frameTimes);
+            const maxFrameTime = Math.max(...frameTimes);
+            const minFps = 1000 / maxFrameTime;
+            const maxFps = 1000 / minFrameTime;
+
+            // Update display
+            const fpsCounter = document.getElementById('fpsCounter');
+            const fpsText = Math.round(fps);
+            fpsCounter.textContent = fpsText + ' FPS';
+
+            // Color coding
+            fpsCounter.className = 'fps-counter ' + (fps >= 55 ? 'fps-good' : fps >= 45 ? 'fps-ok' : 'fps-bad');
+
+            // Update metrics panel
+            document.getElementById('currentFps').textContent = fpsText;
+            document.getElementById('avgFps').textContent = Math.round(fps);
+            document.getElementById('minFps').textContent = Math.round(minFps);
+            document.getElementById('maxFps').textContent = Math.round(maxFps);
+            document.getElementById('frameTime').textContent = avgFrameTime.toFixed(2) + 'ms';
+            document.getElementById('jankEvents').textContent = jankCount;
+
+            // Calculate smoothness
+            const smoothFrames = frameTimes.filter(t => t <= jankThreshold).length;
+            const smoothness = (smoothFrames / frameTimes.length * 100).toFixed(1);
+            const smoothnessEl = document.getElementById('smoothness');
+            smoothnessEl.textContent = smoothness + '%';
+            smoothnessEl.className = 'metric-value ' + (smoothness >= 95 ? '' : smoothness >= 85 ? 'warning' : 'error');
+
+            requestAnimationFrame(updateFPS);
+        }
+
+        // Start FPS monitoring
+        requestAnimationFrame(updateFPS);
+
+        // Animation triggers
+        function triggerFade() {
+            const container = event.target.parentElement;
+            const existing = container.querySelector('.fade-element');
+            if (existing) existing.remove();
+
+            const el = document.createElement('div');
+            el.className = 'fade-element';
+            el.textContent = 'Fade Animation';
+            container.insertBefore(el, event.target);
+        }
+
+        function triggerSlide() {
+            const container = event.target.parentElement;
+            const existing = container.querySelector('.slide-element');
+            if (existing) existing.remove();
+
+            const el = document.createElement('div');
+            el.className = 'slide-element';
+            el.textContent = 'Slide Animation';
+            container.insertBefore(el, event.target);
+        }
+
+        function triggerScale() {
+            const container = event.target.parentElement;
+            const existing = container.querySelector('.scale-element');
+            if (existing) existing.remove();
+
+            const el = document.createElement('div');
+            el.className = 'scale-element';
+            el.textContent = 'Scale Animation';
+            container.insertBefore(el, event.target);
+        }
+
+        function toggleRotate() {
+            const el = event.target.parentElement.querySelector('.rotate-element');
+            el.style.animationPlayState = el.style.animationPlayState === 'paused' ? 'running' : 'paused';
+        }
+
+        function togglePulse() {
+            const el = event.target.parentElement.querySelector('.pulse-element');
+            el.style.animationPlayState = el.style.animationPlayState === 'paused' ? 'running' : 'paused';
+        }
+
+        function toggleBounce() {
+            const el = event.target.parentElement.querySelector('.bounce-element');
+            el.style.animationPlayState = el.style.animationPlayState === 'paused' ? 'running' : 'paused';
+        }
+
+        function startProgress() {
+            let progress = 0;
+            const progressBar = document.getElementById('progressBar');
+            const interval = setInterval(() => {
+                progress += 2;
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = progress + '%';
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, 30);
+        }
+
+        function resetProgress() {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+        }
+
+        function toggleSpinner() {
+            const spinner = document.getElementById('spinner');
+            spinner.style.display = spinner.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function runStressTest() {
+            const container = document.getElementById('stressTestContainer');
+            container.innerHTML = '';
+
+            for (let i = 0; i < 50; i++) {
+                const el = document.createElement('div');
+                el.style.position = 'absolute';
+                el.style.width = '20px';
+                el.style.height = '20px';
+                el.style.background = `hsl(${i * 7}, 70%, 50%)`;
+                el.style.borderRadius = '50%';
+                el.style.left = Math.random() * 300 + 'px';
+                el.style.top = Math.random() * 200 + 'px';
+                el.style.animation = `pulse ${0.5 + Math.random()}s ease-in-out infinite`;
+                el.style.willChange = 'transform, opacity';
+                container.appendChild(el);
+            }
+        }
+
+        function clearStressTest() {
+            document.getElementById('stressTestContainer').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

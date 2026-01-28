@@ -165,7 +165,7 @@ Authentication:
         "--concurrency", "-c",
         type=int,
         default=1,
-        help="Number of concurrent coding agents (default: 1, max: 5)",
+        help="Number of concurrent coding agents (default: 1, max: auto-detected)",
     )
 
     # Backward compatibility: --parallel is deprecated alias for --concurrency
@@ -264,8 +264,9 @@ def main() -> None:
             # Entry point mode - always use unified orchestrator
             from parallel_orchestrator import run_parallel_orchestrator
 
-            # Clamp concurrency to valid range (1-5)
-            concurrency = max(1, min(args.concurrency, 5))
+            # Clamp concurrency to valid range based on API provider
+            from parallel_orchestrator import MAX_PARALLEL_AGENTS
+            concurrency = max(1, min(args.concurrency, MAX_PARALLEL_AGENTS))
             if concurrency != args.concurrency:
                 print(f"Clamping concurrency to valid range: {concurrency}", flush=True)
 
