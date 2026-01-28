@@ -180,21 +180,24 @@ Use browser automation tools:
 **Run ALL these grep checks. Any hits in src/ (excluding test files) require investigation:**
 
 ```bash
+# Common exclusions for test files
+EXCLUDE="--exclude=*.test.* --exclude=*.spec.* --exclude=*__test__* --exclude=*__mocks__*"
+
 # 1. In-memory storage patterns (CRITICAL - catches dev-store)
-grep -r "globalThis\." --include="*.ts" --include="*.tsx" --include="*.js" src/
-grep -r "dev-store\|devStore\|DevStore\|mock-db\|mockDb" --include="*.ts" --include="*.tsx" --include="*.js" src/
+grep -r "globalThis\." --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/
+grep -r "dev-store\|devStore\|DevStore\|mock-db\|mockDb" --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/
 
 # 2. Mock data variables
-grep -r "mockData\|fakeData\|sampleData\|dummyData\|testData" --include="*.ts" --include="*.tsx" --include="*.js" src/
+grep -r "mockData\|fakeData\|sampleData\|dummyData\|testData" --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/
 
 # 3. TODO/incomplete markers
-grep -r "TODO.*real\|TODO.*database\|TODO.*API\|STUB\|MOCK" --include="*.ts" --include="*.tsx" --include="*.js" src/
+grep -r "TODO.*real\|TODO.*database\|TODO.*API\|STUB\|MOCK" --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/
 
 # 4. Development-only conditionals
-grep -r "isDevelopment\|isDev\|process\.env\.NODE_ENV.*development" --include="*.ts" --include="*.tsx" --include="*.js" src/
+grep -r "isDevelopment\|isDev\|process\.env\.NODE_ENV.*development" --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/
 
 # 5. In-memory collections as data stores
-grep -r "new Map\(\)\|new Set\(\)" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null
+grep -r "new Map\(\)\|new Set\(\)" --include="*.ts" --include="*.tsx" --include="*.js" $EXCLUDE src/ 2>/dev/null
 ```
 
 **Rule:** If ANY grep returns results in production code → investigate → FIX before marking passing.
