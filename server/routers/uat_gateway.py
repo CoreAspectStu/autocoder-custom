@@ -4,6 +4,8 @@ UAT Gateway Integration Router
 Provides API endpoints to trigger UAT testing cycles and integrate
 with the DevLayer quality gate workflow.
 
+Also provides endpoints to query UAT tests from uat_tests.db (separate from features.db)
+
 Workflow:
 1. PRD created in AutoCoder
 2. AutoCoder generates features and builds code
@@ -17,11 +19,12 @@ Workflow:
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import asyncio
 import sys
 from pathlib import Path
+from contextlib import contextmanager
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -898,3 +901,164 @@ async def create_manual_bug_card(bug_data: Dict[str, Any]):
             status_code=500,
             detail=f"Failed to create bug card: {str(e)}"
         )
+
+
+# ============================================================================
+# UAT Tests API (queries uat_tests.db instead of features.db)
+# ============================================================================
+
+# UAT database directory
+UAT_DB_DIR = Path.home() / ".autocoder" / "uat_autocoder"
+
+
+def _get_uat_db_classes():
+    """Lazy import of database classes for UAT tests."""
+    global _create_uat_database, _UATTestFeature
+    if '_create_uat_database' not in globals() or _create_uat_database is None:
+        import sys
+        from pathlib import Path
+        root = Path(__file__).parent.parent.parent
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+
+        from api.database import create_database, Feature
+
+        # Create UAT database adapter
+        _create_uat_database = create_database
+        _UATTestFeature = Feature
+    return _create_uat_database, _UATTestFeature
+
+
+@contextmanager
+def get_uat_db_session():
+    """
+    Context manager for UAT database sessions.
+    Uses uat_tests.db from the UAT autocoder project.
+    """
+    create_database, _ = _get_uat_db_classes()
+
+    # UAT database is in the uat-autocoder project
+    uat_db_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder" / "uat_tests.db"
+
+    if not uat_db_path.exists():
+        # If UAT DB doesn't exist, create an empty one
+        uat_db_path.parent.mkdir(parents=True, exist_ok=True)
+        uat_db_path.touch()
+
+    # Use the uat_db_path as the project directory
+    _, SessionLocal = create_database(uat_db_path.parent)
+    session = SessionLocal()
+
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+class UATTestListResponse(BaseModel):
+    """Response model for listing UAT tests"""
+    total: int
+    passing: int
+    in_progress: int
+    features: List[Dict[str, Any]]
+
+
+@router.get("/tests", response_model=UATTestListResponse)
+async def list_uat_tests():
+    """
+    List all UAT tests from uat_tests.db
+
+    This endpoint mirrors the features API but queries from the UAT database
+    instead of the dev features database.
+    """
+    try:
+        with get_uat_db_session() as session:
+            from api.database import Feature
+
+            # Query all UAT tests
+            uat_tests = session.query(Feature).order_by(Feature.priority).all()
+
+            # Convert to dict format
+            tests_list = [test.to_dict() for test in uat_tests]
+
+            # Calculate statistics
+            total = len(tests_list)
+            passing = sum(1 for t in tests_list if t.get('passes', False))
+            in_progress = sum(1 for t in tests_list if t.get('in_progress', False))
+
+            return UATTestListResponse(
+                total=total,
+                passing=passing,
+                in_progress=in_progress,
+                features=tests_list
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list UAT tests: {str(e)}"
+        )
+
+
+@router.get("/tests/{test_id}")
+async def get_uat_test(test_id: int):
+    """Get a specific UAT test by ID"""
+    try:
+        with get_uat_db_session() as session:
+            from api.database import Feature
+
+            test = session.query(Feature).filter(Feature.id == test_id).first()
+
+            if not test:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"UAT test {test_id} not found"
+                )
+
+            return test.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get UAT test: {str(e)}"
+        )
+
+
+@router.get("/stats/summary")
+async def get_uat_stats_summary():
+    """
+    Get UAT testing statistics summary
+
+    Returns:
+    - Total tests
+    - Passing tests
+    - In-progress tests
+    - Completion percentage
+    """
+    try:
+        with get_uat_db_session() as session:
+            from api.database import Feature
+
+            total = session.query(Feature).count()
+            passing = session.query(Feature).filter(Feature.passes == True).count()
+            in_progress = session.query(Feature).filter(Feature.in_progress == True).count()
+
+            percentage = (passing / total * 100) if total > 0 else 0
+
+            return {
+                "total": total,
+                "passing": passing,
+                "in_progress": in_progress,
+                "percentage": round(percentage, 1)
+            }
+
+    except Exception as e:
+        # If UAT DB doesn't exist or has errors, return empty stats
+        return {
+            "total": 0,
+            "passing": 0,
+            "in_progress": 0,
+            "percentage": 0
+        }

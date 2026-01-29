@@ -297,7 +297,11 @@ def print_resource_status() -> None:
     """Print current resource status and limits."""
     provider = detect_api_provider()
     hw = get_hardware_capacity()
-    limits = get_resource_limits()
+    config = load_config()
+    limits = get_resource_limits(
+        mode=config.get("mode", "balanced"),
+        override_max=config.get("override_max"),
+    )
 
     print("=" * 60)
     print("  AUTOCODER RESOURCE LIMITS")

@@ -4,6 +4,8 @@ import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/u
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
+import { useUATMode } from './contexts/UATModeContext'
+import { useUATTests } from './hooks/useUATTests'
 import { ProjectSelector } from './components/ProjectSelector'
 import { KanbanBoard } from './components/KanbanBoard'
 import { AgentControl } from './components/AgentControl'
@@ -72,7 +74,15 @@ function App() {
 
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
-  const { data: features } = useFeatures(selectedProject)
+  const { isUATMode } = useUATMode()
+
+  // Switch data source based on UAT mode
+  const { data: devFeatures } = useFeatures(selectedProject)
+  const { data: uatTests } = useUATTests()
+
+  // Use the appropriate data source based on mode
+  const features = isUATMode ? uatTests : devFeatures
+
   const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
@@ -292,7 +302,7 @@ function App() {
 
                   <UATModeToggle
                     projectName={selectedProject}
-                    hasFeatures={(features?.total ?? 0) > 0}
+                    hasFeatures={progress.total > 0}
                   />
 
                   <button

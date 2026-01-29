@@ -1,43 +1,23 @@
-import { useState, useEffect } from 'react'
 import { FlaskConical, Code } from 'lucide-react'
-
-type UATMode = 'dev' | 'uat'
+import { useUATMode } from '../contexts/UATModeContext'
 
 interface UATModeToggleProps {
   projectName: string | null
   hasFeatures: boolean
 }
 
-const UAT_MODE_KEY = 'autocoder-uat-mode'
-
 export function UATModeToggle({ projectName, hasFeatures }: UATModeToggleProps) {
-  const [uatMode, setUatMode] = useState<UATMode>(() => {
-    try {
-      const stored = localStorage.getItem(UAT_MODE_KEY)
-      return (stored === 'uat' ? 'uat' : 'dev') as UATMode
-    } catch {
-      return 'dev'
-    }
-  })
-
-  // Persist mode to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(UAT_MODE_KEY, uatMode)
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, [uatMode])
+  const { toggleMode, isUATMode } = useUATMode()
 
   // Don't render if no project selected or no features exist
   if (!projectName || !hasFeatures) {
     return null
   }
 
-  const isUAT = uatMode === 'uat'
+  const isUAT = isUATMode
 
   const handleToggle = () => {
-    setUatMode(prev => (prev === 'dev' ? 'uat' : 'dev'))
+    toggleMode()
   }
 
   return (

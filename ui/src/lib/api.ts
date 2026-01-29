@@ -498,3 +498,24 @@ export async function deleteSchedule(
 export async function getNextScheduledRun(projectName: string): Promise<NextRunResponse> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/schedules/next`)
 }
+
+// ============================================================================
+// UAT Tests API (queries uat_tests.db instead of features.db)
+// ============================================================================
+
+export async function listUATTests(): Promise<FeatureListResponse> {
+  return fetchJSON('/uat/tests')
+}
+
+export async function getUATTest(testId: number): Promise<Feature> {
+  return fetchJSON(`/uat/tests/${testId}`)
+}
+
+export async function getUATStatsSummary(): Promise<{
+  total: number
+  passing: number
+  in_progress: number
+  percentage: number
+}> {
+  return fetchJSON('/uat/stats/summary')
+}
