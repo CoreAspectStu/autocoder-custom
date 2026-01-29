@@ -21,6 +21,7 @@ import { ExpandProjectModal } from './components/ExpandProjectModal'
 import { SpecCreationChat } from './components/SpecCreationChat'
 import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
+import { UATModeToggle } from './components/UATModeToggle'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
@@ -287,6 +288,11 @@ function App() {
                     projectName={selectedProject}
                     status={wsState.devServerStatus}
                     url={wsState.devServerUrl}
+                  />
+
+                  <UATModeToggle
+                    projectName={selectedProject}
+                    hasFeatures={(features?.total ?? 0) > 0}
                   />
 
                   <button
