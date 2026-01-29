@@ -99,7 +99,7 @@ npm run lint     # Run ESLint
 ```bash
 ruff check .                      # Lint
 mypy .                            # Type check
-python test_security.py           # Security unit tests (136 tests)
+python test_security.py           # Security unit tests (163 tests)
 python test_security_integration.py  # Integration tests (9 tests)
 ```
 
