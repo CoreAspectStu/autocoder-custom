@@ -414,6 +414,7 @@ function App() {
                 activeAgents={wsState.activeAgents}
                 onCreateSpec={() => setShowSpecChat(true)}
                 hasSpec={hasSpec}
+                isUATMode={isUATMode}
               />
             ) : (
               <div className="neo-card overflow-hidden" style={{ height: '600px' }}>

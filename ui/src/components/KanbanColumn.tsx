@@ -15,6 +15,7 @@ interface KanbanColumnProps {
   showExpandButton?: boolean
   onCreateSpec?: () => void  // Callback to start spec creation
   showCreateSpec?: boolean   // Show "Create Spec" button when project has no spec
+  isUATMode?: boolean        // Whether UAT Mode is active
 }
 
 const colorMap = {
@@ -36,6 +37,7 @@ export function KanbanColumn({
   showExpandButton,
   onCreateSpec,
   showCreateSpec,
+  isUATMode = false,
 }: KanbanColumnProps) {
   // Create a map of feature ID to active agent for quick lookup
   const agentByFeatureId = new Map(
@@ -62,7 +64,7 @@ export function KanbanColumn({
                 <button
                   onClick={onAddFeature}
                   className="neo-btn neo-btn-primary text-sm py-1.5 px-2"
-                  title="Add new feature (N)"
+                  title={isUATMode ? "Add UAT Test (N)" : "Add new feature (N)"}
                 >
                   <Plus size={16} />
                 </button>
@@ -71,7 +73,7 @@ export function KanbanColumn({
                 <button
                   onClick={onExpandProject}
                   className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-2"
-                  title="Expand project with AI (E)"
+                  title={isUATMode ? "Generate UAT Plan (E)" : "Expand project with AI (E)"}
                 >
                   <Sparkles size={16} />
                 </button>

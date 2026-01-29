@@ -9,9 +9,10 @@ interface KanbanBoardProps {
   activeAgents?: ActiveAgent[]
   onCreateSpec?: () => void  // Callback to start spec creation
   hasSpec?: boolean          // Whether the project has a spec
+  isUATMode?: boolean        // Whether UAT Mode is active
 }
 
-export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandProject, activeAgents = [], onCreateSpec, hasSpec = true }: KanbanBoardProps) {
+export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandProject, activeAgents = [], onCreateSpec, hasSpec = true, isUATMode = false }: KanbanBoardProps) {
   const hasFeatures = features && (features.pending.length + features.in_progress.length + features.done.length) > 0
 
   // Combine all features for dependency status calculation
@@ -51,6 +52,7 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
         showExpandButton={hasFeatures}
         onCreateSpec={onCreateSpec}
         showCreateSpec={!hasSpec && !hasFeatures}
+        isUATMode={isUATMode}
       />
       <KanbanColumn
         title="In Progress"
