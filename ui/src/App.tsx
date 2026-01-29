@@ -12,6 +12,7 @@ import { AgentControl } from './components/AgentControl'
 import { ProgressDashboard } from './components/ProgressDashboard'
 import { SetupWizard } from './components/SetupWizard'
 import { AddFeatureForm } from './components/AddFeatureForm'
+import { AddUATTestForm } from './components/AddUATTestForm'
 import { FeatureModal } from './components/FeatureModal'
 import { DebugLogViewer, type TabType } from './components/DebugLogViewer'
 import { AgentThought } from './components/AgentThought'
@@ -24,6 +25,7 @@ import { SpecCreationChat } from './components/SpecCreationChat'
 import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
 import { UATModeToggle } from './components/UATModeToggle'
+import { UATTestPlanning } from './components/UATTestPlanning'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
@@ -46,6 +48,7 @@ function App() {
   })
   const [showAddFeature, setShowAddFeature] = useState(false)
   const [showExpandProject, setShowExpandProject] = useState(false)
+  const [showUATTestPlanning, setShowUATTestPlanning] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
   const [setupComplete, setSetupComplete] = useState(true) // Start optimistic
   const [debugOpen, setDebugOpen] = useState(false)
@@ -417,7 +420,13 @@ function App() {
                 features={features}
                 onFeatureClick={setSelectedFeature}
                 onAddFeature={() => setShowAddFeature(true)}
-                onExpandProject={() => setShowExpandProject(true)}
+                onExpandProject={() => {
+                  if (isUATMode) {
+                    setShowUATTestPlanning(true)
+                  } else {
+                    setShowExpandProject(true)
+                  }
+                }}
                 activeAgents={wsState.activeAgents}
                 onCreateSpec={() => setShowSpecChat(true)}
                 hasSpec={hasSpec}
@@ -442,12 +451,18 @@ function App() {
         )}
       </main>
 
-      {/* Add Feature Modal */}
+      {/* Add Feature Modal - Show AddFeatureForm in Dev mode, AddUATTestForm in UAT mode */}
       {showAddFeature && selectedProject && (
-        <AddFeatureForm
-          projectName={selectedProject}
-          onClose={() => setShowAddFeature(false)}
-        />
+        isUATMode ? (
+          <AddUATTestForm
+            onClose={() => setShowAddFeature(false)}
+          />
+        ) : (
+          <AddFeatureForm
+            projectName={selectedProject}
+            onClose={() => setShowAddFeature(false)}
+          />
+        )
       )}
 
       {/* Feature Detail Modal */}
@@ -470,6 +485,47 @@ function App() {
             queryClient.invalidateQueries({ queryKey: ['features', selectedProject] })
           }}
         />
+      )}
+
+      {/* UAT Test Planning Modal - conversational test planning flow */}
+      {showUATTestPlanning && selectedProject && (
+        <div className="fixed inset-0 z-50 bg-[var(--color-neo-bg)] overflow-y-auto">
+          <div className="min-h-screen p-4">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 dark:border-gray-700">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    Generate UAT Test Plan
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {selectedProject}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowUATTestPlanning(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <UATTestPlanning
+                projectName={selectedProject}
+                onComplete={() => {
+                  setShowUATTestPlanning(false)
+                  // Refresh UAT tests to show newly created tests
+                  queryClient.invalidateQueries({ queryKey: ['uatTests'] })
+                }}
+                onCancel={() => setShowUATTestPlanning(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Spec Creation Chat - for creating spec from empty kanban */}

@@ -150,10 +150,39 @@ export function UATTestPlanning({ projectName, onComplete, onCancel }: UATTestPl
     }
   }
 
-  // Step 5: Complete planning
-  const handleApprovePlan = () => {
-    setStep('complete')
-    onComplete?.()
+  // Step 5: Complete planning - approve plan and create tests
+  const handleApprovePlan = async () => {
+    if (!testPlan?.cycle_id) {
+      setError('No test plan to approve')
+      return
+    }
+
+    setStep('generating')
+    setError(null)
+
+    try {
+      // Call approve-plan endpoint to create UAT tests
+      const response = await fetch(`/api/uat/approve-plan/${testPlan.cycle_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to approve test plan' }))
+        throw new Error(errorData.detail || 'Failed to approve test plan')
+      }
+
+      const result = await response.json()
+
+      console.log(`✅ Created ${result.tests_created} UAT tests`)
+      console.log(`   Test IDs: ${result.test_ids.slice(0, 5).join(', ')}${result.test_ids.length > 5 ? '...' : ''}`)
+
+      setStep('complete')
+      onComplete?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve test plan')
+      setStep('review')
+    }
   }
 
   // ============================================================================
@@ -218,9 +247,14 @@ export function UATTestPlanning({ projectName, onComplete, onCancel }: UATTestPl
     return (
       <div className="flex flex-col items-center gap-4 p-12">
         <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
-        <p className="text-gray-600 dark:text-gray-400">Generating test plan...</p>
+        <p className="text-gray-600 dark:text-gray-400">
+          {testPlan ? 'Creating UAT tests...' : 'Generating test plan...'}
+        </p>
         <p className="text-sm text-gray-500 dark:text-gray-500">
-          This may take a moment while I analyze your project
+          {testPlan
+            ? 'Please wait while I create your test tasks'
+            : 'This may take a moment while I analyze your project'
+          }
         </p>
       </div>
     )

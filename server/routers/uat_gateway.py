@@ -1028,6 +1028,108 @@ async def get_uat_test(test_id: int):
         )
 
 
+@router.post("/tests")
+async def create_uat_test(request: Dict[str, Any]):
+    """
+    Create a new UAT test
+
+    Creates a single UAT test task with the following fields:
+    - scenario: Test scenario name
+    - journey: User journey being tested
+    - phase: Test phase (smoke, functional, regression, uat)
+    - steps: Test execution steps
+    - expected_result: Expected test outcome
+    - category: Test category (optional, defaults to phase)
+    - priority: Test priority (optional, auto-assigned if not provided)
+
+    The test is created in uat_tests.db (separate from features.db)
+    """
+    try:
+        with get_uat_db_session() as session:
+            from api.database import Feature
+
+            # Extract fields from request
+            scenario = request.get('scenario')
+            journey = request.get('journey')
+            phase = request.get('phase')
+            steps = request.get('steps', [])
+            expected_result = request.get('expected_result', '')
+            category = request.get('category', phase)
+            priority = request.get('priority')
+
+            # Validate required fields
+            if not scenario:
+                raise HTTPException(
+                    status_code=400,
+                    detail="scenario is required"
+                )
+            if not journey:
+                raise HTTPException(
+                    status_code=400,
+                    detail="journey is required"
+                )
+            if not phase:
+                raise HTTPException(
+                    status_code=400,
+                    detail="phase is required (smoke, functional, regression, uat)"
+                )
+            if phase not in ['smoke', 'functional', 'regression', 'uat']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid phase: {phase}. Must be one of: smoke, functional, regression, uat"
+                )
+            if not steps or not isinstance(steps, list):
+                raise HTTPException(
+                    status_code=400,
+                    detail="steps is required and must be a list"
+                )
+
+            # Auto-assign priority if not provided
+            if priority is None:
+                # Get the highest priority and add 1
+                max_priority = session.query(Feature).count()
+                priority = max_priority + 1
+
+            # Build description from UAT-specific fields
+            description = f"Journey: {journey}\n"
+            description += f"Phase: {phase}\n"
+            description += f"Scenario: {scenario}\n"
+            description += f"Expected Result: {expected_result}"
+
+            # Create the UAT test
+            uat_test = Feature(
+                priority=priority,
+                category=category,
+                name=scenario,  # Use scenario as the test name
+                description=description,
+                steps=steps,
+                passes=False,
+                in_progress=False,
+                dependencies=None,
+                complexity_score=1,  # UAT tests are typically straightforward
+                created_at=datetime.utcnow()
+            )
+
+            session.add(uat_test)
+            session.commit()
+            session.refresh(uat_test)
+
+            return {
+                "success": True,
+                "test_id": uat_test.id,
+                "message": f"UAT test '{scenario}' created successfully",
+                "test": uat_test.to_dict()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create UAT test: {str(e)}"
+        )
+
+
 @router.get("/stats/summary")
 async def get_uat_stats_summary():
     """
@@ -1628,6 +1730,7 @@ class GenerateTestPlanResponse(BaseModel):
     test_prd: str
     message: str
     created_at: Optional[str] = None
+    estimated_execution_time: Optional[Dict[str, Any]] = None  # FR16: Estimated execution time breakdown
 
 
 @router.post("/generate-plan", response_model=GenerateTestPlanResponse)
@@ -1746,6 +1849,69 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
         print(f"   Phases: {', '.join(test_plan['recommended_phases'])}")
         print(f"   Scenarios: {len(test_plan['test_scenarios'])}")
 
+        # FEATURE #16: Calculate estimated execution time
+        print("⏱️  Calculating estimated execution time...")
+        total_test_count = len(test_plan['test_scenarios'])
+
+        # Configuration for time estimation (based on industry standards and FR16 requirements)
+        avg_test_duration_seconds = 120  # Average 2 minutes per test (conservative estimate)
+        max_concurrent_agents = 3  # Default parallel execution cap (FR69, FR100)
+        setup_time_seconds = 60  # Initial setup (browser launch, environment prep)
+        teardown_time_seconds = 30  # Final cleanup
+
+        # Calculate sequential execution time (if tests ran one at a time)
+        sequential_time_seconds = (total_test_count * avg_test_duration_seconds) + setup_time_seconds + teardown_time_seconds
+
+        # Calculate parallel execution time (with 3 agents running concurrently)
+        # Tests are divided among agents, each agent runs its share sequentially
+        tests_per_agent = max(1, total_test_count // max_concurrent_agents)
+        remaining_tests = total_test_count % max_concurrent_agents
+
+        # The last agent handles the remainder
+        if remaining_tests > 0:
+            tests_per_agent = max(tests_per_agent, remaining_tests)
+
+        parallel_time_seconds = (tests_per_agent * avg_test_duration_seconds) + setup_time_seconds + teardown_time_seconds
+
+        # Format time estimates for display
+        def format_duration(seconds: int) -> str:
+            """Format seconds into human-readable duration"""
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            if hours > 0:
+                return f"{hours}h {minutes}m"
+            return f"{minutes}m"
+
+        estimated_execution_time = {
+            "total_tests": total_test_count,
+            "sequential_execution": {
+                "seconds": sequential_time_seconds,
+                "formatted": format_duration(sequential_time_seconds),
+                "description": "If tests ran one at a time"
+            },
+            "parallel_execution": {
+                "seconds": parallel_time_seconds,
+                "formatted": format_duration(parallel_time_seconds),
+                "description": f"With {max_concurrent_agents} concurrent agents",
+                "concurrent_agents": max_concurrent_agents
+            },
+            "assumptions": {
+                "average_test_duration_seconds": avg_test_duration_seconds,
+                "setup_time_seconds": setup_time_seconds,
+                "teardown_time_seconds": teardown_time_seconds,
+                "max_concurrent_agents": max_concurrent_agents
+            },
+            "time_saved": {
+                "seconds": sequential_time_seconds - parallel_time_seconds,
+                "formatted": format_duration(sequential_time_seconds - parallel_time_seconds),
+                "percentage_saved": round(((sequential_time_seconds - parallel_time_seconds) / sequential_time_seconds) * 100, 1)
+            }
+        }
+
+        print(f"   Sequential: {format_duration(sequential_time_seconds)}")
+        print(f"   Parallel ({max_concurrent_agents} agents): {format_duration(parallel_time_seconds)}")
+        print(f"   Time saved: {format_duration(sequential_time_seconds - parallel_time_seconds)} ({estimated_execution_time['time_saved']['percentage_saved']}%)")
+
         # FEATURE #14: Save test plan to database for approval
         print("💾 Saving test plan to database...")
         from custom.uat_plugin.database import get_db_manager, UATTestPlan
@@ -1786,7 +1952,8 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
             test_dependencies=test_plan['test_dependencies'],
             test_prd=test_plan['test_prd'],
             message=f"Test framework proposal generated successfully with {len(test_plan['test_scenarios'])} scenarios across {len(test_plan['recommended_phases'])} phases",
-            created_at=test_plan['created_at']
+            created_at=test_plan['created_at'],
+            estimated_execution_time=estimated_execution_time  # FR16: Include time estimate
         )
 
     except HTTPException:

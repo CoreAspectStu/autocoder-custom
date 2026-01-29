@@ -520,6 +520,36 @@ export async function getUATStatsSummary(): Promise<{
   return fetchJSON('/uat/stats/summary')
 }
 
+export async function createUATTest(testData: {
+  scenario: string
+  journey: string
+  phase: 'smoke' | 'functional' | 'regression' | 'uat'
+  steps: string[]
+  expected_result: string
+  category?: string
+  priority?: number
+}): Promise<{
+  success: boolean
+  test_id: number
+  message: string
+  test: Feature
+}> {
+  const response = await fetch('/uat/tests', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(testData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to create UAT test')
+  }
+
+  return response.json()
+}
+
 export async function getUATProjectContext(
   projectName: string
 ): Promise<{
