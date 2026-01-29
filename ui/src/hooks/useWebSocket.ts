@@ -12,6 +12,8 @@ import type {
   AgentLogEntry,
   OrchestratorStatus,
   OrchestratorEvent,
+  ActiveTestAgent,
+  TestOrchestratorStatus,
 } from '../lib/types'
 
 // Activity item for the feed
@@ -52,6 +54,9 @@ interface WebSocketState {
   celebration: CelebrationTrigger | null
   // Orchestrator state for Mission Control
   orchestratorStatus: OrchestratorStatus | null
+  // UAT Test agent state
+  activeTestAgents: ActiveTestAgent[]
+  testOrchestratorStatus: TestOrchestratorStatus | null
 }
 
 const MAX_LOGS = 100 // Keep last 100 log lines
@@ -73,6 +78,8 @@ export function useProjectWebSocket(projectName: string | null) {
     celebrationQueue: [],
     celebration: null,
     orchestratorStatus: null,
+    activeTestAgents: [],
+    testOrchestratorStatus: null,
   })
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -122,6 +129,8 @@ export function useProjectWebSocket(projectName: string | null) {
                   activeAgents: [],
                   recentActivity: [],
                   orchestratorStatus: null,
+                  activeTestAgents: [],
+                  testOrchestratorStatus: null,
                 }),
               }))
               break
@@ -324,6 +333,125 @@ export function useProjectWebSocket(projectName: string | null) {
               }))
               break
 
+            case 'test_started':
+              setState(prev => {
+                const newTestAgent: ActiveTestAgent = {
+                  agentId: message.agent_id,
+                  testName: message.scenario,
+                  testId: message.test_id,
+                  phase: message.phase,
+                  journey: message.journey,
+                  state: 'running',
+                  startedAt: message.timestamp,
+                }
+
+                // Add to active test agents (avoid duplicates)
+                const existingIdx = prev.activeTestAgents.findIndex(a => a.agentId === message.agent_id)
+                let newAgents: ActiveTestAgent[]
+                if (existingIdx >= 0) {
+                  newAgents = [...prev.activeTestAgents]
+                  newAgents[existingIdx] = newTestAgent
+                } else {
+                  newAgents = [...prev.activeTestAgents, newTestAgent]
+                }
+
+                return {
+                  ...prev,
+                  activeTestAgents: newAgents,
+                }
+              })
+              break
+
+            case 'test_passed':
+              setState(prev => {
+                // Update or add the test agent with 'passed' state
+                const existingIdx = prev.activeTestAgents.findIndex(a => a.agentId === message.agent_id)
+                let newAgents: ActiveTestAgent[]
+                if (existingIdx >= 0) {
+                  newAgents = [...prev.activeTestAgents]
+                  newAgents[existingIdx] = {
+                    ...newAgents[existingIdx],
+                    state: 'passed',
+                    duration: message.duration,
+                  }
+                } else {
+                  // Add new entry (shouldn't happen but handle gracefully)
+                  newAgents = [
+                    ...prev.activeTestAgents,
+                    {
+                      agentId: message.agent_id,
+                      testName: message.scenario,
+                      testId: message.test_id,
+                      phase: message.phase,
+                      journey: message.journey,
+                      state: 'passed',
+                      startedAt: message.timestamp,
+                      duration: message.duration,
+                    },
+                  ]
+                }
+
+                // Remove passed agents from active list after a brief delay
+                // For now, just mark them as passed and let them be removed by next progress_stats
+                return {
+                  ...prev,
+                  activeTestAgents: newAgents.filter(a => a.state !== 'passed'),
+                }
+              })
+              break
+
+            case 'test_failed':
+              setState(prev => {
+                // Update or add the test agent with 'failed' state
+                const existingIdx = prev.activeTestAgents.findIndex(a => a.agentId === message.agent_id)
+                let newAgents: ActiveTestAgent[]
+                if (existingIdx >= 0) {
+                  newAgents = [...prev.activeTestAgents]
+                  newAgents[existingIdx] = {
+                    ...newAgents[existingIdx],
+                    state: 'failed',
+                    error: message.error,
+                    duration: message.duration,
+                  }
+                } else {
+                  newAgents = [
+                    ...prev.activeTestAgents,
+                    {
+                      agentId: message.agent_id,
+                      testName: message.scenario,
+                      testId: message.test_id,
+                      phase: message.phase,
+                      journey: message.journey,
+                      state: 'failed',
+                      startedAt: message.timestamp,
+                      error: message.error,
+                      duration: message.duration,
+                    },
+                  ]
+                }
+
+                // Remove failed agents from active list
+                return {
+                  ...prev,
+                  activeTestAgents: newAgents.filter(a => a.state !== 'failed'),
+                }
+              })
+              break
+
+            case 'test_progress_stats':
+              setState(prev => ({
+                ...prev,
+                testOrchestratorStatus: {
+                  activeAgents: message.active_agents,
+                  agentAssignments: message.agent_assignments,
+                  testsInProgress: message.tests_in_progress,
+                  testDurations: message.test_durations,
+                  monitoringActive: message.monitoring_active,
+                  timestamp: message.timestamp,
+                },
+              }))
+              break
+
             case 'pong':
               // Heartbeat response
               break
@@ -392,6 +520,8 @@ export function useProjectWebSocket(projectName: string | null) {
       celebrationQueue: [],
       celebration: null,
       orchestratorStatus: null,
+      activeTestAgents: [],
+      testOrchestratorStatus: null,
     })
 
     if (!projectName) {

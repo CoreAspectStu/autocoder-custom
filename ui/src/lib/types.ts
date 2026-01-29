@@ -71,6 +71,48 @@ export interface Feature {
   blocking_dependencies?: number[]  // Computed by API
 }
 
+// UAT Test Feature type (extends Feature with UAT-specific fields)
+export interface UATTestFeature {
+  id: number
+  priority: number
+  category: string                  // Maps to phase
+  name: string                      // Maps to scenario
+  description: string
+  steps: string[]
+  passes: boolean                   // True if status == 'passed'
+  in_progress: boolean              // True if status == 'in_progress'
+  dependencies?: number[]
+  blocked?: boolean
+  blocking_dependencies?: number[]
+
+  // UAT-specific fields
+  phase?: string                    // smoke, functional, regression, uat
+  journey?: string                  // authentication, payment, onboarding, etc.
+  scenario?: string                 // Human-readable test name (same as name)
+  test_type?: string                // e2e, visual, api, a11y
+  test_file?: string                // Path to Playwright test
+  expected_result?: string          // Expected outcome
+  status?: string                   // pending, in_progress, passed, failed, needs-human, parked
+  result?: {                        // Test execution results
+    screenshot?: string             // Screenshot path/URL
+    video?: string                  // Video path/URL
+    logs?: string[]                 // Console logs
+    error?: string                  // Error message
+    duration?: number               // Execution time in seconds
+  }
+  devlayer_card_id?: string         // Linked bug card
+  started_at?: string               // ISO timestamp
+  completed_at?: string             // ISO timestamp
+  created_at?: string               // ISO timestamp
+  status_history?: Array<{          // Status change history
+    from: string
+    to: string
+    at: string
+    agent?: string
+    reason?: string
+  }>
+}
+
 // Status type for graph nodes
 export type FeatureStatus = 'pending' | 'in_progress' | 'done' | 'blocked'
 
@@ -237,8 +279,38 @@ export interface OrchestratorStatus {
   recentEvents: OrchestratorEvent[]
 }
 
+// ============================================================================
+// UAT Test Agent Types
+// ============================================================================
+
+// Test agent state (mirrors AgentState but for test execution)
+export type TestAgentState = 'idle' | 'claiming' | 'running' | 'passed' | 'failed' | 'needs-human' | 'parked'
+
+// Active test agent (executing a UAT test)
+export interface ActiveTestAgent {
+  agentId: number  // Agent index (0, 1, 2, ...)
+  testName: string  // Test scenario name (e.g., "Test login")
+  testId: number  // UAT test ID from database
+  phase: string  // Test phase: smoke, functional, regression, uat
+  journey: string  // User journey: authentication, payment, etc.
+  state: TestAgentState
+  startedAt: string  // ISO timestamp
+  duration?: number  // Execution time in seconds (if completed)
+  error?: string  // Error message (if failed)
+}
+
+// Test agent orchestrator status (UAT equivalent of OrchestratorStatus)
+export interface TestOrchestratorStatus {
+  activeAgents: number  // Number of active test agents
+  agentAssignments: Record<string, number>  // agent_id -> test_id mapping
+  testsInProgress: number[]  // Array of test IDs currently running
+  testDurations: Record<string, number>  // test_id -> duration in seconds
+  monitoringActive: boolean
+  timestamp: string
+}
+
 // WebSocket message types
-export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update'
+export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update' | 'test_started' | 'test_passed' | 'test_failed' | 'test_progress_stats'
 
 export interface WSProgressMessage {
   type: 'progress'
@@ -312,6 +384,54 @@ export interface WSOrchestratorUpdateMessage {
   featureName?: string
 }
 
+// UAT Test WebSocket Messages
+export interface WSTestStartedMessage {
+  type: 'test_started'
+  cycle_id: string
+  timestamp: string
+  test_id: number
+  agent_id: number
+  scenario: string
+  phase: string
+  journey: string
+}
+
+export interface WSTestPassedMessage {
+  type: 'test_passed'
+  cycle_id: string
+  timestamp: string
+  test_id: number
+  agent_id: number
+  scenario: string
+  phase: string
+  journey: string
+  duration: number
+}
+
+export interface WSTestFailedMessage {
+  type: 'test_failed'
+  cycle_id: string
+  timestamp: string
+  test_id: number
+  agent_id: number
+  scenario: string
+  phase: string
+  journey: string
+  error: string
+  duration: number
+}
+
+export interface WSTestProgressStatsMessage {
+  type: 'test_progress_stats'
+  cycle_id: string
+  timestamp: string
+  active_agents: number
+  agent_assignments: Record<string, number>
+  tests_in_progress: number[]
+  test_durations: Record<string, number>
+  monitoring_active: boolean
+}
+
 export type WSMessage =
   | WSProgressMessage
   | WSFeatureUpdateMessage
@@ -322,6 +442,10 @@ export type WSMessage =
   | WSDevLogMessage
   | WSDevServerStatusMessage
   | WSOrchestratorUpdateMessage
+  | WSTestStartedMessage
+  | WSTestPassedMessage
+  | WSTestFailedMessage
+  | WSTestProgressStatsMessage
 
 // ============================================================================
 // Spec Chat Types

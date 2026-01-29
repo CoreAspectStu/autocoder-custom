@@ -1,9 +1,10 @@
 import { Rocket, ChevronDown, ChevronUp, Activity } from 'lucide-react'
 import { useState } from 'react'
 import { AgentCard, AgentLogModal } from './AgentCard'
+import { TestAgentCard } from './TestAgentCard'
 import { ActivityFeed } from './ActivityFeed'
 import { OrchestratorStatusCard } from './OrchestratorStatusCard'
-import type { ActiveAgent, AgentLogEntry, OrchestratorStatus } from '../lib/types'
+import type { ActiveAgent, AgentLogEntry, OrchestratorStatus, ActiveTestAgent } from '../lib/types'
 
 const ACTIVITY_COLLAPSED_KEY = 'autocoder-activity-collapsed'
 
@@ -18,6 +19,8 @@ interface AgentMissionControlProps {
   }>
   isExpanded?: boolean
   getAgentLogs?: (agentIndex: number) => AgentLogEntry[]
+  // UAT Test agents
+  testAgents?: ActiveTestAgent[]
 }
 
 export function AgentMissionControl({
@@ -26,6 +29,7 @@ export function AgentMissionControl({
   recentActivity,
   isExpanded: defaultExpanded = true,
   getAgentLogs,
+  testAgents = [],
 }: AgentMissionControlProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [activityCollapsed, setActivityCollapsed] = useState(() => {
@@ -48,8 +52,8 @@ export function AgentMissionControl({
     }
   }
 
-  // Don't render if no orchestrator status and no agents
-  if (!orchestratorStatus && agents.length === 0) {
+  // Don't render if no orchestrator status, no agents, and no test agents
+  if (!orchestratorStatus && agents.length === 0 && testAgents.length === 0) {
     return null
   }
 
@@ -66,13 +70,15 @@ export function AgentMissionControl({
             Mission Control
           </span>
           <span className="neo-badge neo-badge-sm bg-white text-neo-text ml-2">
-            {agents.length > 0
-              ? `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} active`
-              : orchestratorStatus?.state === 'initializing'
-                ? 'Initializing'
-                : orchestratorStatus?.state === 'complete'
-                  ? 'Complete'
-                  : 'Orchestrating'
+            {testAgents.length > 0
+              ? `${testAgents.length} ${testAgents.length === 1 ? 'test' : 'tests'} running`
+              : agents.length > 0
+                ? `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} active`
+                : orchestratorStatus?.state === 'initializing'
+                  ? 'Initializing'
+                  : orchestratorStatus?.state === 'complete'
+                    ? 'Complete'
+                    : 'Orchestrating'
             }
           </span>
         </div>
@@ -112,6 +118,29 @@ export function AgentMissionControl({
                 />
               ))}
             </div>
+          )}
+
+          {/* Test Agent Cards Row */}
+          {testAgents.length > 0 && (
+            <>
+              {agents.length > 0 && (
+                <div className="border-t-2 border-neo-border/30 my-4"></div>
+              )}
+              <div className="mb-2">
+                <h3 className="text-xs font-bold text-neo-text-secondary uppercase tracking-wide flex items-center gap-2">
+                  <Activity size={14} />
+                  UAT Test Execution
+                </h3>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+                {testAgents.map((agent) => (
+                  <TestAgentCard
+                    key={`test-agent-${agent.agentId}`}
+                    agent={agent}
+                  />
+                ))}
+              </div>
+            </>
           )}
 
           {/* Collapsible Activity Feed */}

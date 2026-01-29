@@ -391,6 +391,7 @@ function App() {
               orchestratorStatus={wsState.orchestratorStatus}
               recentActivity={wsState.recentActivity}
               getAgentLogs={wsState.getAgentLogs}
+              testAgents={wsState.activeTestAgents}
             />
 
             {/* Agent Thought - shows latest agent narrative (single agent mode) */}
