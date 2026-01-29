@@ -579,3 +579,57 @@ export async function getUATProjectContext(
 }> {
   return fetchJSON(`/uat/context/${encodeURIComponent(projectName)}`)
 }
+
+export async function triggerUATExecution(
+  cycleId: string,
+  projectName: string
+): Promise<{
+  success: boolean
+  message: string
+  cycle_id: string
+  agents_spawned?: number
+  tests_assigned?: number
+}> {
+  const response = await fetch('/uat/trigger', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      cycle_id: cycleId,
+      project_name: projectName
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to trigger UAT execution')
+  }
+
+  return response.json()
+}
+
+export async function getUATProgress(cycleId: string): Promise<{
+  cycle_id: string
+  total_tests: number
+  passed: number
+  failed: number
+  running: number
+  pending: number
+  active_agents: number
+  started_at: string | null
+  updated_at: string
+  tests?: Array<{
+    id: number
+    scenario: string
+    phase: string
+    journey: string
+    test_type: string
+    status: string
+    duration?: number
+    devlayer_card_id?: number
+    error?: string
+  }>
+}> {
+  return fetchJSON(`/uat/progress/${encodeURIComponent(cycleId)}`)
+}

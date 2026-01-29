@@ -14,6 +14,7 @@ import { SetupWizard } from './components/SetupWizard'
 import { AddFeatureForm } from './components/AddFeatureForm'
 import { AddUATTestForm } from './components/AddUATTestForm'
 import { FeatureModal } from './components/FeatureModal'
+import { UATTestModal } from './components/UATTestModal'
 import { DebugLogViewer, type TabType } from './components/DebugLogViewer'
 import { AgentThought } from './components/AgentThought'
 import { AgentMissionControl } from './components/AgentMissionControl'
@@ -25,6 +26,7 @@ import { SpecCreationChat } from './components/SpecCreationChat'
 import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
 import { UATModeToggle } from './components/UATModeToggle'
+import { StartUATButton } from './components/StartUATButton'
 import { UATTestPlanning } from './components/UATTestPlanning'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
@@ -315,6 +317,15 @@ function App() {
                     hasFeatures={progress.total > 0}
                   />
 
+                  <StartUATButton
+                    projectName={selectedProject}
+                    pendingTestsCount={features?.pending.length || 0}
+                    onExecutionStarted={() => {
+                      // Refresh UAT tests to show updated status
+                      queryClient.invalidateQueries({ queryKey: ['uatTests'] })
+                    }}
+                  />
+
                   <button
                     onClick={() => setShowSettings(true)}
                     className="neo-btn text-sm py-2 px-3"
@@ -465,13 +476,20 @@ function App() {
         )
       )}
 
-      {/* Feature Detail Modal */}
+      {/* Feature Detail Modal - Different modal for UAT vs Dev mode */}
       {selectedFeature && selectedProject && (
-        <FeatureModal
-          feature={selectedFeature}
-          projectName={selectedProject}
-          onClose={() => setSelectedFeature(null)}
-        />
+        isUATMode ? (
+          <UATTestModal
+            feature={selectedFeature}
+            onClose={() => setSelectedFeature(null)}
+          />
+        ) : (
+          <FeatureModal
+            feature={selectedFeature}
+            projectName={selectedProject}
+            onClose={() => setSelectedFeature(null)}
+          />
+        )
       )}
 
       {/* Expand Project Modal - AI-powered bulk feature creation */}
