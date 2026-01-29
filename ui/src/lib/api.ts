@@ -6,6 +6,7 @@ import type {
   ProjectSummary,
   ProjectDetail,
   ProjectPrompts,
+  ProjectSettingsUpdate,
   FeatureListResponse,
   Feature,
   FeatureCreate,
@@ -97,6 +98,16 @@ export async function updateProjectPrompts(
   await fetchJSON(`/projects/${encodeURIComponent(name)}/prompts`, {
     method: 'PUT',
     body: JSON.stringify(prompts),
+  })
+}
+
+export async function updateProjectSettings(
+  name: string,
+  settings: ProjectSettingsUpdate
+): Promise<ProjectDetail> {
+  return fetchJSON(`/projects/${encodeURIComponent(name)}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
   })
 }
 

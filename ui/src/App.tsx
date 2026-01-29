@@ -268,6 +268,7 @@ function App() {
                   <AgentControl
                     projectName={selectedProject}
                     status={wsState.agentStatus}
+                    defaultConcurrency={selectedProjectData?.default_concurrency}
                   />
 
                   <DevServerControl
