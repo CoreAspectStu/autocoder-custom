@@ -19,12 +19,14 @@ Workflow:
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
+from enum import Enum
 import asyncio
 import sys
 from pathlib import Path
 from contextlib import contextmanager
+import json
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -1062,3 +1064,545 @@ async def get_uat_stats_summary():
             "in_progress": 0,
             "percentage": 0
         }
+
+
+class ProjectContextResponse(BaseModel):
+    """Response model for project context gathering"""
+    success: bool
+    project_name: str
+    has_spec: bool
+    spec_content: Optional[str] = None
+    completed_features_count: int
+    completed_features: List[Dict[str, Any]] = []
+    uat_cycles_count: int
+    uat_cycles: List[Dict[str, Any]] = []
+    message: str
+
+
+@router.get("/context/{project_name}", response_model=ProjectContextResponse)
+async def get_project_context(project_name: str):
+    """
+    Gather project context for UAT planning
+
+    This endpoint collects all necessary context for generating a UAT test plan:
+    1. Reads app_spec.txt from the project directory
+    2. Queries completed features from features.db
+    3. Fetches previous UAT cycle history from uat_tests.db
+
+    Args:
+        project_name: Name of the project to gather context for
+
+    Returns:
+        ProjectContextResponse with all gathered context
+    """
+    try:
+        # Look up project path from registry if available
+        project_path = None
+        try:
+            import sys
+            root = Path(__file__).parent.parent.parent
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from registry import get_project_path
+
+            registered_path = get_project_path(project_name)
+            if registered_path:
+                project_path = Path(registered_path)
+            else:
+                project_path = Path.home() / "projects" / "autocoder-projects" / project_name
+        except ImportError:
+            project_path = Path.home() / "projects" / "autocoder-projects" / project_name
+
+        # Verify project exists
+        if not project_path.exists():
+            return ProjectContextResponse(
+                success=False,
+                project_name=project_name,
+                has_spec=False,
+                completed_features_count=0,
+                uat_cycles_count=0,
+                message=f"Project directory not found: {project_path}"
+            )
+
+        # 1. Read app_spec.txt
+        spec_path = project_path / "app_spec.txt"
+        spec_content = None
+        has_spec = False
+
+        if spec_path.exists():
+            try:
+                spec_content = spec_path.read_text(encoding='utf-8')
+                has_spec = True
+            except Exception as e:
+                print(f"⚠️  Failed to read app_spec.txt: {e}")
+                spec_content = None
+        else:
+            print(f"⚠️  app_spec.txt not found at {spec_path}")
+
+        # 2. Query completed features from features.db
+        completed_features = []
+        completed_features_count = 0
+
+        features_db_path = project_path / "features.db"
+        if features_db_path.exists():
+            try:
+                import sqlite3
+
+                conn = sqlite3.connect(str(features_db_path))
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                # Query only completed features (passes = True)
+                cursor.execute("""
+                    SELECT id, priority, category, name, description, passes, completed_at
+                    FROM features
+                    WHERE passes = 1
+                    ORDER BY priority ASC
+                """)
+
+                rows = cursor.fetchall()
+                completed_features = [
+                    {
+                        "id": row["id"],
+                        "priority": row["priority"],
+                        "category": row["category"],
+                        "name": row["name"],
+                        "description": row["description"],
+                        "completed_at": row["completed_at"]
+                    }
+                    for row in rows
+                ]
+                completed_features_count = len(completed_features)
+
+                conn.close()
+            except Exception as e:
+                print(f"⚠️  Failed to query features.db: {e}")
+        else:
+            print(f"⚠️  features.db not found at {features_db_path}")
+
+        # 3. Fetch previous UAT cycles from uat_tests.db
+        uat_cycles = []
+        uat_cycles_count = 0
+
+        try:
+            with get_uat_db_session() as session:
+                from api.database import Feature
+
+                # Query UAT tests with results (completed cycles)
+                uat_tests = session.query(Feature).filter(
+                    Feature.status.in_(['passed', 'failed', 'needs-human'])
+                ).all()
+
+                # Group by cycle (assuming test names or descriptions contain cycle info)
+                # For now, just return all completed UAT tests
+                uat_cycles = [
+                    {
+                        "id": test.id,
+                        "name": test.name,
+                        "phase": test.phase,
+                        "journey": test.journey,
+                        "status": test.status,
+                        "result": test.result
+                    }
+                    for test in uat_tests
+                ]
+                uat_cycles_count = len(uat_cycles)
+
+        except Exception as e:
+            print(f"⚠️  Failed to query UAT cycles from uat_tests.db: {e}")
+            # Don't fail the whole request if UAT history is missing
+
+        # Check context completeness
+        context_complete = has_spec and completed_features_count > 0
+        message = "Project context gathered successfully"
+
+        if not context_complete:
+            missing = []
+            if not has_spec:
+                missing.append("app_spec.txt")
+            if completed_features_count == 0:
+                missing.append("completed features")
+            if missing:
+                message = f"Warning: Incomplete context - missing {', '.join(missing)}"
+
+        return ProjectContextResponse(
+            success=True,
+            project_name=project_name,
+            has_spec=has_spec,
+            spec_content=spec_content,
+            completed_features_count=completed_features_count,
+            completed_features=completed_features,
+            uat_cycles_count=uat_cycles_count,
+            uat_cycles=uat_cycles,
+            message=message
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to gather project context: {str(e)}"
+        )
+
+
+# Request/Response models for test plan generation
+class GenerateTestPlanRequest(BaseModel):
+    """Request to generate UAT test plan"""
+    project_name: str
+    project_path: Optional[str] = None  # Auto-discovered if not provided
+
+
+class TestFrameworkProposal(BaseModel):
+    """Proposed test framework with phases and journeys"""
+    phase: str
+    description: str
+    test_count: int
+
+
+class JourneyProposal(BaseModel):
+    """User journey identified for testing"""
+    journey: str
+    test_count: int
+    phases: List[str]
+
+
+class GenerateTestPlanResponse(BaseModel):
+    """Response from test plan generation"""
+    success: bool
+    cycle_id: Optional[str] = None
+    project_name: str
+    total_features_completed: int
+    journeys_identified: List[Dict[str, Any]]
+    recommended_phases: List[Dict[str, Any]]
+    test_scenarios: List[Dict[str, Any]]
+    test_dependencies: Dict[int, List[int]]
+    test_prd: str
+    message: str
+    created_at: Optional[str] = None
+
+
+@router.post("/generate-plan", response_model=GenerateTestPlanResponse)
+async def generate_test_plan(request: GenerateTestPlanRequest):
+    """
+    Generate UAT test plan with proposed framework
+
+    This endpoint analyzes the project and proposes a comprehensive test framework:
+    1. Parses app_spec.txt to understand project requirements
+    2. Queries completed features from features.db
+    3. Identifies user journeys that need testing
+    4. Determines appropriate test phases (smoke, functional, regression, UAT)
+    5. Generates test scenarios for each journey/phase combination
+    6. Calculates dependencies between tests
+    7. Returns complete test plan for user review
+
+    The proposed framework includes:
+    - Smoke tests: Critical path verification
+    - Functional tests: Feature-by-feature validation
+    - Regression tests: Cross-feature workflow testing
+    - UAT tests: End-to-end user scenarios
+
+    Args:
+        request: GenerateTestPlanRequest with project details
+
+    Returns:
+        GenerateTestPlanResponse with complete test framework proposal
+    """
+    if not UAT_GATEWAY_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="UAT Gateway backend not available - ensure uat-autocoder plugin is installed"
+        )
+
+    try:
+        # Determine project path
+        if not request.project_path:
+            try:
+                import sys
+                root = Path(__file__).parent.parent.parent
+                if str(root) not in sys.path:
+                    sys.path.insert(0, str(root))
+                from registry import get_project_path
+
+                registered_path = get_project_path(request.project_name)
+                if registered_path:
+                    request.project_path = registered_path
+                else:
+                    request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+            except ImportError:
+                request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+
+        project_path = Path(request.project_path)
+        if not project_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project path not found: {request.project_path}"
+            )
+
+        # Check for app_spec.txt
+        app_spec_path = project_path / "app_spec.txt"
+        if not app_spec_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"app_spec.txt not found at {app_spec_path} - cannot generate test plan without project specification"
+            )
+
+        # Import TestPlannerAgent from uat-autocoder backend
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from custom.uat_plugin.test_planner import TestPlannerAgent
+
+        # Initialize test planner with project's app_spec.txt
+        print(f"🔍 Generating test plan for {request.project_name}...")
+        print(f"   Project path: {project_path}")
+        print(f"   Spec: {app_spec_path}")
+
+        planner = TestPlannerAgent(app_spec_path=str(app_spec_path))
+
+        # Generate the test plan
+        print("📋 Analyzing project and generating test framework...")
+        test_plan = planner.generate_test_plan()
+
+        # Format response with structured phases and journeys
+        journeys_identified = []
+        for journey in test_plan['journeys_identified']:
+            journey_scenarios = [s for s in test_plan['test_scenarios'] if s['journey'] == journey]
+            journey_phases = list(set(s['phase'] for s in journey_scenarios))
+            journeys_identified.append({
+                'journey': journey,
+                'test_count': len(journey_scenarios),
+                'phases': sorted(journey_phases, key=lambda p: ['smoke', 'functional', 'regression', 'uat'].index(p))
+            })
+
+        recommended_phases = []
+        for phase in test_plan['recommended_phases']:
+            phase_scenarios = [s for s in test_plan['test_scenarios'] if s['phase'] == phase]
+            phase_descriptions = {
+                'smoke': 'Basic functionality checks to ensure critical paths work',
+                'functional': 'Detailed testing of individual features',
+                'regression': 'Cross-feature workflow testing',
+                'uat': 'User-facing scenario validation'
+            }
+            recommended_phases.append({
+                'phase': phase,
+                'description': phase_descriptions.get(phase, ''),
+                'test_count': len(phase_scenarios)
+            })
+
+        print(f"✅ Test plan generated: {test_plan['cycle_id']}")
+        print(f"   Features: {test_plan['total_features_completed']}")
+        print(f"   Journeys: {len(test_plan['journeys_identified'])}")
+        print(f"   Phases: {', '.join(test_plan['recommended_phases'])}")
+        print(f"   Scenarios: {len(test_plan['test_scenarios'])}")
+
+        return GenerateTestPlanResponse(
+            success=True,
+            cycle_id=test_plan['cycle_id'],
+            project_name=request.project_name,
+            total_features_completed=test_plan['total_features_completed'],
+            journeys_identified=journeys_identified,
+            recommended_phases=recommended_phases,
+            test_scenarios=test_plan['test_scenarios'],
+            test_dependencies=test_plan['test_dependencies'],
+            test_prd=test_plan['test_prd'],
+            message=f"Test framework proposal generated successfully with {len(test_plan['test_scenarios'])} scenarios across {len(test_plan['recommended_phases'])} phases",
+            created_at=test_plan['created_at']
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate test plan: {str(e)}"
+        )
+
+
+# Request/Response models for untested journeys identification
+class UntestedJourneysRequest(BaseModel):
+    """Request to identify untested user journeys"""
+    project_name: str
+    project_path: Optional[str] = None  # Auto-discovered if not provided
+
+
+class UntestedJourneysResponse(BaseModel):
+    """Response with untested journey analysis"""
+    success: bool
+    project_name: str
+    all_journeys: List[str]
+    tested_journeys: List[str]
+    untested_journeys: List[str]
+    journey_coverage: Dict[str, int]
+    total_journeys: int
+    tested_count: int
+    untested_count: int
+    coverage_percentage: float
+    message: str
+
+
+@router.post("/untested-journeys", response_model=UntestedJourneysResponse)
+async def identify_untested_journeys(request: UntestedJourneysRequest):
+    """
+    Identify user journeys that haven't been tested yet.
+
+    This endpoint analyzes the project and cross-references with previous UAT cycles
+    to determine which journeys still need testing:
+
+    1. Parses app_spec.txt to understand project requirements
+    2. Queries completed features from features.db
+    3. Identifies ALL potential user journeys from spec and features
+    4. Fetches previous UAT cycles from uat_tests.db
+    5. Filters out journeys that have already been tested
+    6. Returns detailed analysis of test coverage
+
+    Use this to:
+    - Avoid duplicating tests for already-tested journeys
+    - Focus testing efforts on unexplored user flows
+    - Track overall journey coverage percentage
+
+    Args:
+        request: UntestedJourneysRequest with project details
+
+    Returns:
+        UntestedJourneysResponse with journey coverage analysis
+    """
+    if not UAT_GATEWAY_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="UAT Gateway backend not available - ensure uat-autocoder plugin is installed"
+        )
+
+    try:
+        # Determine project path
+        if not request.project_path:
+            try:
+                import sys
+                root = Path(__file__).parent.parent.parent
+                if str(root) not in sys.path:
+                    sys.path.insert(0, str(root))
+                from registry import get_project_path
+
+                registered_path = get_project_path(request.project_name)
+                if registered_path:
+                    request.project_path = registered_path
+                else:
+                    request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+            except ImportError:
+                request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+
+        project_path = Path(request.project_path)
+        if not project_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project path not found: {request.project_path}"
+            )
+
+        # Check for app_spec.txt
+        app_spec_path = project_path / "app_spec.txt"
+        if not app_spec_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"app_spec.txt not found at {app_spec_path}"
+            )
+
+        # Import test planner functions
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from custom.uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
+        from custom.uat_plugin.database import get_db_manager
+
+        # Parse PRD
+        print(f"🔍 Analyzing journeys for {request.project_name}...")
+        prd_info = parse_app_spec(str(app_spec_path))
+
+        # Query completed features
+        db = get_db_manager()
+        completed_features = db.query_passing_features()
+        print(f"  Found {len(completed_features)} completed features")
+
+        # Fetch previous UAT cycles
+        previous_uat_cycles = []
+        try:
+            with get_uat_db_session() as session:
+                from api.database import Feature
+
+                # Query UAT tests with results (completed cycles)
+                uat_tests = session.query(Feature).filter(
+                    Feature.status.in_(['passed', 'failed', 'needs-human'])
+                ).all()
+
+                # Extract journey info from previous tests
+                previous_uat_cycles = [
+                    {
+                        "id": test.id,
+                        "name": test.name,
+                        "phase": test.phase,
+                        "journey": test.journey,
+                        "status": test.status,
+                    }
+                    for test in uat_tests
+                ]
+                print(f"  Found {len(previous_uat_cycles)} previous UAT tests")
+
+        except Exception as e:
+            print(f"⚠️  Failed to query UAT cycles: {e}")
+            # Continue without previous cycle data
+
+        # Identify untested journeys
+        print("📊 Analyzing journey coverage...")
+        journey_analysis = identify_untested_journeys(
+            prd_info=prd_info,
+            completed_features=completed_features,
+            previous_uat_cycles=previous_uat_cycles
+        )
+
+        # Calculate coverage percentage
+        coverage_pct = 0.0
+        if journey_analysis['total_journeys'] > 0:
+            coverage_pct = (journey_analysis['tested_count'] / journey_analysis['total_journeys']) * 100
+
+        # Format response message
+        if journey_analysis['untested_count'] == 0:
+            message = f"All {journey_analysis['total_journeys']} journeys have been tested! Coverage: {coverage_pct:.1f}%"
+        elif journey_analysis['tested_count'] == 0:
+            message = f"No journeys tested yet. {journey_analysis['untested_count']} journeys identified for first-time testing."
+        else:
+            message = f"Found {journey_analysis['untested_count']} untested journeys out of {journey_analysis['total_journeys']} total. Coverage: {coverage_pct:.1f}%"
+
+        print(f"✅ Journey analysis complete:")
+        print(f"   Total: {journey_analysis['total_journeys']}")
+        print(f"   Tested: {journey_analysis['tested_count']}")
+        print(f"   Untested: {journey_analysis['untested_count']}")
+        print(f"   Coverage: {coverage_pct:.1f}%")
+
+        return UntestedJourneysResponse(
+            success=True,
+            project_name=request.project_name,
+            all_journeys=journey_analysis['all_journeys'],
+            tested_journeys=journey_analysis['tested_journeys'],
+            untested_journeys=journey_analysis['untested_journeys'],
+            journey_coverage=journey_analysis['journey_coverage'],
+            total_journeys=journey_analysis['total_journeys'],
+            tested_count=journey_analysis['tested_count'],
+            untested_count=journey_analysis['untested_count'],
+            coverage_percentage=round(coverage_pct, 1),
+            message=message
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to identify untested journeys: {str(e)}"
+        )
