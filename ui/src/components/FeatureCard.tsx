@@ -9,6 +9,7 @@ interface FeatureCardProps {
   isInProgress?: boolean
   allFeatures?: Feature[]
   activeAgent?: ActiveAgent // Agent working on this feature
+  isUATMode?: boolean        // Whether UAT Mode is active
 }
 
 // Generate consistent color for category using CSS variable references
@@ -32,7 +33,7 @@ function getCategoryColor(category: string): string {
   return colors[Math.abs(hash) % colors.length]
 }
 
-export function FeatureCard({ feature, onClick, isInProgress, allFeatures = [], activeAgent }: FeatureCardProps) {
+export function FeatureCard({ feature, onClick, isInProgress, allFeatures = [], activeAgent, isUATMode = false }: FeatureCardProps) {
   const categoryColor = getCategoryColor(feature.category)
   const isBlocked = feature.blocked || (feature.blocking_dependencies && feature.blocking_dependencies.length > 0)
   const hasActiveAgent = !!activeAgent
@@ -46,6 +47,7 @@ export function FeatureCard({ feature, onClick, isInProgress, allFeatures = [], 
         ${feature.passes ? 'border-neo-done' : ''}
         ${isBlocked && !feature.passes ? 'border-neo-danger opacity-80' : ''}
         ${hasActiveAgent ? 'ring-2 ring-neo-progress ring-offset-2' : ''}
+        ${isUATMode ? 'border-purple-500 dark:border-purple-400 border-2' : ''}
       `}
     >
       {/* Header */}

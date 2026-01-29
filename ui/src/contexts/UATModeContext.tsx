@@ -48,7 +48,20 @@ export function UATModeProvider({ children }: UATModeProviderProps) {
   }
 
   const toggleMode = () => {
-    setModeState(prev => (prev === 'dev' ? 'uat' : 'dev'))
+    const startTime = performance.now()
+    setModeState(prev => {
+      const newMode = prev === 'dev' ? 'uat' : 'dev'
+      // Measure time until state update is processed
+      requestAnimationFrame(() => {
+        const endTime = performance.now()
+        const duration = endTime - startTime
+        console.log(`[UAT Mode] Switched from ${prev} to ${newMode} in ${duration.toFixed(2)}ms`)
+        if (duration > 500) {
+          console.warn(`[UAT Mode] Performance warning: Mode switch took ${duration.toFixed(2)}ms (exceeds 500ms requirement)`)
+        }
+      })
+      return newMode
+    })
   }
 
   const isUATMode = mode === 'uat'

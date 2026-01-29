@@ -1746,6 +1746,35 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
         print(f"   Phases: {', '.join(test_plan['recommended_phases'])}")
         print(f"   Scenarios: {len(test_plan['test_scenarios'])}")
 
+        # FEATURE #14: Save test plan to database for approval
+        print("💾 Saving test plan to database...")
+        from custom.uat_plugin.database import get_db_manager, UATTestPlan
+        from datetime import datetime
+
+        db = get_db_manager()
+        with db.uat_session() as session:
+            # Check if plan already exists
+            existing_plan = session.query(UATTestPlan).filter(
+                UATTestPlan.cycle_id == test_plan['cycle_id']
+            ).first()
+
+            if not existing_plan:
+                # Create new test plan record
+                uat_test_plan = UATTestPlan(
+                    project_name=request.project_name,
+                    cycle_id=test_plan['cycle_id'],
+                    total_features_completed=test_plan['total_features_completed'],
+                    journeys_identified=test_plan['journeys_identified'],
+                    recommended_phases=test_plan['recommended_phases'],
+                    test_prd=test_plan['test_prd'],
+                    approved=False
+                )
+                session.add(uat_test_plan)
+                session.commit()
+                print(f"   Saved to uat_test_plan table: {test_plan['cycle_id']}")
+            else:
+                print(f"   Test plan already exists in database: {test_plan['cycle_id']}")
+
         return GenerateTestPlanResponse(
             success=True,
             cycle_id=test_plan['cycle_id'],
@@ -1954,3 +1983,510 @@ async def identify_untested_journeys(request: UntestedJourneysRequest):
             status_code=500,
             detail=f"Failed to identify untested journeys: {str(e)}"
         )
+
+
+# ==============================================================================
+# FEATURE #12: Conversational Test Framework Modification
+# ==============================================================================
+
+class ModifyTestPlanRequest(BaseModel):
+    """Request to modify proposed test framework conversationally"""
+    project_name: str
+    cycle_id: str  # From previous generate-plan response
+    modification_type: Literal[
+        "add_tests",
+        "remove_tests",
+        "change_phases",
+        "adjust_journeys",
+        "custom"
+    ]
+    modification_params: Dict[str, Any] = {}  # Flexible params for different modification types
+    user_message: Optional[str] = None  # Natural language description of changes
+
+
+class ModifyTestPlanResponse(BaseModel):
+    """Response with modified test framework"""
+    success: bool
+    cycle_id: str
+    project_name: str
+    original_test_count: int
+    modified_test_count: int
+    journeys_identified: List[Dict[str, Any]]
+    recommended_phases: List[Dict[str, Any]]
+    test_scenarios: List[Dict[str, Any]]
+    test_dependencies: Dict[int, List[int]]
+    test_prd: str
+    modifications_applied: List[str]
+    message: str
+    created_at: Optional[str] = None
+
+
+@router.post("/modify-plan", response_model=ModifyTestPlanResponse)
+async def modify_test_plan(request: ModifyTestPlanRequest):
+    """
+    Modify proposed test framework conversationally (FR11)
+
+    This endpoint allows users to modify the proposed test framework before confirmation:
+    - Add/remove specific tests
+    - Change phase allocation (e.g., "more smoke tests, fewer regression tests")
+    - Add/remove entire journeys
+    - Adjust test counts
+
+    The modifications are handled conversationally - users describe what they want
+    to change in natural language, and the system updates the plan accordingly.
+
+    Args:
+        request: ModifyTestPlanRequest with cycle_id and modification details
+
+    Returns:
+        ModifyTestPlanResponse with updated test framework
+
+    Example modifications:
+    - "Add 5 more smoke tests for authentication"
+    - "Remove all regression tests, keep only smoke and functional"
+    - "Add payment journey testing"
+    - "Reduce functional tests by 50%, increase UAT tests"
+    """
+    if not UAT_GATEWAY_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="UAT Gateway backend not available - ensure uat-autocoder plugin is installed"
+        )
+
+    try:
+        # Import TestPlannerAgent
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from custom.uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
+
+        # Determine project path
+        project_path = None
+        try:
+            import sys
+            root = Path(__file__).parent.parent.parent
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from registry import get_project_path
+
+            registered_path = get_project_path(request.project_name)
+            if registered_path:
+                project_path = Path(registered_path)
+            else:
+                project_path = Path.home() / "projects" / "autocoder-projects" / request.project_name
+        except ImportError:
+            project_path = Path.home() / "projects" / "autocoder-projects" / request.project_name
+
+        if not project_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project path not found: {project_path}"
+            )
+
+        # Get original test plan (simulate loading from state)
+        app_spec_path = project_path / "app_spec.txt"
+        if not app_spec_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"app_spec.txt not found at {app_spec_path}"
+            )
+
+        print(f"🔧 Modifying test plan for cycle {request.cycle_id}...")
+        print(f"   Modification type: {request.modification_type}")
+        if request.user_message:
+            print(f"   User request: {request.user_message}")
+
+        # Initialize test planner
+        planner = TestPlannerAgent(app_spec_path=str(app_spec_path))
+
+        # Generate original plan first (in production, this would be loaded from state)
+        original_plan = planner.generate_test_plan()
+        original_test_count = len(original_plan['test_scenarios'])
+
+        # Apply modifications
+        print("📝 Applying modifications...")
+        modified_plan = modify_test_plan(
+            original_plan=original_plan,
+            modification_type=request.modification_type,
+            modification_params=request.modification_params,
+            user_message=request.user_message
+        )
+
+        # Track modifications applied
+        modifications_applied = []
+        if request.modification_type == "add_tests":
+            added_count = len(modified_plan['test_scenarios']) - original_test_count
+            modifications_applied.append(f"Added {added_count} test(s)")
+        elif request.modification_type == "remove_tests":
+            removed_count = original_test_count - len(modified_plan['test_scenarios'])
+            modifications_applied.append(f"Removed {removed_count} test(s)")
+        elif request.modification_type == "change_phases":
+            modifications_applied.append(f"Updated phase allocation: {request.modification_params.get('phases', [])}")
+        elif request.modification_type == "adjust_journeys":
+            modifications_applied.append(f"Adjusted journeys: {request.modification_params.get('journeys', [])}")
+        elif request.user_message:
+            modifications_applied.append(f"Custom: {request.user_message}")
+
+        # Format response (same structure as generate-plan)
+        journeys_identified = []
+        for journey in modified_plan['journeys_identified']:
+            journey_scenarios = [s for s in modified_plan['test_scenarios'] if s['journey'] == journey]
+            journey_phases = list(set(s['phase'] for s in journey_scenarios))
+            journeys_identified.append({
+                'journey': journey,
+                'test_count': len(journey_scenarios),
+                'phases': sorted(journey_phases, key=lambda p: ['smoke', 'functional', 'regression', 'uat'].index(p))
+            })
+
+        recommended_phases = []
+        for phase in modified_plan['recommended_phases']:
+            phase_scenarios = [s for s in modified_plan['test_scenarios'] if s['phase'] == phase]
+            phase_descriptions = {
+                'smoke': 'Basic functionality checks to ensure critical paths work',
+                'functional': 'Detailed testing of individual features',
+                'regression': 'Cross-feature workflow testing',
+                'uat': 'User-facing scenario validation'
+            }
+            recommended_phases.append({
+                'phase': phase,
+                'description': phase_descriptions.get(phase, ''),
+                'test_count': len(phase_scenarios)
+            })
+
+        print(f"✅ Test plan modified:")
+        print(f"   Original: {original_test_count} scenarios")
+        print(f"   Modified: {len(modified_plan['test_scenarios'])} scenarios")
+        print(f"   Changes: {', '.join(modifications_applied)}")
+
+        return ModifyTestPlanResponse(
+            success=True,
+            cycle_id=request.cycle_id,  # Keep same cycle_id for modifications
+            project_name=request.project_name,
+            original_test_count=original_test_count,
+            modified_test_count=len(modified_plan['test_scenarios']),
+            journeys_identified=journeys_identified,
+            recommended_phases=recommended_phases,
+            test_scenarios=modified_plan['test_scenarios'],
+            test_dependencies=modified_plan['test_dependencies'],
+            test_prd=modified_plan['test_prd'],
+            modifications_applied=modifications_applied,
+            message=f"Test framework modified successfully. {len(modified_plan['test_scenarios'])} scenarios (was {original_test_count}). Changes: {', '.join(modifications_applied)}",
+            created_at=modified_plan.get('created_at')
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to modify test plan: {str(e)}"
+        )
+
+
+# ============================================================================
+# FEATURE #14: Create UAT test tasks in database
+# ============================================================================
+
+class ApproveTestPlanRequest(BaseModel):
+    """Request to approve a test plan and create UAT tests"""
+    cycle_id: str
+
+
+class ApproveTestPlanResponse(BaseModel):
+    """Response after approving test plan"""
+    success: bool
+    cycle_id: str
+    project_name: str
+    tests_created: int
+    test_ids: List[int]
+    message: str
+    approved_at: Optional[str] = None
+
+
+@router.post("/approve-plan/{cycle_id}", response_model=ApproveTestPlanResponse)
+async def approve_test_plan(cycle_id: str):
+    """
+    Approve a test plan and create UAT test tasks in database (FR12)
+
+    This endpoint:
+    1. Retrieves the test plan from uat_test_plan table using cycle_id
+    2. Creates UATTestFeature records in uat_tests.db for each test scenario
+    3. Marks the test plan as approved
+    4. Returns list of created test IDs
+
+    The created tests include all required fields:
+    - id: Auto-increment primary key
+    - priority: Execution order (1, 2, 3, ...)
+    - phase: smoke, functional, regression, or uat
+    - journey: User journey category (authentication, payment, etc.)
+    - scenario: Human-readable test name with cycle_id prefix
+    - description: What this test validates
+    - test_type: e2e, visual, api, or a11y
+    - test_file: Path to Playwright test file (optional)
+    - steps: JSON array of test steps
+    - expected_result: Expected outcome
+    - status: pending (default)
+    - dependencies: JSON array of test IDs this test depends on
+    - result: null (to be filled during execution)
+
+    All tests are created in a single atomic transaction.
+
+    Args:
+        cycle_id: Unique cycle identifier from test plan generation
+
+    Returns:
+        ApproveTestPlanResponse with created test count and IDs
+    """
+    if not UAT_GATEWAY_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="UAT Gateway backend not available - ensure uat-autocoder plugin is installed"
+        )
+
+    try:
+        # Import database manager
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from custom.uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
+
+        db = get_db_manager()
+
+        # Step 1: Retrieve test plan from database
+        print(f"🔍 Retrieving test plan {cycle_id}...")
+
+        with db.uat_session() as session:
+            test_plan = session.query(UATTestPlan).filter(
+                UATTestPlan.cycle_id == cycle_id
+            ).first()
+
+            if not test_plan:
+                # Test plan not found in database
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Test plan {cycle_id} not found. Please generate a test plan first using /generate-plan"
+                )
+
+            if test_plan.approved:
+                # Already approved - return existing tests
+                existing_tests = session.query(UATTestFeature).filter(
+                    UATTestFeature.scenario.contains(f"[{cycle_id[:15]}]")
+                ).all()
+
+                return ApproveTestPlanResponse(
+                    success=True,
+                    cycle_id=cycle_id,
+                    project_name=test_plan.project_name,
+                    tests_created=len(existing_tests),
+                    test_ids=[t.id for t in existing_tests],
+                    message=f"Test plan already approved. {len(existing_tests)} tests exist.",
+                    approved_at=test_plan.created_at.isoformat() if test_plan.created_at else None
+                )
+
+            # Step 2: Parse test scenarios from test_prd markdown
+            print(f"📋 Parsing test plan for {test_plan.project_name}...")
+
+            scenarios = _parse_test_scenarios_from_prd(
+                test_plan.test_prd,
+                cycle_id,
+                test_plan.journeys_identified,
+                test_plan.recommended_phases
+            )
+
+            print(f"  Found {len(scenarios)} test scenarios")
+
+            # Step 3: Create UATTestFeature records in database
+            print(f"💾 Creating {len(scenarios)} UAT test records...")
+
+            test_ids = []
+            priority = 1
+
+            for scenario_data in scenarios:
+                # Create test feature
+                test_feature = UATTestFeature(
+                    priority=priority,
+                    phase=scenario_data['phase'],
+                    journey=scenario_data['journey'],
+                    scenario=scenario_data['scenario'],
+                    description=scenario_data['description'],
+                    test_type=scenario_data.get('test_type', 'e2e'),
+                    test_file=scenario_data.get('test_file'),
+                    steps=scenario_data['steps'],
+                    expected_result=scenario_data['expected_result'],
+                    status='pending',
+                    dependencies=scenario_data.get('dependencies', []),
+                    result=None,
+                    devlayer_card_id=None
+                )
+
+                session.add(test_feature)
+                session.flush()  # Get the ID without committing
+                test_ids.append(test_feature.id)
+
+                priority += 1
+
+            # Step 4: Mark test plan as approved
+            test_plan.approved = True
+
+            # Commit transaction (atomic - all or nothing)
+            session.commit()
+
+            print(f"✅ Test plan approved:")
+            print(f"   Cycle ID: {cycle_id}")
+            print(f"   Tests created: {len(test_ids)}")
+            print(f"   Test IDs: {test_ids[:5]}{'...' if len(test_ids) > 5 else ''}")
+
+            return ApproveTestPlanResponse(
+                success=True,
+                cycle_id=cycle_id,
+                project_name=test_plan.project_name,
+                tests_created=len(test_ids),
+                test_ids=test_ids,
+                message=f"Test plan approved successfully. Created {len(test_ids)} UAT tests in database.",
+                approved_at=datetime.now().isoformat()
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve test plan: {str(e)}"
+        )
+
+
+def _parse_test_scenarios_from_prd(
+    test_prd: str,
+    cycle_id: str,
+    journeys_identified: List[str],
+    recommended_phases: List[str]
+) -> List[Dict[str, Any]]:
+    """
+    Parse test scenarios from test PRD markdown document.
+
+    The test PRD contains markdown with scenario definitions like:
+    ## Phase: smoke
+    ### Journey: authentication
+    #### Scenario: User can log in with valid credentials
+    **Description:** Tests the login flow...
+    **Steps:** [...]
+    **Expected Result:** ...
+
+    Args:
+        test_prd: Test PRD markdown document
+        cycle_id: Cycle ID for scenario naming
+        journeys_identified: List of journey names
+        recommended_phases: List of phase names
+
+    Returns:
+        List of scenario dictionaries with all required fields
+    """
+    import re
+
+    scenarios = []
+    current_phase = None
+    current_journey = None
+
+    # Split PRD into lines
+    lines = test_prd.split('\n')
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Detect phase headers (## Phase: smoke)
+        phase_match = re.match(r'##\s+Phase:\s*(\w+)', line, re.IGNORECASE)
+        if phase_match:
+            current_phase = phase_match.group(1).lower()
+            if current_phase not in ['smoke', 'functional', 'regression', 'uat']:
+                current_phase = 'functional'  # Default
+            i += 1
+            continue
+
+        # Detect journey headers (### Journey: authentication)
+        journey_match = re.match(r'###\s+Journey:\s*(\w+)', line, re.IGNORECASE)
+        if journey_match:
+            current_journey = journey_match.group(1).lower()
+            i += 1
+            continue
+
+        # Detect scenario headers (#### Scenario: ...)
+        scenario_match = re.match(r'####\s+Scenario:\s*(.+)', line, re.IGNORECASE)
+        if scenario_match:
+            scenario_name = scenario_match.group(1).strip()
+
+            # Parse scenario details
+            description = ""
+            steps = []
+            expected_result = ""
+            test_type = "e2e"
+
+            # Look for description, steps, expected result in next lines
+            j = i + 1
+            while j < len(lines) and not lines[j].strip().startswith('####'):
+                next_line = lines[j].strip()
+
+                if next_line.startswith('**Description:**'):
+                    description = next_line.split('**Description:**', 1)[1].strip()
+                elif next_line.startswith('**Steps:**'):
+                    # Parse JSON array or list
+                    steps_str = next_line.split('**Steps:**', 1)[1].strip()
+                    try:
+                        steps = eval(steps_str) if steps_str.startswith('[') else [steps_str]
+                    except:
+                        steps = [steps_str]
+                elif next_line.startswith('**Expected Result:**'):
+                    expected_result = next_line.split('**Expected Result:**', 1)[1].strip()
+                elif next_line.startswith('**Test Type:**'):
+                    test_type = next_line.split('**Test Type:**', 1)[1].strip().lower()
+
+                j += 1
+
+            # Create scenario with cycle_id prefix
+            cycle_prefix = cycle_id[:15]
+            scenario = {
+                'phase': current_phase or 'smoke',
+                'journey': current_journey or 'general',
+                'scenario': f"[{cycle_prefix}] {scenario_name}",
+                'description': description or f"Test scenario: {scenario_name}",
+                'test_type': test_type,
+                'test_file': None,
+                'steps': steps if steps else ['Run test scenario'],
+                'expected_result': expected_result or 'Test passes successfully',
+                'dependencies': []
+            }
+
+            scenarios.append(scenario)
+
+            i = j
+            continue
+
+        i += 1
+
+    # If no scenarios parsed (markdown format different), generate from phases/journeys
+    if not scenarios:
+        print("⚠️  No scenarios parsed from PRD, generating from phases/journeys...")
+        for phase in recommended_phases:
+            for journey in journeys_identified:
+                cycle_prefix = cycle_id[:15]
+                scenarios.append({
+                    'phase': phase,
+                    'journey': journey,
+                    'scenario': f"[{cycle_prefix}] {phase.capitalize()} test for {journey}",
+                    'description': f"Validate {journey} functionality in {phase} phase",
+                    'test_type': 'e2e',
+                    'test_file': None,
+                    'steps': [f'Execute {phase} test for {journey}'],
+                    'expected_result': f'{phase.capitalize()} test passes for {journey}',
+                    'dependencies': []
+                })
+
+    return scenarios

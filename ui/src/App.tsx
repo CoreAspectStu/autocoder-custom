@@ -269,13 +269,20 @@ function App() {
   return (
     <div className="min-h-screen bg-neo-bg">
       {/* Header */}
-      <header className="bg-neo-card text-neo-text border-b-4 border-neo-border">
+      <header className={`bg-neo-card text-neo-text border-b-4 ${isUATMode ? 'border-purple-500 dark:border-purple-400' : 'border-neo-border'}`}>
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
-            <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
-              AutoCoder
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
+                AutoCoder
+              </h1>
+              {isUATMode && (
+                <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded border-2 border-purple-600 dark:border-purple-400">
+                  UAT Mode
+                </span>
+              )}
+            </div>
 
             {/* Controls */}
             <div className="flex items-center gap-4">
@@ -342,7 +349,7 @@ function App() {
 
       {/* Main Content */}
       <main
-        className="max-w-7xl mx-auto px-4 py-8"
+        className={`max-w-7xl mx-auto px-4 py-8 ${isUATMode ? 'border-l-4 border-purple-500 dark:border-purple-400' : ''}`}
         style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
       >
         {!selectedProject ? (

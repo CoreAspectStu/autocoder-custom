@@ -63,19 +63,21 @@ export function KanbanColumn({
               {onAddFeature && (
                 <button
                   onClick={onAddFeature}
-                  className="neo-btn neo-btn-primary text-sm py-1.5 px-2"
+                  className="neo-btn neo-btn-primary text-sm py-1.5 px-3"
                   title={isUATMode ? "Add UAT Test (N)" : "Add new feature (N)"}
                 >
-                  <Plus size={16} />
+                  <Plus size={16} className="mr-1" />
+                  <span className="hidden md:inline">{isUATMode ? 'Add UAT Test' : 'Add Feature'}</span>
                 </button>
               )}
               {onExpandProject && showExpandButton && (
                 <button
                   onClick={onExpandProject}
-                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-2"
+                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-3"
                   title={isUATMode ? "Generate UAT Plan (E)" : "Expand project with AI (E)"}
                 >
-                  <Sparkles size={16} />
+                  <Sparkles size={16} className="mr-1" />
+                  <span className="hidden md:inline">{isUATMode ? 'Generate UAT Plan' : 'Expand Project'}</span>
                 </button>
               )}
             </div>
@@ -115,6 +117,7 @@ export function KanbanColumn({
                 isInProgress={color === 'progress'}
                 allFeatures={allFeatures}
                 activeAgent={agentByFeatureId.get(feature.id)}
+                isUATMode={isUATMode}
               />
             </div>
           ))

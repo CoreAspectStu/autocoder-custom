@@ -11,6 +11,7 @@ import { Send, Loader2, Wifi, WifiOff, Plus, History } from 'lucide-react'
 import { useAssistantChat } from '../hooks/useAssistantChat'
 import { ChatMessage as ChatMessageComponent } from './ChatMessage'
 import { ConversationHistory } from './ConversationHistory'
+import { UATPlanningHelper } from './UATPlanningHelper'
 import type { ChatMessage } from '../lib/types'
 
 interface AssistantChatProps {
@@ -223,6 +224,11 @@ export function AssistantChat({
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto bg-[var(--color-neo-bg)]">
+        {/* UAT Planning Helper - shows at top when in UAT mode */}
+        <div className="px-4 pt-4">
+          <UATPlanningHelper projectName={projectName} />
+        </div>
+
         {isLoadingConversation ? (
           <div className="flex items-center justify-center h-full text-[var(--color-neo-text-secondary)] text-sm">
             <div className="flex items-center gap-2">

@@ -519,3 +519,33 @@ export async function getUATStatsSummary(): Promise<{
 }> {
   return fetchJSON('/uat/stats/summary')
 }
+
+export async function getUATProjectContext(
+  projectName: string
+): Promise<{
+  success: boolean
+  project_name: string
+  has_spec: boolean
+  spec_content: string | null
+  completed_features_count: number
+  completed_features: Array<{
+    id: number
+    priority: number
+    category: string
+    name: string
+    description: string
+    completed_at: string | null
+  }>
+  uat_cycles_count: number
+  uat_cycles: Array<{
+    id: number
+    name: string
+    phase: string
+    journey: string
+    status: string
+    result: string
+  }>
+  message: string
+}> {
+  return fetchJSON(`/uat/context/${encodeURIComponent(projectName)}`)
+}
