@@ -36,6 +36,9 @@ import { Badge } from '@/components/ui/badge'
 const STORAGE_KEY = 'autocoder-selected-project'
 const VIEW_MODE_KEY = 'autocoder-view-mode'
 
+// Bottom padding for main content when debug panel is collapsed (40px header + 8px margin)
+const COLLAPSED_DEBUG_PANEL_CLEARANCE = 48
+
 function App() {
   // Initialize selected project from localStorage
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
@@ -331,7 +334,7 @@ function App() {
       {/* Main Content */}
       <main
         className="max-w-7xl mx-auto px-4 py-8"
-        style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : 48 }}
+        style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : COLLAPSED_DEBUG_PANEL_CLEARANCE }}
       >
         {!selectedProject ? (
           <div className="text-center mt-12">

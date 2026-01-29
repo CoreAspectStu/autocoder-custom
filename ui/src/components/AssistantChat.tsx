@@ -12,6 +12,7 @@ import { useAssistantChat } from '../hooks/useAssistantChat'
 import { ChatMessage as ChatMessageComponent } from './ChatMessage'
 import { ConversationHistory } from './ConversationHistory'
 import type { ChatMessage } from '../lib/types'
+import { isSubmitEnter } from '../lib/keyboard'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -134,8 +135,7 @@ export function AssistantChat({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Skip if composing (e.g., Japanese IME input)
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (isSubmitEnter(e)) {
       e.preventDefault()
       handleSend()
     }

@@ -11,6 +11,7 @@ import { useExpandChat } from '../hooks/useExpandChat'
 import { ChatMessage } from './ChatMessage'
 import { TypingIndicator } from './TypingIndicator'
 import type { ImageAttachment } from '../lib/types'
+import { isSubmitEnter } from '../lib/keyboard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -88,8 +89,7 @@ export function ExpandProjectChat({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Skip if composing (e.g., Japanese IME input)
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (isSubmitEnter(e)) {
       e.preventDefault()
       handleSendMessage()
     }
