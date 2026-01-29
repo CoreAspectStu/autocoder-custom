@@ -111,6 +111,23 @@ export async function updateProjectSettings(
   })
 }
 
+export interface ResetProjectResponse {
+  success: boolean
+  reset_type: 'quick' | 'full'
+  deleted_files: string[]
+  message: string
+}
+
+export async function resetProject(
+  name: string,
+  fullReset: boolean = false
+): Promise<ResetProjectResponse> {
+  const params = fullReset ? '?full_reset=true' : ''
+  return fetchJSON(`/projects/${encodeURIComponent(name)}/reset${params}`, {
+    method: 'POST',
+  })
+}
+
 // ============================================================================
 // Features API
 // ============================================================================

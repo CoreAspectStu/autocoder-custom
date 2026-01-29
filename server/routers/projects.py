@@ -373,6 +373,87 @@ async def get_project_stats_endpoint(name: str):
     return get_project_stats(project_dir)
 
 
+@router.post("/{name}/reset")
+async def reset_project(name: str, full_reset: bool = False):
+    """
+    Reset a project to its initial state.
+
+    Args:
+        name: Project name to reset
+        full_reset: If True, also delete prompts/ directory (triggers setup wizard)
+
+    Returns:
+        Dictionary with list of deleted files and reset type
+    """
+    _init_imports()
+    (_, _, get_project_path, _, _, _, _) = _get_registry_functions()
+
+    name = validate_project_name(name)
+    project_dir = get_project_path(name)
+
+    if not project_dir:
+        raise HTTPException(status_code=404, detail=f"Project '{name}' not found")
+
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail="Project directory not found")
+
+    # Check if agent is running
+    lock_file = project_dir / ".agent.lock"
+    if lock_file.exists():
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot reset project while agent is running. Stop the agent first."
+        )
+
+    # Dispose of database engines to release file locks (required on Windows)
+    # Import here to avoid circular imports
+    from api.database import dispose_engine as dispose_features_engine
+    from server.services.assistant_database import dispose_engine as dispose_assistant_engine
+
+    dispose_features_engine(project_dir)
+    dispose_assistant_engine(project_dir)
+
+    deleted_files: list[str] = []
+
+    # Files to delete in quick reset
+    quick_reset_files = [
+        "features.db",
+        "features.db-wal",  # WAL mode journal file
+        "features.db-shm",  # WAL mode shared memory file
+        "assistant.db",
+        "assistant.db-wal",
+        "assistant.db-shm",
+        ".claude_settings.json",
+        ".claude_assistant_settings.json",
+    ]
+
+    for filename in quick_reset_files:
+        file_path = project_dir / filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+                deleted_files.append(filename)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to delete {filename}: {e}")
+
+    # Full reset: also delete prompts directory
+    if full_reset:
+        prompts_dir = project_dir / "prompts"
+        if prompts_dir.exists():
+            try:
+                shutil.rmtree(prompts_dir)
+                deleted_files.append("prompts/")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to delete prompts/: {e}")
+
+    return {
+        "success": True,
+        "reset_type": "full" if full_reset else "quick",
+        "deleted_files": deleted_files,
+        "message": f"Project '{name}' has been reset" + (" (full reset)" if full_reset else " (quick reset)")
+    }
+
+
 @router.patch("/{name}/settings", response_model=ProjectDetail)
 async def update_project_settings(name: str, settings: ProjectSettingsUpdate):
     """Update project-level settings (concurrency, etc.)."""
