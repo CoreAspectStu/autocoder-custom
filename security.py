@@ -6,6 +6,7 @@ Pre-tool-use hooks that validate bash commands for security.
 Uses an allowlist approach - only explicitly permitted commands can run.
 """
 
+import logging
 import os
 import re
 import shlex
@@ -13,6 +14,9 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
+
+# Logger for security-related events (fallback parsing, validation failures, etc.)
+logger = logging.getLogger(__name__)
 
 # Regex pattern for valid pkill process names (no regex metacharacters allowed)
 # Matches alphanumeric names with dots, underscores, and hyphens
@@ -195,7 +199,6 @@ def extract_commands(command_string: str) -> list[str]:
     commands = []
 
     # shlex doesn't treat ; as a separator, so we need to pre-process
-    # (re is already imported at module level)
 
     # Split on semicolons that aren't inside quotes (simple heuristic)
     # This handles common cases like "echo hello; ls"
@@ -213,7 +216,17 @@ def extract_commands(command_string: str) -> list[str]:
             # Try fallback extraction instead of blocking entirely
             fallback_cmd = _extract_primary_command(segment)
             if fallback_cmd:
+                logger.debug(
+                    "shlex fallback used: segment=%r -> command=%r",
+                    segment,
+                    fallback_cmd,
+                )
                 commands.append(fallback_cmd)
+            else:
+                logger.debug(
+                    "shlex fallback failed: segment=%r (no command extracted)",
+                    segment,
+                )
             continue
 
         if not tokens:
