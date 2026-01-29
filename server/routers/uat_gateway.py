@@ -1079,6 +1079,354 @@ class ProjectContextResponse(BaseModel):
     message: str
 
 
+# ============================================================================
+# Blocker Detection Models (Feature #9)
+# ============================================================================
+
+class BlockerType(str, Enum):
+    """Types of blockers that can prevent test execution"""
+    EMAIL_VERIFICATION = "email_verification"
+    SMS = "sms"
+    PAYMENT_GATEWAY = "payment_gateway"
+    EXTERNAL_API = "external_api"
+    DATABASE_MIGRATION = "database_migration"
+    THIRD_PARTY_SERVICE = "third_party_service"
+    AUTH_PROVIDER = "auth_provider"
+
+
+class BlockerAction(str, Enum):
+    """Actions user can take when a blocker is detected"""
+    WAIT = "wait"  # Pause and wait for user to manually resolve
+    SKIP = "skip"  # Skip affected tests and continue
+    MOCK = "mock"  # Use test doubles/mocks instead
+
+
+class BlockerConfig(BaseModel):
+    """Configuration for a single blocker type"""
+    blocker_type: BlockerType
+    detected: bool
+    action: Optional[BlockerAction] = None
+    reason: str  # Why this blocker was detected
+    affected_tests: List[str] = []  # Test scenarios that would be affected
+    notes: Optional[str] = None
+
+
+class DetectBlockersRequest(BaseModel):
+    """Request to detect potential blockers in a project"""
+    project_name: str
+    project_path: Optional[str] = None
+
+
+class DetectBlockersResponse(BaseModel):
+    """Response with detected blockers and recommendations"""
+    success: bool
+    project_name: str
+    blockers_detected: List[BlockerConfig]
+    total_blockers: int
+    critical_blockers: int  # Blockers that would prevent most tests
+    message: str
+    recommendations: str  # Human-readable summary
+
+
+class ConfigureBlockersRequest(BaseModel):
+    """Request to save blocker configuration"""
+    project_name: str
+    blockers: List[BlockerConfig]
+
+
+class ConfigureBlockersResponse(BaseModel):
+    """Response after saving blocker configuration"""
+    success: bool
+    project_name: str
+    blockers_configured: int
+    message: str
+    config_saved_at: Optional[str] = None
+
+
+# ============================================================================
+# Blocker Detection Endpoints (Feature #9)
+# ============================================================================
+
+def _detect_blockers_from_spec(spec_content: str) -> List[BlockerConfig]:
+    """
+    Analyze app_spec.txt to detect potential blockers
+
+    Args:
+        spec_content: The app_spec.txt content
+
+    Returns:
+        List of detected blockers with recommendations
+    """
+    blockers = []
+    spec_lower = spec_content.lower()
+
+    # Detect email verification requirements
+    if any(term in spec_lower for term in ['email verification', 'email confirm', 'verify email', 'email token']):
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.EMAIL_VERIFICATION,
+            detected=True,
+            reason="Project requires email verification (e.g., account confirmation, password reset)",
+            affected_tests=["authentication - signup", "authentication - password recovery"],
+            notes="Email service (SMTP) must be configured or tests will use mocked email verification"
+        ))
+
+    # Detect SMS requirements
+    if any(term in spec_lower for term in ['sms', 'text message', 'phone verification', '2fa', 'two-factor', 'otp']):
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.SMS,
+            detected=True,
+            reason="Project requires SMS verification (e.g., 2FA, phone confirmation)",
+            affected_tests=["authentication - 2FA", "authentication - phone verification"],
+            notes="SMS gateway (Twilio, etc.) must be configured or tests will use mocked SMS"
+        ))
+
+    # Detect payment gateway requirements
+    if any(term in spec_lower for term in ['payment', 'checkout', 'stripe', 'paypal', 'credit card', 'transaction']):
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.PAYMENT_GATEWAY,
+            detected=True,
+            reason="Project processes payments (e.g., Stripe, PayPal)",
+            affected_tests=["payment - checkout", "payment - refund", "payment - subscription"],
+            notes="Payment gateway test mode must be configured or tests will use mocked payments"
+        ))
+
+    # Detect external API dependencies
+    if any(term in spec_lower for term in ['api integration', 'external service', 'webhook', 'third-party']):
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.EXTERNAL_API,
+            detected=True,
+            reason="Project integrates with external APIs or services",
+            affected_tests=["integration tests"],
+            notes="External API credentials or test endpoints must be configured"
+        ))
+
+    # Detect database migration dependencies
+    if 'migration' in spec_lower or 'database schema' in spec_lower:
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.DATABASE_MIGRATION,
+            detected=True,
+            reason="Project requires specific database schema or migrations",
+            affected_tests=["database setup", "data seeding"],
+            notes="Database must be initialized with correct schema before tests"
+        ))
+
+    # Detect third-party service dependencies
+    if any(term in spec_lower for term in ['oauth', 'google', 'github', 'facebook', 'social login']):
+        blockers.append(BlockerConfig(
+            blocker_type=BlockerType.AUTH_PROVIDER,
+            detected=True,
+            reason="Project uses external OAuth providers",
+            affected_tests=["authentication - social login"],
+            notes="OAuth test credentials must be configured or tests will use mocked auth"
+        ))
+
+    return blockers
+
+
+@router.post("/detect-blockers", response_model=DetectBlockersResponse)
+async def detect_blockers(request: DetectBlockersRequest):
+    """
+    Detect potential blockers that could prevent UAT test execution
+
+    This endpoint analyzes the project to identify common blockers:
+    1. Parses app_spec.txt for blocker keywords
+    2. Identifies services that need configuration (email, SMS, payments, etc.)
+    3. Returns detected blockers with recommendations
+
+    The conversational UI will present these to the user and ask:
+    - "I detected email verification is required. How should I handle it?"
+    - Options: "Wait for you to configure", "Skip those tests", "Use mock emails"
+
+    Args:
+        request: DetectBlockersRequest with project name
+
+    Returns:
+        DetectBlockersResponse with detected blockers
+    """
+    try:
+        # Determine project path
+        if not request.project_path:
+            try:
+                import sys
+                root = Path(__file__).parent.parent.parent
+                if str(root) not in sys.path:
+                    sys.path.insert(0, str(root))
+                from registry import get_project_path
+
+                registered_path = get_project_path(request.project_name)
+                if registered_path:
+                    request.project_path = registered_path
+                else:
+                    request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+            except ImportError:
+                request.project_path = str(Path.home() / "projects" / "autocoder-projects" / request.project_name)
+
+        project_path = Path(request.project_path)
+        if not project_path.exists():
+            return DetectBlockersResponse(
+                success=False,
+                project_name=request.project_name,
+                blockers_detected=[],
+                total_blockers=0,
+                critical_blockers=0,
+                message=f"Project path not found: {request.project_path}",
+                recommendations=""
+            )
+
+        # Read app_spec.txt
+        spec_path = project_path / "app_spec.txt"
+        if not spec_path.exists():
+            return DetectBlockersResponse(
+                success=False,
+                project_name=request.project_name,
+                blockers_detected=[],
+                total_blockers=0,
+                critical_blockers=0,
+                message=f"app_spec.txt not found at {spec_path}",
+                recommendations=""
+            )
+
+        spec_content = spec_path.read_text(encoding='utf-8')
+
+        # Detect blockers from spec
+        blockers = _detect_blockers_from_spec(spec_content)
+
+        # Count critical blockers (affect most tests)
+        critical_count = sum(1 for b in blockers if len(b.affected_tests) >= 2)
+
+        # Generate human-readable recommendations
+        if blockers:
+            blocker_summary = []
+            for blocker in blockers:
+                blocker_summary.append(f"- **{blocker.blocker_type.value.replace('_', ' ').title()}**: {blocker.reason}")
+
+            recommendations = (
+                f"I detected {len(blockers)} potential blocker(s) that may prevent test execution:\n\n"
+                + "\n".join(blocker_summary) +
+                "\n\nFor each blocker, you can choose:\n"
+                "• **Wait**: Pause and I'll wait for you to configure the service manually\n"
+                "• **Skip**: Skip tests that depend on this blocker\n"
+                "• **Mock**: Use test doubles instead of real services\n\n"
+                "How would you like to handle these?"
+            )
+        else:
+            recommendations = "No blockers detected! Your project looks ready for automated testing."
+
+        print(f"🔍 Detected {len(blockers)} blockers for {request.project_name}")
+        for blocker in blockers:
+            print(f"   - {blocker.blocker_type.value}: {blocker.reason}")
+
+        return DetectBlockersResponse(
+            success=True,
+            project_name=request.project_name,
+            blockers_detected=blockers,
+            total_blockers=len(blockers),
+            critical_blockers=critical_count,
+            message=f"Detected {len(blockers)} potential blocker(s)",
+            recommendations=recommendations
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to detect blockers: {str(e)}"
+        )
+
+
+@router.post("/configure-blockers", response_model=ConfigureBlockersResponse)
+async def configure_blockers(request: ConfigureBlockersRequest):
+    """
+    Save blocker configuration preferences
+
+    This endpoint saves the user's choices for how to handle detected blockers.
+    The configuration will be used during test plan generation and execution.
+
+    Configuration is saved to: ~/.autocoder/uat_gateway/{project_name}/blockers.json
+
+    Args:
+        request: ConfigureBlockersRequest with blocker preferences
+
+    Returns:
+        ConfigureBlockersResponse confirming save
+    """
+    try:
+        # Create config directory
+        project_config_dir = STATE_DIR / request.project_name
+        project_config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save blocker configuration
+        config_path = project_config_dir / "blockers.json"
+        with open(config_path, 'w') as f:
+            json.dump({
+                "project_name": request.project_name,
+                "blockers": [b.dict() for b in request.blockers],
+                "configured_at": datetime.now().isoformat()
+            }, f, indent=2)
+
+        # Count configured blockers (action != None)
+        configured_count = sum(1 for b in request.blockers if b.action is not None)
+
+        print(f"💾 Saved blocker configuration for {request.project_name}")
+        print(f"   Path: {config_path}")
+        print(f"   Blockers configured: {configured_count}/{len(request.blockers)}")
+
+        return ConfigureBlockersResponse(
+            success=True,
+            project_name=request.project_name,
+            blockers_configured=configured_count,
+            message=f"Blocker configuration saved ({configured_count} blockers configured)",
+            config_saved_at=datetime.now().isoformat()
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save blocker configuration: {str(e)}"
+        )
+
+
+@router.get("/configure-blockers/{project_name}")
+async def get_blocker_configuration(project_name: str):
+    """
+    Retrieve saved blocker configuration for a project
+
+    Args:
+        project_name: Name of the project
+
+    Returns:
+        JSON with blocker configuration or empty config if not found
+    """
+    try:
+        config_path = STATE_DIR / project_name / "blockers.json"
+
+        if not config_path.exists():
+            return {
+                "success": True,
+                "project_name": project_name,
+                "blockers": [],
+                "message": "No blocker configuration found"
+            }
+
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+        print(f"📋 Retrieved blocker configuration for {project_name}")
+
+        return config
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve blocker configuration: {str(e)}"
+        )
+
+
 @router.get("/context/{project_name}", response_model=ProjectContextResponse)
 async def get_project_context(project_name: str):
     """
