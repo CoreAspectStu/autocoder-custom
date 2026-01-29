@@ -151,10 +151,14 @@ class ExpandChatSession:
             return
 
         # Create temporary security settings file (unique per session to avoid conflicts)
+        # Note: permission_mode="bypassPermissions" is safe here because:
+        # 1. Only Read/Glob file tools are allowed (no Write/Edit)
+        # 2. MCP tools are restricted to feature creation only
+        # 3. No Bash access - cannot execute arbitrary commands
         security_settings = {
             "sandbox": {"enabled": True},
             "permissions": {
-                "defaultMode": "acceptEdits",
+                "defaultMode": "bypassPermissions",
                 "allow": [
                     "Read(./**)",
                     "Glob(./**)",
