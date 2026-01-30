@@ -205,6 +205,7 @@ class ParallelOrchestrator:
         # Thread-safe state
         self._lock = threading.Lock()
         # Coding agents: feature_id -> process
+        # Safe to key by feature_id because start_feature() checks for duplicates before spawning
         self.running_coding_agents: dict[int, subprocess.Popen] = {}
         # Testing agents: pid -> (feature_id, process)
         # Keyed by PID (not feature_id) because multiple agents can test the same feature
@@ -989,6 +990,11 @@ class ParallelOrchestrator:
             debug_log.log("STOP", f"Killed testing agent for feature #{feature_id} (PID {pid})",
                 status=result.status, children_found=result.children_found,
                 children_terminated=result.children_terminated, children_killed=result.children_killed)
+
+        # Clear dict so get_status() doesn't report stale agents while
+        # _on_agent_complete callbacks are still in flight.
+        with self._lock:
+            self.running_testing_agents.clear()
 
     async def run_loop(self):
         """Main orchestration loop."""
