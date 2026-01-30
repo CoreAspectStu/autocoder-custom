@@ -31,7 +31,7 @@ DEFAULT_PLAYWRIGHT_HEADLESS = True
 DEFAULT_PLAYWRIGHT_BROWSER = "firefox"
 
 # Environment variables to pass through to Claude CLI for API configuration
-# These allow using alternative API endpoints (e.g., GLM via z.ai) without
+# These allow using alternative API endpoints (e.g., GLM via z.ai, Vertex AI) without
 # affecting the user's global Claude Code settings
 API_ENV_VARS = [
     "ANTHROPIC_BASE_URL",              # Custom API endpoint (e.g., https://api.z.ai/api/anthropic)
@@ -40,6 +40,10 @@ API_ENV_VARS = [
     "ANTHROPIC_DEFAULT_SONNET_MODEL",  # Model override for Sonnet
     "ANTHROPIC_DEFAULT_OPUS_MODEL",    # Model override for Opus
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",   # Model override for Haiku
+    # Vertex AI configuration
+    "CLAUDE_CODE_USE_VERTEX",          # Enable Vertex AI mode (set to "1")
+    "CLOUD_ML_REGION",                 # GCP region (e.g., us-east5)
+    "ANTHROPIC_VERTEX_PROJECT_ID",     # GCP project ID
 ]
 
 # Extra read paths for cross-project file access (read-only)
@@ -63,6 +67,36 @@ EXTRA_READ_PATHS_BLOCKLIST = {
     ".pypirc",
     ".netrc",
 }
+
+def compute_mode(model: str) -> str:
+    """
+    Convert model name format for Vertex AI compatibility.
+
+    Vertex AI uses @ to separate model name from version (e.g., claude-opus-4-5@20251101)
+    while the Anthropic API uses - (e.g., claude-opus-4-5-20251101).
+
+    Args:
+        model: Model name in Anthropic format (with hyphens)
+
+    Returns:
+        Model name in Vertex AI format (with @ before date) if Vertex AI is enabled,
+        otherwise returns the model unchanged.
+    """
+    # Only convert if Vertex AI is enabled
+    if os.getenv("CLAUDE_CODE_USE_VERTEX") != "1":
+        return model
+
+    # Pattern: claude-{name}-{version}-{date} -> claude-{name}-{version}@{date}
+    # Example: claude-opus-4-5-20251101 -> claude-opus-4-5@20251101
+    # The date is always 8 digits at the end
+    import re
+    match = re.match(r'^(claude-[a-z0-9-]+?)-(\d{8})$', model)
+    if match:
+        base_name, date = match.groups()
+        return f"{base_name}@{date}"
+
+    # If already in @ format or doesn't match expected pattern, return as-is
+    return model
 
 
 def get_playwright_headless() -> bool:
@@ -173,7 +207,6 @@ def get_extra_read_paths() -> list[Path]:
         validated_paths.append(path)
 
     return validated_paths
-
 
 # Feature MCP tools for feature/test management
 FEATURE_MCP_TOOLS = [
@@ -400,14 +433,19 @@ def create_client(
         if value:
             sdk_env[var] = value
 
-    # Detect alternative API mode (Ollama or GLM)
+    # Detect alternative API mode (Ollama, GLM, or Vertex AI)
     base_url = sdk_env.get("ANTHROPIC_BASE_URL", "")
-    is_alternative_api = bool(base_url)
+    is_vertex = sdk_env.get("CLAUDE_CODE_USE_VERTEX") == "1"
+    is_alternative_api = bool(base_url) or is_vertex
     is_ollama = "localhost:11434" in base_url or "127.0.0.1:11434" in base_url
-
+    model = compute_mode(model)
     if sdk_env:
         print(f"   - API overrides: {', '.join(sdk_env.keys())}")
-        if is_ollama:
+        if is_vertex:
+            project_id = sdk_env.get("ANTHROPIC_VERTEX_PROJECT_ID", "unknown")
+            region = sdk_env.get("CLOUD_ML_REGION", "unknown")
+            print(f"   - Vertex AI Mode: Using GCP project '{project_id}' with model '{model}' in region '{region}'")
+        elif is_ollama:
             print("   - Ollama Mode: Using local models")
         elif "ANTHROPIC_BASE_URL" in sdk_env:
             print(f"   - GLM Mode: Using {sdk_env['ANTHROPIC_BASE_URL']}")
@@ -486,7 +524,7 @@ def create_client(
             # Enable extended context beta for better handling of long sessions.
             # This provides up to 1M tokens of context with automatic compaction.
             # See: https://docs.anthropic.com/en/api/beta-headers
-            # Disabled for alternative APIs (Ollama, GLM) as they don't support Claude-specific betas.
+            # Disabled for alternative APIs (Ollama, GLM, Vertex AI) as they don't support this beta.
             betas=[] if is_alternative_api else ["context-1m-2025-08-07"],
             # Note on context management:
             # The Claude Agent SDK handles context management automatically through the
