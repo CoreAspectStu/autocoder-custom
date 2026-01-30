@@ -7,6 +7,7 @@ Functions for creating and configuring the Claude Agent SDK client.
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -68,7 +69,7 @@ EXTRA_READ_PATHS_BLOCKLIST = {
     ".netrc",
 }
 
-def compute_mode(model: str) -> str:
+def convert_model_for_vertex(model: str) -> str:
     """
     Convert model name format for Vertex AI compatibility.
 
@@ -89,8 +90,7 @@ def compute_mode(model: str) -> str:
     # Pattern: claude-{name}-{version}-{date} -> claude-{name}-{version}@{date}
     # Example: claude-opus-4-5-20251101 -> claude-opus-4-5@20251101
     # The date is always 8 digits at the end
-    import re
-    match = re.match(r'^(claude-[a-z0-9-]+?)-(\d{8})$', model)
+    match = re.match(r'^(claude-.+)-(\d{8})$', model)
     if match:
         base_name, date = match.groups()
         return f"{base_name}@{date}"
@@ -207,6 +207,7 @@ def get_extra_read_paths() -> list[Path]:
         validated_paths.append(path)
 
     return validated_paths
+
 
 # Feature MCP tools for feature/test management
 FEATURE_MCP_TOOLS = [
@@ -438,7 +439,7 @@ def create_client(
     is_vertex = sdk_env.get("CLAUDE_CODE_USE_VERTEX") == "1"
     is_alternative_api = bool(base_url) or is_vertex
     is_ollama = "localhost:11434" in base_url or "127.0.0.1:11434" in base_url
-    model = compute_mode(model)
+    model = convert_model_for_vertex(model)
     if sdk_env:
         print(f"   - API overrides: {', '.join(sdk_env.keys())}")
         if is_vertex:
