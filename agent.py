@@ -24,7 +24,6 @@ if sys.platform == "win32":
 
 from client import create_client
 from progress import (
-    clear_stuck_features,
     count_passing_tests,
     has_features,
     print_progress_summary,
@@ -38,7 +37,9 @@ from prompts import (
     get_testing_prompt,
 )
 from rate_limit_utils import (
-    RATE_LIMIT_PATTERNS,
+    calculate_error_backoff,
+    calculate_rate_limit_backoff,
+    clamp_retry_delay,
     is_rate_limit_error,
     parse_retry_after,
 )
@@ -173,28 +174,6 @@ async def run_autonomous_agent(
     # Create project directory
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    # IMPORTANT: Do NOT clear stuck features in parallel mode!
-    # The orchestrator manages feature claiming atomically.
-    # Clearing here causes race conditions where features are marked in_progress
-    # by the orchestrator but immediately cleared by the agent subprocess on startup.
-    #
-    # For single-agent mode or manual runs, clearing is still safe because
-    # there's only one agent at a time and it happens before claiming any features.
-    #
-    # Only clear if we're NOT in a parallel orchestrator context
-    # (detected by checking if this agent is a subprocess spawned by orchestrator)
-    import psutil
-    try:
-        parent_process = psutil.Process().parent()
-        parent_name = parent_process.name() if parent_process else ""
-
-        # Only clear if parent is NOT python (i.e., we're running manually, not from orchestrator)
-        if "python" not in parent_name.lower():
-            clear_stuck_features(project_dir)
-    except Exception:
-        # If parent process check fails, err on the safe side and clear
-        clear_stuck_features(project_dir)
-
     # Determine agent type if not explicitly set
     if agent_type is None:
         # Auto-detect based on whether we have features
@@ -304,18 +283,17 @@ async def run_autonomous_agent(
             target_time_str = None
 
             # Check for rate limit indicators in response text
-            response_lower = response.lower()
-            if any(pattern in response_lower for pattern in RATE_LIMIT_PATTERNS):
+            if is_rate_limit_error(response):
                 print("Claude Agent SDK indicated rate limit reached.")
                 reset_rate_limit_retries = False
 
                 # Try to extract retry-after from response text first
                 retry_seconds = parse_retry_after(response)
                 if retry_seconds is not None:
-                    delay_seconds = retry_seconds
+                    delay_seconds = clamp_retry_delay(retry_seconds)
                 else:
                     # Use exponential backoff when retry-after unknown
-                    delay_seconds = min(60 * (2 ** rate_limit_retries), 3600)
+                    delay_seconds = calculate_rate_limit_backoff(rate_limit_retries)
                     rate_limit_retries += 1
 
                 # Try to parse reset time from response (more specific format)
@@ -347,9 +325,9 @@ async def run_autonomous_agent(
                             target += timedelta(days=1)
 
                         delta = target - now
-                        delay_seconds = min(
+                        delay_seconds = int(min(
                             delta.total_seconds(), 24 * 60 * 60
-                        )  # Clamp to 24 hours max
+                        ))  # Clamp to 24 hours max
                         target_time_str = target.strftime("%B %d, %Y at %I:%M %p %Z")
 
                     except Exception as e:
@@ -395,20 +373,25 @@ async def run_autonomous_agent(
         elif status == "rate_limit":
             # Smart rate limit handling with exponential backoff
             if response != "unknown":
-                delay_seconds = int(response)
-                print(f"\nRate limit hit. Waiting {delay_seconds} seconds before retry...")
-            else:
-                # Use exponential backoff when retry-after unknown
-                delay_seconds = min(60 * (2 ** rate_limit_retries), 3600)  # Max 1 hour
+                try:
+                    delay_seconds = clamp_retry_delay(int(response))
+                except (ValueError, TypeError):
+                    # Malformed value - fall through to exponential backoff
+                    response = "unknown"
+            if response == "unknown":
+                # Use exponential backoff when retry-after unknown or malformed
+                delay_seconds = calculate_rate_limit_backoff(rate_limit_retries)
                 rate_limit_retries += 1
                 print(f"\nRate limit hit. Backoff wait: {delay_seconds} seconds (attempt #{rate_limit_retries})...")
+            else:
+                print(f"\nRate limit hit. Waiting {delay_seconds} seconds before retry...")
 
             await asyncio.sleep(delay_seconds)
 
         elif status == "error":
             # Non-rate-limit errors: linear backoff capped at 5 minutes
             error_retries += 1
-            delay_seconds = min(30 * error_retries, 300)  # Max 5 minutes
+            delay_seconds = calculate_error_backoff(error_retries)
             print("\nSession encountered an error")
             print(f"Will retry in {delay_seconds}s (attempt #{error_retries})...")
             await asyncio.sleep(delay_seconds)
