@@ -6,7 +6,7 @@
  * Manages conversation state with localStorage persistence.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Bot } from 'lucide-react'
 import { AssistantChat } from './AssistantChat'
 import { useConversation } from '../hooks/useConversations'
@@ -43,6 +43,9 @@ function setStoredConversationId(projectName: string, conversationId: number | n
 }
 
 export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelProps) {
+  // Ref for the close button (used to blur focus on close)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
   // Load initial conversation ID from localStorage
   const [conversationId, setConversationId] = useState<number | null>(() =>
     getStoredConversationId(projectName)
@@ -87,6 +90,15 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
     setConversationId(id)
   }, [])
 
+  // Handle panel close with focus cleanup to avoid aria-hidden accessibility warning
+  const handleClose = useCallback(() => {
+    // Blur the close button before closing to prevent aria-hidden accessibility issue
+    // When aria-hidden is set to true on the panel, no element inside should have focus
+    closeButtonRef.current?.blur()
+    // Call the original onClose callback
+    onClose()
+  }, [onClose])
+
   return (
     <>
       {/* Backdrop - click to close */}
@@ -129,7 +141,8 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
             </div>
           </div>
           <button
-            onClick={onClose}
+            ref={closeButtonRef}
+            onClick={handleClose}
             className="
               neo-btn neo-btn-ghost
               p-2
