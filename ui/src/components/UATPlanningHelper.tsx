@@ -32,6 +32,7 @@ import {
 import { useUATMode } from '../contexts/UATModeContext'
 import { useGenerateTestPlan, type GenerateTestPlanResponse } from '../hooks/useGenerateTestPlan'
 import { useModifyTestPlan, type ModifyTestPlanResponse } from '../hooks/useModifyTestPlan'
+import { useApproveTestPlan, type ApproveTestPlanResponse } from '../hooks/useApproveTestPlan'
 
 interface UATPlanningHelperProps {
   projectName: string | undefined
@@ -65,6 +66,9 @@ export function UATPlanningHelper({
 
   // Test plan modification mutation
   const modifyPlan = useModifyTestPlan()
+
+  // Test plan approval mutation (Feature #11)
+  const approvePlan = useApproveTestPlan()
 
   // Update stage when context is loaded
   useEffect(() => {
@@ -415,15 +419,26 @@ export function UATPlanningHelper({
           <div className="space-y-2">
             <button
               onClick={() => handleConfirmPlan()}
+              disabled={approvePlan.isPending}
               className="
                 w-full neo-btn neo-btn-primary
                 flex items-center justify-center gap-2
                 bg-[var(--color-neo-done)] border-[var(--color-neo-border)]
                 text-[var(--color-neo-text-on-bright)]
+                disabled:opacity-50 disabled:cursor-not-allowed
               "
             >
-              <ThumbsUp size={16} />
-              Approve & Create Tests
+              {approvePlan.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Creating Tests...
+                </>
+              ) : (
+                <>
+                  <ThumbsUp size={16} />
+                  Approve & Create Tests
+                </>
+              )}
             </button>
 
             <button
@@ -454,6 +469,15 @@ export function UATPlanningHelper({
               Reject & Start Over
             </button>
           </div>
+
+          {approvePlan.error && (
+            <div className="mt-3 p-2 bg-[var(--color-neo-danger)] bg-opacity-10 border border-[var(--color-neo-danger)] rounded">
+              <div className="flex items-center gap-2 text-[var(--color-neo-danger)] text-sm">
+                <AlertCircle size={14} />
+                <span>{approvePlan.error.message}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -634,12 +658,30 @@ export function UATPlanningHelper({
     }
   }
 
-  function handleConfirmPlan() {
-    setUserMessage('Great! Creating your UAT tests now...')
-    // Feature #11 will implement the actual test creation
-    setTimeout(() => {
+  async function handleConfirmPlan() {
+    if (!generatePlan.data?.cycle_id) {
+      setUserMessage('Error: No test plan to approve')
+      return
+    }
+
+    setUserMessage('Great! Creating your UAT tests in the database...')
+
+    try {
+      const result = await approvePlan.mutateAsync(generatePlan.data.cycle_id)
+
+      // Show success message with test count
+      setUserMessage(
+        `✅ Success! Created ${result.tests_created} UAT tests in the database. ` +
+        `Tests are now visible in the kanban board.`
+      )
+
+      // Move to confirmed stage
       setStage('confirmed')
-    }, 1000)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create tests'
+      setUserMessage(`❌ Error: ${errorMessage}`)
+      // Don't change stage - let user try again
+    }
   }
 
   function handleRequestModification() {

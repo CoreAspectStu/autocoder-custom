@@ -78,6 +78,25 @@ async def lifespan(app: FastAPI):
     scheduler = get_scheduler()
     await scheduler.start()
 
+    # Initialize UAT execution router db_manager (Feature #45)
+    try:
+        import sys
+        from pathlib import Path
+        uat_project_path = Path("/home/stu/projects/autocoder-projects/UAT")
+        if str(uat_project_path) not in sys.path:
+            sys.path.insert(0, str(uat_project_path))
+
+        from api.execution import set_database_manager
+        from uat_plugin.database import get_db_manager
+
+        uat_db_manager = get_db_manager()
+        set_database_manager(uat_db_manager)
+        print("✅ UAT execution router db_manager initialized (Feature #45)")
+    except ImportError as e:
+        print(f"⚠️  Could not initialize UAT execution router db_manager: {e}")
+    except Exception as e:
+        print(f"⚠️  Error initializing UAT execution router: {e}")
+
     yield
 
     # Shutdown - cleanup scheduler first to stop triggering new starts

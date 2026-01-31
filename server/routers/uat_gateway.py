@@ -52,6 +52,33 @@ router = APIRouter(
     tags=["uat-gateway"]
 )
 
+# Import execution router for Feature #45 (bug fix retest)
+try:
+    # Add the UAT project to the path
+    uat_project_path = Path("/home/stu/projects/autocoder-projects/UAT")
+    if str(uat_project_path) not in sys.path:
+        sys.path.insert(0, str(uat_project_path))
+
+    from api.execution import router as execution_router, set_database_manager
+    # Remove the /api/uat prefix from execution router since it's already included
+    # The execution router has prefix="/api/uat/execution", we want just "/execution"
+    execution_router.prefix = "/execution"
+    router.include_router(execution_router, tags=["uat-execution"])
+
+    # Initialize db_manager for execution router
+    try:
+        from uat_plugin.database import get_db_manager
+        uat_db_manager = get_db_manager()
+        set_database_manager(uat_db_manager)
+        print("✅ UAT execution router database manager initialized (Feature #45)")
+    except ImportError:
+        print("⚠️  UAT plugin database not available - execution endpoints may not work")
+
+    print("✅ UAT execution router integrated (Feature #45)")
+except ImportError as e:
+    print(f"⚠️  UAT execution router not available: {e}")
+    print("   Feature #45 (bug fix retest) endpoints will not be available")
+
 # State directory for UAT Gateway
 STATE_DIR = Path.home() / ".autocoder" / "uat_gateway"
 
@@ -939,8 +966,8 @@ def get_uat_db_session():
     """
     create_database, _ = _get_uat_db_classes()
 
-    # UAT database is in the uat-autocoder project
-    uat_db_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder" / "uat_tests.db"
+    # UAT database is in the uat-autocoder config directory
+    uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
 
     if not uat_db_path.exists():
         # If UAT DB doesn't exist, create an empty one
@@ -1800,11 +1827,11 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
 
         # Import TestPlannerAgent from uat-autocoder backend
         import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
         if str(uat_backend_path) not in sys.path:
             sys.path.insert(0, str(uat_backend_path))
 
-        from custom.uat_plugin.test_planner import TestPlannerAgent
+        from uat_plugin.test_planner import TestPlannerAgent
 
         # Initialize test planner with project's app_spec.txt
         print(f"🔍 Generating test plan for {request.project_name}...")
@@ -1914,7 +1941,7 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
 
         # FEATURE #14: Save test plan to database for approval
         print("💾 Saving test plan to database...")
-        from custom.uat_plugin.database import get_db_manager, UATTestPlan
+        from uat_plugin.database import get_db_manager, UATTestPlan
         from datetime import datetime
 
         db = get_db_manager()
@@ -2056,12 +2083,12 @@ async def identify_untested_journeys(request: UntestedJourneysRequest):
 
         # Import test planner functions
         import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
         if str(uat_backend_path) not in sys.path:
             sys.path.insert(0, str(uat_backend_path))
 
-        from custom.uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
-        from custom.uat_plugin.database import get_db_manager
+        from uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
+        from uat_plugin.database import get_db_manager
 
         # Parse PRD
         print(f"🔍 Analyzing journeys for {request.project_name}...")
@@ -2223,11 +2250,11 @@ async def modify_test_plan(request: ModifyTestPlanRequest):
     try:
         # Import TestPlannerAgent
         import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
         if str(uat_backend_path) not in sys.path:
             sys.path.insert(0, str(uat_backend_path))
 
-        from custom.uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
+        from uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
 
         # Determine project path
         project_path = None
@@ -2417,11 +2444,11 @@ async def approve_test_plan(cycle_id: str):
     try:
         # Import database manager
         import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder-projects" / "uat-autocoder"
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
         if str(uat_backend_path) not in sys.path:
             sys.path.insert(0, str(uat_backend_path))
 
-        from custom.uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
+        from uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
 
         db = get_db_manager()
 

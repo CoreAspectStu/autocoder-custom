@@ -71,7 +71,7 @@ def get_engine(project_dir: Path):
         db_path = get_db_path(project_dir)
         # Use as_posix() for cross-platform compatibility with SQLite connection strings
         db_url = f"sqlite:///{db_path.as_posix()}"
-        engine = create_engine(db_url, echo=False)
+        engine = create_engine(db_url, echo=False, connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         _engine_cache[cache_key] = engine
         logger.debug(f"Created new database engine for {cache_key}")
