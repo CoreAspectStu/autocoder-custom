@@ -28,7 +28,7 @@ import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
 import { ThemeSelector } from './components/ThemeSelector'
 import { ResetProjectModal } from './components/ResetProjectModal'
 import { ProjectSetupRequired } from './components/ProjectSetupRequired'
-import { getDependencyGraph } from './lib/api'
+import { getDependencyGraph, startAgent } from './lib/api'
 import { Loader2, Settings, Moon, Sun, RotateCcw } from 'lucide-react'
 import type { Feature } from './lib/types'
 import { Button } from '@/components/ui/button'
@@ -495,7 +495,16 @@ function App() {
         <div className="fixed inset-0 z-50 bg-background">
           <SpecCreationChat
             projectName={selectedProject}
-            onComplete={() => {
+            onComplete={async (_specPath, yoloMode) => {
+              // Auto-start the agent after spec creation (same as NewProjectModal)
+              try {
+                await startAgent(selectedProject, {
+                  yoloMode: yoloMode ?? false,
+                  maxConcurrency: 3,
+                })
+              } catch (err) {
+                console.error('Failed to start agent:', err)
+              }
               setShowSpecChat(false)
               // Refresh projects to update has_spec
               queryClient.invalidateQueries({ queryKey: ['projects'] })
