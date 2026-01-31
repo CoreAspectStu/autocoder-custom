@@ -58,7 +58,7 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
   )
 
   // Convert API messages to ChatMessage format for the chat component
-  const initialMessages: ChatMessage[] | undefined = conversationDetail?.messages.map((msg) => ({
+  const initialMessages: ChatMessage[] | undefined = conversationDetail?.messages?.map((msg) => ({
     id: `db-${msg.id}`,
     role: msg.role,
     content: msg.content,
