@@ -97,7 +97,13 @@ class SessionInfo(BaseModel):
 
 @router.get("/conversations/{project_name}", response_model=list[ConversationSummary])
 async def list_project_conversations(project_name: str):
-    """List all conversations for a project."""
+    """
+    List all conversations for a project.
+
+    Returns an empty array [] when no conversations exist, not a 404 error.
+    This ensures the frontend can distinguish between "no conversations" (200 with [])
+    and "project not found" (404).
+    """
     if not validate_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
@@ -106,6 +112,12 @@ async def list_project_conversations(project_name: str):
         raise HTTPException(status_code=404, detail="Project not found")
 
     conversations = get_conversations(project_dir, project_name)
+
+    # Explicitly return empty array when no conversations exist (Feature #150)
+    # This prevents treating "no conversations" as an error condition
+    if not conversations:
+        return []
+
     return [ConversationSummary(**c) for c in conversations]
 
 

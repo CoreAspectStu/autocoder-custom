@@ -64,17 +64,28 @@ def get_engine(project_dir: Path):
 
     Uses a cache to avoid creating new engines for each request, which improves
     performance by reusing database connections.
+
+    Automatically creates the database file with proper schema on first access.
     """
     cache_key = project_dir.as_posix()
 
     if cache_key not in _engine_cache:
         db_path = get_db_path(project_dir)
+
+        # Feature #149: Ensure parent directory exists before creating database
+        # This prevents errors when project directory structure doesn't exist yet
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Use as_posix() for cross-platform compatibility with SQLite connection strings
         db_url = f"sqlite:///{db_path.as_posix()}"
         engine = create_engine(db_url, echo=False, connect_args={"check_same_thread": False})
+
+        # Create database schema if it doesn't exist
+        # This creates the database file and all tables on first access
         Base.metadata.create_all(engine)
+
         _engine_cache[cache_key] = engine
-        logger.debug(f"Created new database engine for {cache_key}")
+        logger.info(f"Created new database engine for {cache_key} (database at {db_path})")
 
     return _engine_cache[cache_key]
 

@@ -307,3 +307,68 @@ async def emergency_cleanup():
         "agents_reset": agents_reset,
         "message": f"Cleaned up {lock_files_removed} lock files and reset {agents_reset} stuck agents"
     }
+
+
+@router.post("/api/emergency/cleanup-orphans")
+async def cleanup_orphaned_agents():
+    """
+    Cleanup orphaned Claude agent processes.
+
+    Finds and kills Claude CLI processes that have been reparented to systemd
+    (or init) because their original parent died unexpectedly. These processes
+    consume task slots but are no longer doing useful work.
+
+    Safe to run - only targets orphaned processes, not active agents.
+    """
+    killed_count = 0
+    scanned_count = 0
+
+    # Get systemd user manager PID
+    systemd_user_pid = None
+    for proc in psutil.process_iter(['pid', 'cmdline']):
+        try:
+            cmdline = proc.info.get('cmdline') or []
+            if cmdline and 'systemd' in cmdline[0] and '--user' in ' '.join(cmdline):
+                systemd_user_pid = proc.info['pid']
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied, IndexError):
+            continue
+
+    # Find all Claude CLI processes
+    for proc in psutil.process_iter(['pid', 'ppid', 'cmdline']):
+        try:
+            cmdline = ' '.join(proc.info.get('cmdline', []))
+
+            # Check if this is a Claude CLI process
+            if 'node /usr/bin/claude' not in cmdline:
+                continue
+
+            scanned_count += 1
+            ppid = proc.info.get('ppid')
+
+            # Check if orphaned (reparented to systemd/init or parent doesn't exist)
+            is_orphaned = False
+            if ppid == systemd_user_pid or ppid == 1:
+                is_orphaned = True
+            elif ppid:
+                # Check if parent process still exists
+                try:
+                    parent = psutil.Process(ppid)
+                    if not parent.is_running():
+                        is_orphaned = True
+                except psutil.NoSuchProcess:
+                    is_orphaned = True
+
+            if is_orphaned:
+                proc.kill()
+                killed_count += 1
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    return {
+        "success": True,
+        "scanned": scanned_count,
+        "killed": killed_count,
+        "message": f"Scanned {scanned_count} Claude processes, killed {killed_count} orphans"
+    }

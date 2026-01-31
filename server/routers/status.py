@@ -502,6 +502,63 @@ async def status_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AutoCoder - Dashboard</title>
     <style>
+        /* CSS Variables - Design System */
+        :root {
+            /* Primary - Trust & Control */
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #e0e7ff;
+
+            /* Status Colors */
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --success-text: #065f46;
+            --warning: #f59e0b;
+            --warning-bg: #fef3c7;
+            --warning-text: #92400e;
+            --danger: #ef4444;
+            --danger-bg: #fee2e2;
+            --danger-text: #991b1b;
+            --info: #3b82f6;
+            --info-bg: #dbeafe;
+            --info-text: #1e40af;
+
+            /* Neutral Scale */
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-section: #f1f5f9;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --text-tertiary: #94a3b8;
+
+            /* Typography */
+            --font-xs: 0.75rem;
+            --font-sm: 0.875rem;
+            --font-base: 1rem;
+            --font-lg: 1.125rem;
+            --font-xl: 1.25rem;
+            --font-2xl: 1.5rem;
+            --font-3xl: 2rem;
+
+            /* Spacing */
+            --space-xs: 8px;
+            --space-sm: 12px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+
+            /* Effects */
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -510,66 +567,292 @@ async def status_page():
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #f5f7fa;
-            color: #2d3748;
+            background: var(--bg-page);
+            color: var(--text-primary);
             line-height: 1.6;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 24px;
+            padding: var(--space-lg);
         }
 
         /* Header */
         header {
-            margin-bottom: 32px;
+            margin-bottom: var(--space-xl);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm);
         }
 
         h1 {
-            font-size: 28px;
+            font-size: var(--font-3xl);
             font-weight: 700;
-            color: #1a202c;
-            margin-bottom: 8px;
+            color: var(--text-primary);
+            margin-bottom: var(--space-xs);
         }
 
         .subtitle {
-            color: #718096;
-            font-size: 14px;
+            color: var(--text-secondary);
+            font-size: var(--font-sm);
+        }
+
+        .refresh-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-md);
+            background: var(--success-bg);
+            color: var(--success-text);
+            border-radius: var(--radius-full);
+            font-size: var(--font-xs);
+            font-weight: 600;
+        }
+
+        .refresh-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Resource Hero Section - NEW */
+        .resource-hero {
+            background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+            border-radius: var(--radius-lg);
+            padding: var(--space-xl);
+            color: white;
+            margin-bottom: var(--space-xl);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
+        }
+
+        .resource-hero-header {
+            margin-bottom: var(--space-lg);
+        }
+
+        .resource-hero-header h2 {
+            font-size: var(--font-lg);
+            font-weight: 600;
+            margin-bottom: var(--space-xs);
+        }
+
+        .resource-hero-header p {
+            font-size: var(--font-sm);
+            opacity: 0.9;
+        }
+
+        .resource-hero-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-lg);
+        }
+
+        .hero-metric {
+            text-align: center;
+            padding: var(--space-md);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            backdrop-filter: blur(10px);
+        }
+
+        .hero-metric .label {
+            font-size: var(--font-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+            margin-bottom: var(--space-xs);
+        }
+
+        .hero-metric .value {
+            font-size: var(--font-3xl);
+            font-weight: 700;
+        }
+
+        .hero-metric .unit {
+            font-size: var(--font-sm);
+            opacity: 0.8;
+            font-weight: 400;
+        }
+
+        .hero-metric .trend {
+            font-size: var(--font-xs);
+            opacity: 0.8;
+            margin-top: var(--space-xs);
+        }
+
+        /* Alert states for hero metrics */
+        .hero-metric.alert .value {
+            color: #fca5a5;
+        }
+
+        .hero-metric.warning .value {
+            color: #fcd34d;
+        }
+
+        @media (max-width: 1024px) {
+            .resource-hero-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .resource-hero-grid {
+                grid-template-columns: 1fr;
+                gap: var(--space-md);
+            }
+
+            .hero-metric .value {
+                font-size: var(--font-2xl);
+            }
         }
 
         /* Summary Cards */
         .summary {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
         }
 
         .summary-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .summary-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
         }
 
         .summary-card .label {
-            font-size: 13px;
-            color: #718096;
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 8px;
+            margin-bottom: var(--space-xs);
         }
 
         .summary-card .value {
-            font-size: 32px;
+            font-size: var(--font-3xl);
             font-weight: 700;
-            color: #2d3748;
+            color: var(--text-primary);
         }
 
-        .summary-card.running .value { color: #10b981; }
-        .summary-card.agents .value { color: #3b82f6; }
-        .summary-card.idle .value { color: #9ca3af; }
+        .summary-card.running .value { color: var(--success); }
+        .summary-card.agents .value { color: var(--info); }
+        .summary-card.idle .value { color: var(--text-tertiary); }
+
+        /* Main Grid Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: var(--space-lg);
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Settings Card - Collapsible */
+        .settings-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: var(--space-md);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .settings-card.collapsed .settings-body {
+            display: none;
+        }
+
+        .settings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            cursor: pointer;
+            user-select: none;
+            background: white;
+            border-bottom: 1px solid transparent;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .settings-header:hover {
+            background: #f9fafb;
+        }
+
+        .settings-card.collapsed .settings-header {
+            border-bottom: none;
+        }
+
+        .settings-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .settings-icon {
+            transition: transform 0.2s ease;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .settings-card.collapsed .settings-icon {
+            transform: rotate(-90deg);
+        }
+
+        .settings-body {
+            padding: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* Sidebar Card */
+        .sidebar-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: var(--space-md);
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .sidebar-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
         /* Port Range Info */
         .port-info {
@@ -710,21 +993,21 @@ async def status_page():
             background: white;
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 24px;
+            padding: 16px;
+            margin-bottom: var(--space-md);
         }
 
         .service-controls-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
             border-bottom: 1px solid #e5e7eb;
         }
 
         .service-controls-header h3 {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 600;
             color: #1a202c;
             margin: 0;
@@ -753,34 +1036,40 @@ async def status_page():
         }
 
         .service-controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        @media (min-width: 1025px) {
+            .main-grid:not(.sidebar-collapsed) .service-controls-grid {
+                /* In sidebar - keep vertical stack */
+            }
         }
 
         .control-group {
             background: #f9fafb;
             border-radius: 8px;
-            padding: 16px;
+            padding: 12px;
         }
 
         .control-group h4 {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             color: #374151;
-            margin: 0 0 12px 0;
+            margin: 0 0 10px 0;
         }
 
         .button-group {
             display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
+            gap: 6px;
+            margin-bottom: 10px;
         }
 
         .btn {
-            padding: 10px 16px;
+            padding: 8px 12px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             cursor: pointer;
             border: none;
@@ -788,9 +1077,32 @@ async def status_page():
             flex: 1;
         }
 
+        /* Enhanced hover states - Phase 3 Polish */
+        .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        /* Focus states for accessibility - Phase 3 Polish */
+        .btn:focus-visible,
+        input:focus-visible,
+        .settings-header:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
         }
 
         .btn-primary {
@@ -912,11 +1224,15 @@ async def status_page():
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             overflow: hidden;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
         }
 
         .project-card:hover {
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .project-card.expanded {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
         }
 
         .project-header {
@@ -990,6 +1306,12 @@ async def status_page():
 
         .project-details.expanded {
             display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .details-grid {
@@ -1204,9 +1526,82 @@ async def status_page():
             color: #1a202c;
         }
 
+        .modal-close:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
         .modal-body {
             padding: 24px;
             overflow-y: auto;
+        }
+
+        /* Emergency Modal - Phase 3 Polish */
+        .emergency-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        .emergency-modal.active {
+            display: flex;
+        }
+
+        .emergency-modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 420px;
+            text-align: center;
+            animation: scaleIn 0.2s ease-out;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .emergency-modal-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .emergency-modal h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #991b1b;
+            margin: 0 0 12px 0;
+        }
+
+        .emergency-modal p {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 0 0 24px 0;
+            line-height: 1.6;
+        }
+
+        .emergency-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
 
         .spec-content {
@@ -1261,23 +1656,19 @@ async def status_page():
             margin-bottom: 16px;
         }
 
-        /* CUSTOM: Auth Settings Panel */
+        /* CUSTOM: Auth Settings Panel - Now as Collapsible Settings Card */
         .auth-settings {
+            /* Inherit styles from .settings-card */
             background: white;
             border-radius: 12px;
-            padding: 24px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 32px;
+            margin-bottom: var(--space-md);
+            overflow: hidden;
         }
 
         .auth-settings h2 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1a202c;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            /* No longer used - title is in .settings-header */
+            display: none;
         }
 
         .auth-form {
@@ -1406,194 +1797,230 @@ async def status_page():
 <body>
     <div class="container">
         <header>
-            <h1>🎯 AutoCoder Dashboard</h1>
-            <p class="subtitle">Manage all your AutoCoder projects and dev servers</p>
+            <div class="header-top">
+                <div>
+                    <h1>🎯 AutoCoder Dashboard</h1>
+                    <p class="subtitle">Manage all your AutoCoder projects and dev servers</p>
+                </div>
+                <div class="refresh-indicator">
+                    Live
+                </div>
+            </div>
         </header>
 
-        <!-- CUSTOM: Authentication Settings -->
-        <div class="auth-settings">
-            <h2>🔐 Authentication Settings</h2>
-            <div class="auth-form">
-                <div class="form-group">
-                    <label>Authentication Method <span id="current-auth-badge" class="auth-status info" style="display: none; margin-left: 12px; font-size: 11px; padding: 4px 8px;"></span></label>
-                    <div class="radio-group">
-                        <div class="radio-option">
-                            <input type="radio" id="auth-claude" name="auth-method" value="claude_login">
-                            <label for="auth-claude">Claude Login (claude login)</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" id="auth-api" name="auth-method" value="api_key">
-                            <label for="auth-api">API Key (Anthropic API)</label>
-                        </div>
-                    </div>
+        <!-- Resource Hero Section -->
+        <div class="resource-hero">
+            <div class="resource-hero-header">
+                <h2>⚡ System Resources</h2>
+                <p>Real-time monitoring of your AutoCoder service</p>
+            </div>
+            <div class="resource-hero-grid">
+                <div class="hero-metric" id="hero-cpu">
+                    <div class="label">CPU Usage</div>
+                    <div class="value" id="hero-cpu-value">--</div>
+                    <div class="unit">of <span id="hero-cpu-limit">--</span></div>
                 </div>
-
-                <div class="form-group" id="api-key-group" style="display: none;">
-                    <label for="api-key">Anthropic API Key</label>
-                    <input type="password" id="api-key" placeholder="sk-ant-api03-...">
-                    <div class="hint">Your API key will be saved to .env file. Get one from https://console.anthropic.com/</div>
+                <div class="hero-metric" id="hero-memory">
+                    <div class="label">Memory</div>
+                    <div class="value" id="hero-memory-value">--</div>
+                    <div class="unit">of <span id="hero-memory-limit">--</span></div>
                 </div>
-
-                <div class="auth-actions">
-                    <button class="btn btn-primary" id="save-auth">Save Authentication Settings</button>
-                    <span class="auth-status" id="auth-status" style="display: none;"></span>
+                <div class="hero-metric" id="hero-processes">
+                    <div class="label">Processes</div>
+                    <div class="value" id="hero-processes-value">--</div>
+                    <div class="unit">tasks</div>
+                </div>
+                <div class="hero-metric" id="hero-quota">
+                    <div class="label">API Quota</div>
+                    <div class="value" id="hero-quota-value">--</div>
+                    <div class="unit">remaining</div>
                 </div>
             </div>
         </div>
 
-        <!-- Summary Stats -->
-        <div class="summary" id="summary">
+        <!-- Summary Cards -->
+        <div class="summary">
             <div class="summary-card running">
-                <div class="label">Dev Servers Running</div>
-                <div class="value" id="running-count">0</div>
+                <div class="label">Running Projects</div>
+                <div class="value" id="summary-running">0</div>
             </div>
             <div class="summary-card agents">
                 <div class="label">Active Agents</div>
-                <div class="value" id="agents-count">0</div>
+                <div class="value" id="summary-agents">0</div>
             </div>
             <div class="summary-card idle">
                 <div class="label">Idle Projects</div>
-                <div class="value" id="idle-count">0</div>
+                <div class="value" id="summary-idle">0</div>
             </div>
             <div class="summary-card">
                 <div class="label">Total Projects</div>
-                <div class="value" id="total-count">0</div>
+                <div class="value" id="summary-total">0</div>
             </div>
         </div>
 
-        <!-- Resources Stats -->
-        <div class="summary" id="resources" style="margin-top: 24px;">
-            <div class="summary-card">
-                <div class="label">CPU Usage</div>
-                <div class="value" id="cpu-usage">-</div>
+        <!-- CUSTOM: Authentication Settings - Now Collapsible Settings Card -->
+        <div class="settings-card collapsed" id="settings-card">
+            <div class="settings-header" onclick="toggleSettings()" onkeydown="handleSettingsKeydown(event)" role="button" tabindex="0" aria-expanded="false" aria-controls="settings-body">
+                <div class="settings-title">
+                    🔐 Settings
+                </div>
+                <div class="settings-icon" aria-hidden="true">▼</div>
             </div>
-            <div class="summary-card">
-                <div class="label">Memory</div>
-                <div class="value" id="memory-usage">-</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">Processes</div>
-                <div class="value" id="process-count">-</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">API Quota</div>
-                <div class="value" id="quota-usage">-</div>
-            </div>
-        </div>
-
-        <!-- Resources Details -->
-        <div class="resources-section" id="resources-section" style="display: none;">
-            <div class="resources-header">
-                <h3>🖥️ System Resources</h3>
-                <div class="autocoder-status" id="autocoder-status"></div>
-            </div>
-            <div class="resources-grid" id="resources-grid"></div>
-        </div>
-
-        <!-- Service Controls -->
-        <div class="service-controls-section" style="margin-top: 24px;">
-            <div class="service-controls-header">
-                <h3>🔧 Service Controls</h3>
-                <div class="service-status-badge" id="service-status-badge">Checking...</div>
-            </div>
-
-            <div class="service-controls-grid">
-                <!-- Control Buttons -->
-                <div class="control-group">
-                    <h4>AutoCoder UI Service</h4>
-                    <div class="button-group">
-                        <button class="btn btn-primary" id="btn-start" onclick="startService()" disabled>
-                            ▶ Start
-                        </button>
-                        <button class="btn btn-danger" id="btn-stop" onclick="stopService()" disabled>
-                            ⏹ Stop
-                        </button>
-                        <button class="btn btn-secondary" id="btn-restart" onclick="restartService()" disabled>
-                            🔄 Restart
-                        </button>
+            <div class="settings-body" id="settings-body" role="region" aria-labelledby="settings-title">
+                <div class="auth-form">
+                    <div class="form-group">
+                        <label>Authentication Method <span id="current-auth-badge" class="auth-status info" style="display: none; margin-left: 12px; font-size: 11px; padding: 4px 8px;"></span></label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="auth-claude" name="auth-method" value="claude_login">
+                                <label for="auth-claude">Claude Login (claude login)</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="auth-api" name="auth-method" value="api_key">
+                                <label for="auth-api">API Key (Anthropic API)</label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="service-info" id="service-info">
-                        Last restart: <span id="service-restart-time">-</span>
+
+                    <div class="form-group" id="api-key-group" style="display: none;">
+                        <label for="api-key">Anthropic API Key</label>
+                        <input type="password" id="api-key" placeholder="sk-ant-api03-..." aria-label="Enter your Anthropic API key" autocomplete="off">
+                        <div class="hint">Your API key will be saved to .env file. Get one from https://console.anthropic.com/</div>
+                    </div>
+
+                    <div class="auth-actions">
+                        <button class="btn btn-primary" id="save-auth" aria-label="Save authentication settings">Save Authentication Settings</button>
+                        <span class="auth-status" id="auth-status" style="display: none;" role="status" aria-live="polite"></span>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Resource Limits -->
-                <div class="control-group">
-                    <h4>Resource Limits</h4>
+        <!-- Main Grid Layout -->
+        <div class="main-grid">
+            <!-- Left Column: Projects -->
+            <div class="main-content">
+                <!-- Port Range Info -->
+                <div class="port-info">
+                    <strong>📡 Port Convention:</strong> Dev servers auto-assigned to <strong>4000-4099</strong> range (SSH tunnel friendly).
+                    Local development uses 3000-3999.
+                </div>
 
-                    <!-- Display Mode -->
-                    <div class="limits-display" id="limits-display">
-                        <div class="limit-item">
-                            <span class="limit-label">CPU:</span>
-                            <span class="limit-value" id="limit-cpu">-</span>
-                        </div>
-                        <div class="limit-item">
-                            <span class="limit-label">Memory:</span>
-                            <span class="limit-value" id="limit-memory">-</span>
-                        </div>
-                        <div class="limit-item">
-                            <span class="limit-label">Processes:</span>
-                            <span class="limit-value" id="limit-processes">-</span>
-                        </div>
+                <!-- Projects -->
+                <div class="projects" id="projects"></div>
+            </div>
+
+            <!-- Right Column: Sidebar -->
+            <div class="sidebar">
+                <!-- Service Controls -->
+                <div class="service-controls-section">
+                    <div class="service-controls-header">
+                        <h3>🔧 Service Controls</h3>
+                        <div class="service-status-badge" id="service-status-badge">Checking...</div>
                     </div>
 
-                    <!-- Edit Mode (hidden by default) -->
-                    <div class="limits-edit" id="limits-edit" style="display: none;">
-                        <div class="limit-item">
-                            <span class="limit-label">CPU:</span>
-                            <input type="number" id="edit-cpu" min="50" max="800" step="50" class="limit-input">
-                            <span class="limit-unit">cores</span>
+                    <div class="service-controls-grid">
+                        <!-- Control Buttons -->
+                        <div class="control-group">
+                            <h4>AutoCoder UI Service</h4>
+                            <div class="button-group">
+                                <button class="btn btn-primary" id="btn-start" onclick="startService()" disabled aria-label="Start AutoCoder UI service">
+                                    ▶ Start
+                                </button>
+                                <button class="btn btn-danger" id="btn-stop" onclick="stopService()" disabled aria-label="Stop AutoCoder UI service">
+                                    ⏹ Stop
+                                </button>
+                                <button class="btn btn-secondary" id="btn-restart" onclick="restartService()" disabled aria-label="Restart AutoCoder UI service">
+                                    🔄 Restart
+                                </button>
+                            </div>
+                            <div class="service-info" id="service-info">
+                                Last restart: <span id="service-restart-time">-</span>
+                            </div>
                         </div>
-                        <div class="limit-item">
-                            <span class="limit-label">Memory:</span>
-                            <input type="number" id="edit-memory" min="4" max="128" step="4" class="limit-input">
-                            <span class="limit-unit">GB</span>
-                        </div>
-                        <div class="limit-item">
-                            <span class="limit-label">Processes:</span>
-                            <input type="number" id="edit-processes" min="50" max="500" step="50" class="limit-input">
-                            <span class="limit-unit">max</span>
-                        </div>
-                        <div class="button-group" style="margin-top: 12px;">
-                            <button class="btn btn-success btn-small" onclick="applyLimits()">
-                                ✅ Apply
+
+                        <!-- Resource Limits -->
+                        <div class="control-group">
+                            <h4>Resource Limits</h4>
+
+                            <!-- Display Mode -->
+                            <div class="limits-display" id="limits-display">
+                                <div class="limit-item">
+                                    <span class="limit-label">CPU:</span>
+                                    <span class="limit-value" id="limit-cpu">-</span>
+                                </div>
+                                <div class="limit-item">
+                                    <span class="limit-label">Memory:</span>
+                                    <span class="limit-value" id="limit-memory">-</span>
+                                </div>
+                                <div class="limit-item">
+                                    <span class="limit-label">Processes:</span>
+                                    <span class="limit-value" id="limit-processes">-</span>
+                                </div>
+                            </div>
+
+                            <!-- Edit Mode (hidden by default) -->
+                            <div class="limits-edit" id="limits-edit" style="display: none;">
+                                <div class="limit-item">
+                                    <span class="limit-label">CPU:</span>
+                                    <input type="number" id="edit-cpu" min="50" max="800" step="50" class="limit-input">
+                                    <span class="limit-unit">cores</span>
+                                </div>
+                                <div class="limit-item">
+                                    <span class="limit-label">Memory:</span>
+                                    <input type="number" id="edit-memory" min="4" max="128" step="4" class="limit-input">
+                                    <span class="limit-unit">GB</span>
+                                </div>
+                                <div class="limit-item">
+                                    <span class="limit-label">Processes:</span>
+                                    <input type="number" id="edit-processes" min="50" max="500" step="50" class="limit-input">
+                                    <span class="limit-unit">max</span>
+                                </div>
+                                <div class="button-group" style="margin-top: 12px;">
+                                    <button class="btn btn-success btn-small" onclick="applyLimits()">
+                                        ✅ Apply
+                                    </button>
+                                    <button class="btn btn-secondary btn-small" onclick="cancelEditLimits()">
+                                        ✖ Cancel
+                                    </button>
+                                </div>
+                                <div class="service-info" style="margin-top: 8px;">
+                                    ⚠️ Service will restart to apply changes
+                                </div>
+                            </div>
+
+                            <!-- Display Mode Button -->
+                            <button class="btn btn-secondary btn-small" id="btn-edit-limits" onclick="startEditLimits()">
+                                ⚙️ Adjust Limits
                             </button>
-                            <button class="btn btn-secondary btn-small" onclick="cancelEditLimits()">
-                                ✖ Cancel
+                        </div>
+
+                        <!-- Emergency Stop -->
+                        <div class="control-group emergency-group">
+                            <h4>🚨 Emergency</h4>
+                            <p class="emergency-warning">
+                                Immediately kill ALL processes, agents, and browsers
+                            </p>
+                            <button class="btn btn-emergency" onclick="confirmEmergencyStop()" aria-label="Trigger emergency stop - kill all processes">
+                                EMERGENCY STOP
                             </button>
                         </div>
-                        <div class="service-info" style="margin-top: 8px;">
-                            ⚠️ Service will restart to apply changes
+
+                        <!-- Cleanup Orphans -->
+                        <div class="control-group">
+                            <h4>🧹 Cleanup</h4>
+                            <p class="help-text">
+                                Remove orphaned Claude agents that consume task slots
+                            </p>
+                            <button class="btn btn-secondary btn-small" onclick="cleanupOrphans()" aria-label="Cleanup orphaned agent processes">
+                                Cleanup Orphaned Agents
+                            </button>
+                            <span id="orphan-status" style="margin-left: 10px; font-size: 12px;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-
-                    <!-- Display Mode Button -->
-                    <button class="btn btn-secondary btn-small" id="btn-edit-limits" onclick="startEditLimits()">
-                        ⚙️ Adjust Limits
-                    </button>
-                </div>
-
-                <!-- Emergency Stop -->
-                <div class="control-group emergency-group">
-                    <h4>🚨 Emergency</h4>
-                    <p class="emergency-warning">
-                        Immediately kill ALL processes, agents, and browsers
-                    </p>
-                    <button class="btn btn-emergency" onclick="confirmEmergencyStop()">
-                        EMERGENCY STOP
-                    </button>
                 </div>
             </div>
         </div>
-
-        <!-- Port Range Info -->
-        <div class="port-info">
-            <strong>📡 Port Convention:</strong> Dev servers auto-assigned to <strong>4000-4099</strong> range (SSH tunnel friendly).
-            Local development uses 3000-3999.
-        </div>
-
-        <!-- Projects -->
-        <div class="projects" id="projects"></div>
 
         <footer>
             Auto-refreshes every 5 seconds • Last updated: <span id="last-update">Never</span>
@@ -1605,7 +2032,7 @@ async def status_page():
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle">Project Details</h2>
-                <button class="modal-close" onclick="closeSpecModal()">&times;</button>
+                <button class="modal-close" onclick="closeSpecModal()" aria-label="Close modal">&times;</button>
             </div>
             <div class="modal-body" id="modalBody">
                 <div class="loading">Loading...</div>
@@ -1613,8 +2040,38 @@ async def status_page():
         </div>
     </div>
 
+    <!-- Emergency Confirmation Modal - Phase 3 Polish -->
+    <div class="emergency-modal" id="emergency-modal" role="dialog" aria-modal="true" aria-labelledby="emergency-title" aria-describedby="emergency-description">
+        <div class="emergency-modal-content">
+            <div class="emergency-modal-icon" role="img" aria-label="Emergency warning">🚨</div>
+            <h2 id="emergency-title">Emergency Stop</h2>
+            <p id="emergency-description">This will immediately kill ALL AutoCoder processes. All work will be lost.</p>
+            <div class="emergency-actions">
+                <button class="btn btn-secondary" onclick="closeEmergencyModal()" aria-label="Cancel emergency stop">Cancel</button>
+                <button class="btn btn-emergency" onclick="executeEmergencyStop()" aria-label="Confirm and kill all processes">KILL ALL</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let lastDataStr = null;
+
+        // Toggle Settings Card (collapsible)
+        function toggleSettings() {
+            const settingsCard = document.getElementById('settings-card');
+            const isCollapsed = settingsCard.classList.toggle('collapsed');
+            // Update ARIA attribute
+            const header = settingsCard.querySelector('.settings-header');
+            header.setAttribute('aria-expanded', !isCollapsed);
+        }
+
+        // Keyboard handler for settings header - Phase 3 Accessibility
+        function handleSettingsKeydown(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleSettings();
+            }
+        }
 
         // CUSTOM: Authentication Settings
         // Load current auth settings on page load
@@ -1781,7 +2238,7 @@ async def status_page():
             const hasUrl = server.status === 'running' && server.url;
 
             return `
-                <div class="project-card" data-project="${server.project}" onclick="toggleExpand(this)">
+                <div class="project-card" data-project="${server.project}" onclick="toggleExpand(this)" onkeydown="handleProjectKeydown(event, this)" role="button" tabindex="0" aria-expanded="false">
                     <div class="project-header">
                         <div class="project-title-row">
                             <div class="project-name">${server.project}</div>
@@ -1792,7 +2249,7 @@ async def status_page():
                                 ${server.agent_running
                                     ? '<span class="badge agent-active">🤖 Agent</span>'
                                     : ''}
-                                <span class="expand-icon">v</span>
+                                <span class="expand-icon" aria-hidden="true">v</span>
                             </div>
                         </div>
                         <div class="project-meta">
@@ -1872,9 +2329,19 @@ async def status_page():
 
         // Toggle card expansion
         function toggleExpand(card) {
-            card.classList.toggle('expanded');
+            const isExpanded = card.classList.toggle('expanded');
             const details = card.querySelector('.project-details');
             details.classList.toggle('expanded');
+            // Update ARIA attribute - Phase 3 Accessibility
+            card.setAttribute('aria-expanded', isExpanded);
+        }
+
+        // Keyboard handler for project cards - Phase 3 Accessibility
+        function handleProjectKeydown(event, card) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleExpand(card);
+            }
         }
 
         // Actions
@@ -2037,6 +2504,26 @@ async def status_page():
             }
         });
 
+        // Phase 3 Polish: Emergency modal keyboard and click handlers
+        document.getElementById('emergency-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEmergencyModal();
+            }
+        });
+
+        // Escape key closes both modals - Phase 3 Accessibility
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const emergencyModal = document.getElementById('emergency-modal');
+                const specModal = document.getElementById('specModal');
+                if (emergencyModal.classList.contains('active')) {
+                    closeEmergencyModal();
+                } else if (specModal.classList.contains('active')) {
+                    closeSpecModal();
+                }
+            }
+        });
+
         function viewLogs(project) {
             alert(`View logs for ${project}\n\nRun: ./remote-start.sh logs agent-${project.replace('/', '-')}`);
         }
@@ -2142,11 +2629,11 @@ async def status_page():
                 if (dataStr === lastDataStr) return;
                 lastDataStr = dataStr;
 
-                // Update summary
-                document.getElementById('running-count').textContent = data.summary.running;
-                document.getElementById('agents-count').textContent = data.summary.agents;
-                document.getElementById('idle-count').textContent = data.summary.idle;
-                document.getElementById('total-count').textContent = data.count;
+                // Update summary (NEW IDs)
+                document.getElementById('summary-running').textContent = data.summary.running;
+                document.getElementById('summary-agents').textContent = data.summary.agents;
+                document.getElementById('summary-idle').textContent = data.summary.idle;
+                document.getElementById('summary-total').textContent = data.count;
 
                 // Update projects
                 const projectsContainer = document.getElementById('projects');
@@ -2181,100 +2668,56 @@ async def status_page():
                 const resp = await fetch('/api/status/resources');
                 const data = await resp.json();
 
-                // Update summary cards
-                document.getElementById('cpu-usage').textContent = data.system.cpu_percent + '%';
-                document.getElementById('memory-usage').textContent =
-                    data.system.memory_used_gb + 'GB';
-                document.getElementById('process-count').textContent = data.system.process_count;
+                // Update resource hero section (NEW)
+                const cpuValue = document.getElementById('hero-cpu-value');
+                const memValue = document.getElementById('hero-memory-value');
+                const procValue = document.getElementById('hero-processes-value');
+                const quotaValue = document.getElementById('hero-quota-value');
 
-                if (data.quota && !data.quota.error) {
-                    document.getElementById('quota-usage').textContent =
-                        data.quota.remaining + ' left';
-                } else {
-                    document.getElementById('quota-usage').textContent = 'N/A';
+                if (cpuValue) {
+                    cpuValue.textContent = data.system.cpu_percent + '%';
+                    document.getElementById('hero-cpu-limit').textContent = '600%';
+                }
+                if (memValue) {
+                    memValue.textContent = data.system.memory_used_gb + 'GB';
+                    document.getElementById('hero-memory-limit').textContent = '32GB';
+                }
+                if (procValue) {
+                    procValue.textContent = data.system.process_count;
+                    const procLimit = document.getElementById('hero-processes-limit');
+                    if (procLimit) procLimit.textContent = '250';
                 }
 
-                // Update resources section
-                const resourcesSection = document.getElementById('resources-section');
-                const autocoderStatus = document.getElementById('autocoder-status');
-                const resourcesGrid = document.getElementById('resources-grid');
+                // Alert states
+                const cpuMetric = document.getElementById('hero-cpu');
+                const memMetric = document.getElementById('hero-memory');
+                const procMetric = document.getElementById('hero-processes');
 
-                if (data.autocoder.in_cgroup) {
-                    resourcesSection.style.display = 'block';
-                    autocoderStatus.textContent = '✅ Limits Enforced';
-                    autocoderStatus.className = 'autocoder-status enforced';
+                if (cpuMetric) {
+                    cpuMetric.classList.remove('alert', 'warning');
+                    if (data.system.cpu_percent > 85) cpuMetric.classList.add('alert');
+                    else if (data.system.cpu_percent > 60) cpuMetric.classList.add('warning');
+                }
 
-                    // Build resources grid
-                    let html = `
-                        <div class="resource-group">
-                            <h4>🖥️ System</h4>
-                            <div class="resource-item">
-                                <span class="resource-label">CPU Usage</span>
-                                <span class="resource-value">${data.system.cpu_percent}%</span>
-                            </div>
-                            <div class="resource-item">
-                                <span class="resource-label">Load Average</span>
-                                <span class="resource-value">${data.system.load_1m}, ${data.system.load_5m}, ${data.system.load_15m}</span>
-                            </div>
-                            <div class="resource-item">
-                                <span class="resource-label">Memory</span>
-                                <span class="resource-value">${data.system.memory_used_gb}GB / ${data.system.memory_total_gb}GB (${data.system.memory_percent}%)</span>
-                            </div>
-                            <div class="resource-item">
-                                <span class="resource-label">Processes</span>
-                                <span class="resource-value">${data.system.process_count}</span>
-                            </div>
-                        </div>
+                if (memMetric) {
+                    memMetric.classList.remove('alert', 'warning');
+                    if (data.system.memory_used_gb > 27) memMetric.classList.add('alert');
+                    else if (data.system.memory_used_gb > 20) memMetric.classList.add('warning');
+                }
 
-                        <div class="resource-group">
-                            <h4>🔒 AutoCoder Cgroup</h4>
-                            <div class="resource-item">
-                                <span class="resource-label">Processes</span>
-                                <span class="resource-value">${data.autocoder.process_count} / ${data.autocoder.process_limit}</span>
-                            </div>
-                            <div class="resource-item">
-                                <span class="resource-label">CPU</span>
-                                <span class="resource-value">${data.autocoder.cpu_percent}% / ${data.autocoder.cpu_limit}% (2 cores)</span>
-                            </div>
-                            <div class="resource-item">
-                                <span class="resource-label">Memory</span>
-                                <span class="resource-value">${data.autocoder.memory_gb}GB / ${data.autocoder.memory_limit_gb}GB</span>
-                            </div>
-                        </div>
-                    `;
+                if (procMetric) {
+                    procMetric.classList.remove('alert', 'warning');
+                    if (data.system.process_count > 230) procMetric.classList.add('alert');
+                    else if (data.system.process_count > 180) procMetric.classList.add('warning');
+                }
 
-                    // Add process list if processes exist
-                    if (data.autocoder.processes && data.autocoder.processes.length > 0) {
-                        html += `
-                            <div class="resource-group" style="grid-column: 1 / -1;">
-                                <h4>📋 AutoCoder Processes</h4>
-                                <div class="process-list">
-                                    ${data.autocoder.processes.map(p => `
-                                        <div class="process-item">
-                                            <span class="process-icon">${p.icon}</span>
-                                            <div class="process-info">
-                                                <span class="process-type">${p.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                                                <span class="process-stats">PID ${p.pid} • ${p.cpu_percent}% CPU • ${p.memory_mb}MB RAM</span>
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
+                // Quota
+                if (quotaValue) {
+                    if (data.quota && !data.quota.error) {
+                        quotaValue.textContent = data.quota.remaining;
+                    } else {
+                        quotaValue.textContent = 'N/A';
                     }
-
-                    resourcesGrid.innerHTML = html;
-                } else {
-                    resourcesSection.style.display = 'block';
-                    autocoderStatus.textContent = '⚠️ Limits Not Enforced';
-                    autocoderStatus.className = 'autocoder-status not-enforced';
-                    resourcesGrid.innerHTML = `
-                        <div class="resource-group" style="grid-column: 1 / -1;">
-                            <div class="resource-item">
-                                <span class="resource-value" style="color: #991b1b;">${data.autocoder.warning}</span>
-                            </div>
-                        </div>
-                    `;
                 }
 
             } catch (e) {
@@ -2497,18 +2940,19 @@ async def status_page():
         }
 
         function confirmEmergencyStop() {
-            const confirmed = prompt(
-                '⚠️ EMERGENCY STOP ⚠️\\n' +
-                'This will IMMEDIATELY kill ALL AutoCoder processes!\\n' +
-                'All work will be LOST!\\n\\n' +
-                'Type "KILL" to confirm:'
-            );
+            // Phase 3 Polish: Show modal instead of prompt
+            document.getElementById('emergency-modal').classList.add('active');
+            // Focus on cancel button for accessibility
+            document.querySelector('#emergency-modal .btn-secondary').focus();
+        }
 
-            if (confirmed === 'KILL') {
-                emergencyStop();
-            } else if (confirmed !== null) {
-                alert('Cancelled - you must type "KILL" to confirm');
-            }
+        function closeEmergencyModal() {
+            document.getElementById('emergency-modal').classList.remove('active');
+        }
+
+        async function executeEmergencyStop() {
+            closeEmergencyModal();
+            await emergencyStop();
         }
 
         async function emergencyStop() {
@@ -2528,6 +2972,41 @@ async def status_page():
                 setTimeout(refreshServiceStatus, 2000);
 
             } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function cleanupOrphans() {
+            const statusEl = document.getElementById('orphan-status');
+            statusEl.textContent = 'Cleaning...';
+
+            try {
+                const resp = await fetch('/api/emergency/cleanup-orphans', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    statusEl.textContent = `✅ ${data.killed} killed`;
+                    setTimeout(() => statusEl.textContent = '', 3000);
+
+                    if (data.killed > 0) {
+                        alert(
+                            '🧹 Cleanup Complete\\n' +
+                            `Scanned: ${data.scanned} Claude processes\\n` +
+                            `Killed: ${data.killed} orphaned agents\\n\\n` +
+                            'Task slots freed!'
+                        );
+                    } else {
+                        alert('✅ No orphaned agents found - system clean!');
+                    }
+
+                    // Refresh status after cleanup
+                    setTimeout(refreshServiceStatus, 1000);
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    alert('❌ Failed to cleanup orphans: ' + data.message);
+                }
+            } catch (e) {
+                statusEl.textContent = '❌ Error';
                 alert('Error: ' + e.message);
             }
         }

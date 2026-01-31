@@ -10,8 +10,11 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 
 // Types for conversation history
 interface ConversationMessage {
@@ -54,6 +57,58 @@ const AGENT_MASCOTS: Record<string, string> = {
   Buzz: '🐝'
 }
 
+// Error Boundary for catching rendering errors
+interface ErrorBoundaryState {
+  hasError: boolean
+  error?: Error
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+  fallback?: ReactNode
+}
+
+class ChatTabErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ChatTab error caught by boundary:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="flex items-center justify-center h-full bg-red-50 dark:bg-red-900/20">
+          <div className="text-center p-6">
+            <AlertTriangle className="mx-auto mb-4 text-red-500" size={48} />
+            <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">
+              Something went wrong
+            </h3>
+            <p className="text-sm text-red-600 dark:text-red-300 mb-4">
+              The chat interface encountered an error
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false })}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 interface ChatTabProps {
   selectedProject: string | null
 }
@@ -61,6 +116,7 @@ interface ChatTabProps {
 export function ChatTab({ selectedProject }: ChatTabProps) {
   const [input, setInput] = useState('')
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null)
+  const [isTransitioning, setIsTransitioning] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -69,9 +125,16 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
     queryKey: ['conversations', selectedProject],
     queryFn: async () => {
       if (!selectedProject) return []
-      const res = await fetch(`/api/assistant/conversations/${encodeURIComponent(selectedProject)}`)
-      if (!res.ok) return []
-      return res.json()
+      try {
+        const res = await fetch(`/api/assistant/conversations/${encodeURIComponent(selectedProject)}`)
+        if (!res.ok) return []
+        const data = await res.json()
+        // Ensure we always return an array
+        return Array.isArray(data) ? data : []
+      } catch (error) {
+        console.error('Failed to fetch conversations:', error)
+        return []
+      }
     },
     enabled: !!selectedProject,
     refetchInterval: 5000,
@@ -81,27 +144,70 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ConversationMessage[]>({
     queryKey: ['conversationMessages', selectedConversationId],
     queryFn: async () => {
-      if (!selectedConversationId) return []
-      const res = await fetch(`/api/assistant/conversations/${encodeURIComponent(selectedProject!)}/${selectedConversationId}`)
-      if (!res.ok) return []
-      return res.json()
+      if (!selectedConversationId || !selectedProject) return []
+      try {
+        const res = await fetch(`/api/assistant/conversations/${encodeURIComponent(selectedProject)}/${selectedConversationId}`)
+        // Handle 404 - conversation doesn't exist, clear selection
+        if (res.status === 404) {
+          console.warn(`Conversation ${selectedConversationId} not found, clearing selection`)
+          setSelectedConversationId(null)
+          return []
+        }
+        if (!res.ok) return []
+        const data = await res.json()
+        // Ensure we always return an array
+        return Array.isArray(data) ? data : []
+      } catch (error) {
+        console.error('Failed to fetch messages:', error)
+        return []
+      }
     },
-    enabled: !!selectedConversationId,
+    enabled: !!selectedConversationId && !!selectedProject,
     refetchInterval: 2000,
   })
 
   // Fetch agent status
-  const { data: agentStatus } = useQuery<AgentStatus>({
+  const { data: agentStatus = null } = useQuery<AgentStatus | null>({
     queryKey: ['agentStatus', selectedProject],
     queryFn: async () => {
       if (!selectedProject) return null
-      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProject)}/agent/status`)
-      if (!res.ok) return null
-      return res.json()
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(selectedProject)}/agent/status`)
+        if (!res.ok) return null
+        const data = await res.json()
+        // Validate response structure
+        return data && typeof data === 'object' ? data : null
+      } catch (error) {
+        console.error('Failed to fetch agent status:', error)
+        return null
+      }
     },
     enabled: !!selectedProject,
     refetchInterval: 2000,
   })
+
+  // Reset state when project/mode changes
+  useEffect(() => {
+    // Show transition animation
+    setIsTransitioning(true)
+
+    // Reset all conversation state when switching projects
+    setSelectedConversationId(null)
+    setInput('')
+
+    // Clear query cache for conversations and messages
+    queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    queryClient.invalidateQueries({ queryKey: ['conversationMessages'] })
+
+    console.log(`[ChatTab] State reset for project: ${selectedProject}`)
+
+    // Hide transition animation after a brief delay
+    const timer = setTimeout(() => {
+      setIsTransitioning(false)
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [selectedProject, queryClient])
 
   // WebSocket for real-time updates
   useEffect(() => {
@@ -259,20 +365,23 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
 
   if (!selectedProject) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <div className="text-center">
-          <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
-          <p className="text-lg mb-2">No project selected</p>
-          <p className="text-sm">Select a project to view conversations</p>
+      <ChatTabErrorBoundary>
+        <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="text-center">
+            <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+            <p className="text-lg mb-2">No project selected</p>
+            <p className="text-sm">Select a project to view conversations</p>
+          </div>
         </div>
-      </div>
+      </ChatTabErrorBoundary>
     )
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
-      {/* Header with Agent Control */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+    <ChatTabErrorBoundary>
+      <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+        {/* Header with Agent Control */}
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -296,7 +405,7 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
                   {agentStatus.status}
                 </span>
-                {agentStatus.agents && agentStatus.agents.length > 0 && (
+                {agentStatus?.agents && agentStatus.agents.length > 0 && (
                   <span className="text-xs text-gray-500">
                     ({agentStatus.agents.length} agent{agentStatus.agents.length > 1 ? 's' : ''})
                   </span>
@@ -364,7 +473,7 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
             </div>
 
             {/* Active Agents Display */}
-            {agentStatus.agents && agentStatus.agents.length > 0 && (
+            {agentStatus?.agents && agentStatus.agents.length > 0 && (
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {agentStatus.agents.map((agent) => (
                   <div key={`${agent.index}-${agent.type}`} className="flex items-center gap-3 text-xs bg-white dark:bg-gray-800 rounded px-2 py-1.5">
@@ -388,21 +497,33 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mode Switch Transition Overlay */}
+        {isTransitioning && (
+          <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-center animate-pulse">
+            <div className="text-center">
+              <RefreshCw className="animate-spin text-purple-500 mx-auto mb-3" size={32} />
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Switching mode...
+              </p>
+            </div>
+          </div>
+        )}
         {/* Conversations Sidebar */}
         <div className="w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto">
           <div className="p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
               <MessageSquare size={16} />
-              Conversations ({conversations.length})
+              Conversations ({conversations?.length ?? 0})
             </h3>
           </div>
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {conversationsLoading ? (
               <div className="p-4 text-center">
                 <Loader2 className="animate-spin mx-auto text-gray-400" size={24} />
+                <p className="text-xs text-gray-500 mt-2">Loading conversations...</p>
               </div>
-            ) : conversations.length === 0 ? (
+            ) : !conversations || conversations.length === 0 ? (
               <div className="p-4 text-center text-sm text-gray-500">
                 No conversations yet
               </div>
@@ -439,10 +560,11 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
             {messagesLoading && (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="animate-spin text-gray-400" size={32} />
+                <p className="text-xs text-gray-500 mt-2 ml-2">Loading messages...</p>
               </div>
             )}
 
-            {!messagesLoading && messages.length === 0 && (
+            {!messagesLoading && (!messages || messages.length === 0) && (
               <div className="text-center text-gray-500 py-8">
                 <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
                 <p className="text-lg mb-2">No messages in this conversation</p>
@@ -450,7 +572,7 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
               </div>
             )}
 
-            {!messagesLoading && messages.map((msg) => (
+            {!messagesLoading && messages && messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -522,5 +644,8 @@ export function ChatTab({ selectedProject }: ChatTabProps) {
         </div>
       </div>
     </div>
+    </ChatTabErrorBoundary>
   )
 }
+
+export { ChatTabErrorBoundary }
