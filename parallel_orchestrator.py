@@ -153,6 +153,7 @@ class ParallelOrchestrator:
         yolo_mode: bool = False,
         testing_agent_ratio: int = 1,
         testing_batch_size: int = DEFAULT_TESTING_BATCH_SIZE,
+        batch_size: int = 3,
         on_output: Callable[[int, str], None] | None = None,
         on_status: Callable[[int, str], None] | None = None,
     ):
@@ -177,6 +178,7 @@ class ParallelOrchestrator:
         self.yolo_mode = yolo_mode
         self.testing_agent_ratio = min(max(testing_agent_ratio, 0), 3)  # Clamp 0-3
         self.testing_batch_size = min(max(testing_batch_size, 1), 5)  # Clamp 1-5
+        self.batch_size = min(max(batch_size, 1), 3)  # Clamp 1-3
         self.on_output = on_output
         self.on_status = on_status
 
@@ -199,6 +201,11 @@ class ParallelOrchestrator:
         # Track recently tested feature IDs to avoid redundant re-testing.
         # Cleared when all passing features have been covered at least once.
         self._recently_tested: set[int] = set()
+
+        # Batch tracking: primary feature_id -> all feature IDs in batch
+        self._batch_features: dict[int, list[int]] = {}
+        # Reverse mapping: any feature_id -> primary feature_id
+        self._feature_to_primary: dict[int, int] = {}
 
         # Shutdown flag for async-safe signal handling
         # Signal handlers only set this flag; cleanup happens in the main loop
@@ -352,6 +359,104 @@ class ParallelOrchestrator:
 
         return selected
 
+    def build_feature_batches(
+        self,
+        ready: list[dict],
+        all_features: list[dict],
+        scheduling_scores: dict[int, float],
+    ) -> list[list[dict]]:
+        """Build dependency-aware feature batches for coding agents.
+
+        Each batch contains up to `batch_size` features. The algorithm:
+        1. Start with a ready feature (sorted by scheduling score)
+        2. Chain extension: find dependents whose deps are satisfied if earlier batch features pass
+        3. Same-category fill: fill remaining slots with ready features from the same category
+
+        Args:
+            ready: Ready features (sorted by scheduling score)
+            all_features: All features for dependency checking
+            scheduling_scores: Pre-computed scheduling scores
+
+        Returns:
+            List of batches, each batch is a list of feature dicts
+        """
+        if self.batch_size <= 1:
+            # No batching - return each feature as a single-item batch
+            return [[f] for f in ready]
+
+        # Build children adjacency: parent_id -> [child_ids]
+        children: dict[int, list[int]] = {f["id"]: [] for f in all_features}
+        feature_map: dict[int, dict] = {f["id"]: f for f in all_features}
+        for f in all_features:
+            for dep_id in (f.get("dependencies") or []):
+                if dep_id in children:
+                    children[dep_id].append(f["id"])
+
+        # Pre-compute passing IDs
+        passing_ids = {f["id"] for f in all_features if f.get("passes")}
+
+        used_ids: set[int] = set()  # Features already assigned to a batch
+        batches: list[list[dict]] = []
+
+        for feature in ready:
+            if feature["id"] in used_ids:
+                continue
+
+            batch = [feature]
+            used_ids.add(feature["id"])
+            # Simulate passing set = real passing + batch features
+            simulated_passing = passing_ids | {feature["id"]}
+
+            # Phase 1: Chain extension - find dependents whose deps are met
+            for _ in range(self.batch_size - 1):
+                best_candidate = None
+                best_score = -1.0
+                # Check children of all features currently in the batch
+                candidate_ids: set[int] = set()
+                for bf in batch:
+                    for child_id in children.get(bf["id"], []):
+                        if child_id not in used_ids and child_id not in simulated_passing:
+                            candidate_ids.add(child_id)
+
+                for cid in candidate_ids:
+                    cf = feature_map.get(cid)
+                    if not cf or cf.get("passes") or cf.get("in_progress"):
+                        continue
+                    # Check if ALL deps are satisfied by simulated passing set
+                    deps = cf.get("dependencies") or []
+                    if all(d in simulated_passing for d in deps):
+                        score = scheduling_scores.get(cid, 0)
+                        if score > best_score:
+                            best_score = score
+                            best_candidate = cf
+
+                if best_candidate:
+                    batch.append(best_candidate)
+                    used_ids.add(best_candidate["id"])
+                    simulated_passing.add(best_candidate["id"])
+                else:
+                    break
+
+            # Phase 2: Same-category fill
+            if len(batch) < self.batch_size:
+                category = feature.get("category", "")
+                for rf in ready:
+                    if len(batch) >= self.batch_size:
+                        break
+                    if rf["id"] in used_ids:
+                        continue
+                    if rf.get("category", "") == category:
+                        batch.append(rf)
+                        used_ids.add(rf["id"])
+
+            batches.append(batch)
+
+        debug_log.log("BATCH", f"Built {len(batches)} batches from {len(ready)} ready features",
+            batch_sizes=[len(b) for b in batches],
+            batch_ids=[[f['id'] for f in b] for b in batches[:5]])
+
+        return batches
+
     def get_resumable_features(
         self,
         feature_dicts: list[dict] | None = None,
@@ -376,9 +481,11 @@ class ParallelOrchestrator:
             finally:
                 session.close()
 
-        # Snapshot running IDs once to avoid acquiring lock per feature
+        # Snapshot running IDs once (include all batch feature IDs)
         with self._lock:
             running_ids = set(self.running_coding_agents.keys())
+            for batch_ids in self._batch_features.values():
+                running_ids.update(batch_ids)
 
         resumable = []
         for fd in feature_dicts:
@@ -421,9 +528,11 @@ class ParallelOrchestrator:
         # Pre-compute passing_ids once to avoid O(n^2) in the loop
         passing_ids = {fd["id"] for fd in feature_dicts if fd.get("passes")}
 
-        # Snapshot running IDs once to avoid acquiring lock per feature
+        # Snapshot running IDs once (include all batch feature IDs)
         with self._lock:
             running_ids = set(self.running_coding_agents.keys())
+            for batch_ids in self._batch_features.values():
+                running_ids.update(batch_ids)
 
         ready = []
         skipped_reasons = {"passes": 0, "in_progress": 0, "running": 0, "failed": 0, "deps": 0}
@@ -635,6 +744,75 @@ class ParallelOrchestrator:
 
         return True, f"Started feature {feature_id}"
 
+    def start_feature_batch(self, feature_ids: list[int], resume: bool = False) -> tuple[bool, str]:
+        """Start a coding agent for a batch of features.
+
+        Args:
+            feature_ids: List of feature IDs to implement in batch
+            resume: If True, resume features already in_progress
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if not feature_ids:
+            return False, "No features to start"
+
+        # Single feature falls back to start_feature
+        if len(feature_ids) == 1:
+            return self.start_feature(feature_ids[0], resume=resume)
+
+        with self._lock:
+            # Check if any feature in batch is already running
+            for fid in feature_ids:
+                if fid in self.running_coding_agents or fid in self._feature_to_primary:
+                    return False, f"Feature {fid} already running"
+            if len(self.running_coding_agents) >= self.max_concurrency:
+                return False, "At max concurrency"
+            total_agents = len(self.running_coding_agents) + len(self.running_testing_agents)
+            if total_agents >= MAX_TOTAL_AGENTS:
+                return False, f"At max total agents ({total_agents}/{MAX_TOTAL_AGENTS})"
+
+        # Mark all features as in_progress in a single transaction
+        session = self.get_session()
+        try:
+            features_to_mark = []
+            for fid in feature_ids:
+                feature = session.query(Feature).filter(Feature.id == fid).first()
+                if not feature:
+                    return False, f"Feature {fid} not found"
+                if feature.passes:
+                    return False, f"Feature {fid} already complete"
+                if not resume:
+                    if feature.in_progress:
+                        return False, f"Feature {fid} already in progress"
+                    features_to_mark.append(feature)
+                else:
+                    if not feature.in_progress:
+                        return False, f"Feature {fid} not in progress, cannot resume"
+
+            for feature in features_to_mark:
+                feature.in_progress = True
+            session.commit()
+        finally:
+            session.close()
+
+        # Spawn batch coding agent
+        success, message = self._spawn_coding_agent_batch(feature_ids)
+        if not success:
+            # Clear in_progress on failure
+            session = self.get_session()
+            try:
+                for fid in feature_ids:
+                    feature = session.query(Feature).filter(Feature.id == fid).first()
+                    if feature and not resume:
+                        feature.in_progress = False
+                session.commit()
+            finally:
+                session.close()
+            return False, message
+
+        return True, f"Started batch [{', '.join(str(fid) for fid in feature_ids)}]"
+
     def _spawn_coding_agent(self, feature_id: int) -> tuple[bool, str]:
         """Spawn a coding agent subprocess for a specific feature."""
         # Create abort event
@@ -701,6 +879,75 @@ class ParallelOrchestrator:
 
         print(f"Started coding agent for feature #{feature_id}", flush=True)
         return True, f"Started feature {feature_id}"
+
+    def _spawn_coding_agent_batch(self, feature_ids: list[int]) -> tuple[bool, str]:
+        """Spawn a coding agent subprocess for a batch of features."""
+        primary_id = feature_ids[0]
+        abort_event = threading.Event()
+
+        cmd = [
+            sys.executable,
+            "-u",
+            str(AUTOCODER_ROOT / "autonomous_agent_demo.py"),
+            "--project-dir", str(self.project_dir),
+            "--max-iterations", "1",
+            "--agent-type", "coding",
+            "--feature-ids", ",".join(str(fid) for fid in feature_ids),
+        ]
+        if self.model:
+            cmd.extend(["--model", self.model])
+        if self.yolo_mode:
+            cmd.append("--yolo")
+
+        try:
+            popen_kwargs: dict[str, Any] = {
+                "stdin": subprocess.DEVNULL,
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "replace",
+                "cwd": str(AUTOCODER_ROOT),
+                "env": {**os.environ, "PYTHONUNBUFFERED": "1"},
+            }
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+        except Exception as e:
+            # Reset in_progress on failure
+            session = self.get_session()
+            try:
+                for fid in feature_ids:
+                    feature = session.query(Feature).filter(Feature.id == fid).first()
+                    if feature:
+                        feature.in_progress = False
+                        session.commit()
+            finally:
+                session.close()
+            return False, f"Failed to start batch agent: {e}"
+
+        with self._lock:
+            self.running_coding_agents[primary_id] = proc
+            self.abort_events[primary_id] = abort_event
+            self._batch_features[primary_id] = list(feature_ids)
+            for fid in feature_ids:
+                self._feature_to_primary[fid] = primary_id
+
+        # Start output reader thread
+        threading.Thread(
+            target=self._read_output,
+            args=(primary_id, proc, abort_event, "coding"),
+            daemon=True
+        ).start()
+
+        if self.on_status is not None:
+            for fid in feature_ids:
+                self.on_status(fid, "running")
+
+        ids_str = ", ".join(f"#{fid}" for fid in feature_ids)
+        print(f"Started coding agent for features {ids_str}", flush=True)
+        return True, f"Started batch [{ids_str}]"
 
     def _spawn_testing_agent(self) -> tuple[bool, str]:
         """Spawn a testing agent subprocess for batch regression testing.
@@ -982,73 +1229,84 @@ class ParallelOrchestrator:
         # feature_id is required for coding agents (always passed from start_feature)
         assert feature_id is not None, "feature_id must not be None for coding agents"
 
-        # Coding agent completion
-        debug_log.log("COMPLETE", f"Coding agent for feature #{feature_id} finished",
-            return_code=return_code,
-            status="success" if return_code == 0 else "failed")
-
+        # Coding agent completion - handle both single and batch features
+        batch_ids = None
         with self._lock:
+            batch_ids = self._batch_features.pop(feature_id, None)
+            if batch_ids:
+                # Clean up reverse mapping
+                for fid in batch_ids:
+                    self._feature_to_primary.pop(fid, None)
             self.running_coding_agents.pop(feature_id, None)
             self.abort_events.pop(feature_id, None)
 
+        all_feature_ids = batch_ids or [feature_id]
+
+        debug_log.log("COMPLETE", f"Coding agent for feature(s) {all_feature_ids} finished",
+            return_code=return_code,
+            status="success" if return_code == 0 else "failed",
+            batch_size=len(all_feature_ids))
+
         # Refresh session cache to see subprocess commits
-        # The coding agent runs as a subprocess and commits changes (e.g., passes=True).
-        # Using session.expire_all() is lighter weight than engine.dispose() for SQLite WAL mode
-        # and is sufficient to invalidate cached data and force fresh reads.
-        # engine.dispose() is only called on orchestrator shutdown, not on every agent completion.
         session = self.get_session()
         try:
             session.expire_all()
-            feature = session.query(Feature).filter(Feature.id == feature_id).first()
-            feature_passes = feature.passes if feature else None
-            feature_in_progress = feature.in_progress if feature else None
-            debug_log.log("DB", f"Feature #{feature_id} state after session.expire_all()",
-                passes=feature_passes,
-                in_progress=feature_in_progress)
-            if feature and feature.in_progress and not feature.passes:
-                feature.in_progress = False
-                session.commit()
-                debug_log.log("DB", f"Cleared in_progress for feature #{feature_id} (agent failed)")
+            for fid in all_feature_ids:
+                feature = session.query(Feature).filter(Feature.id == fid).first()
+                feature_passes = feature.passes if feature else None
+                feature_in_progress = feature.in_progress if feature else None
+                debug_log.log("DB", f"Feature #{fid} state after session.expire_all()",
+                    passes=feature_passes,
+                    in_progress=feature_in_progress)
+                if feature and feature.in_progress and not feature.passes:
+                    feature.in_progress = False
+                    session.commit()
+                    debug_log.log("DB", f"Cleared in_progress for feature #{fid} (agent failed)")
         finally:
             session.close()
 
-        # Track failures to prevent infinite retry loops
+        # Track failures for features still in_progress at exit
         if return_code != 0:
             with self._lock:
-                self._failure_counts[feature_id] = self._failure_counts.get(feature_id, 0) + 1
-                failure_count = self._failure_counts[feature_id]
-            if failure_count >= MAX_FEATURE_RETRIES:
-                print(f"Feature #{feature_id} has failed {failure_count} times, will not retry", flush=True)
-                debug_log.log("COMPLETE", f"Feature #{feature_id} exceeded max retries",
-                    failure_count=failure_count)
+                for fid in all_feature_ids:
+                    self._failure_counts[fid] = self._failure_counts.get(fid, 0) + 1
+                    failure_count = self._failure_counts[fid]
+                    if failure_count >= MAX_FEATURE_RETRIES:
+                        print(f"Feature #{fid} has failed {failure_count} times, will not retry", flush=True)
+                        debug_log.log("COMPLETE", f"Feature #{fid} exceeded max retries",
+                            failure_count=failure_count)
 
         status = "completed" if return_code == 0 else "failed"
         if self.on_status is not None:
-            self.on_status(feature_id, status)
-        # CRITICAL: This print triggers the WebSocket to emit agent_update with state='error' or 'success'
-        print(f"Feature #{feature_id} {status}", flush=True)
+            for fid in all_feature_ids:
+                self.on_status(fid, status)
+
+        # CRITICAL: Print triggers WebSocket to emit agent_update
+        if batch_ids and len(batch_ids) > 1:
+            ids_str = ", ".join(f"#{fid}" for fid in batch_ids)
+            print(f"Features {ids_str} {status}", flush=True)
+        else:
+            print(f"Feature #{feature_id} {status}", flush=True)
 
         # Signal main loop that an agent slot is available
         self._signal_agent_completed()
 
-        # NOTE: Testing agents are now spawned in start_feature() when coding agents START,
-        # not here when they complete. This ensures 1:1 ratio and proper termination.
-
     def stop_feature(self, feature_id: int) -> tuple[bool, str]:
         """Stop a running coding agent and all its child processes."""
         with self._lock:
-            if feature_id not in self.running_coding_agents:
+            # Check if this feature is part of a batch
+            primary_id = self._feature_to_primary.get(feature_id, feature_id)
+            if primary_id not in self.running_coding_agents:
                 return False, "Feature not running"
 
-            abort = self.abort_events.get(feature_id)
-            proc = self.running_coding_agents.get(feature_id)
+            abort = self.abort_events.get(primary_id)
+            proc = self.running_coding_agents.get(primary_id)
 
         if abort:
             abort.set()
         if proc:
-            # Kill entire process tree to avoid orphaned children (e.g., browser instances)
             result = kill_process_tree(proc, timeout=5.0)
-            debug_log.log("STOP", f"Killed feature {feature_id} process tree",
+            debug_log.log("STOP", f"Killed feature {feature_id} (primary {primary_id}) process tree",
                 status=result.status, children_found=result.children_found,
                 children_terminated=result.children_terminated, children_killed=result.children_killed)
 
@@ -1113,6 +1371,7 @@ class ParallelOrchestrator:
         print(f"Max concurrency: {self.max_concurrency} coding agents", flush=True)
         print(f"YOLO mode: {self.yolo_mode}", flush=True)
         print(f"Regression agents: {self.testing_agent_ratio} (maintained independently)", flush=True)
+        print(f"Batch size: {self.batch_size} features per agent", flush=True)
         print("=" * 70, flush=True)
         print(flush=True)
 
@@ -1276,37 +1535,39 @@ class ParallelOrchestrator:
                         await self._wait_for_agent_completion(timeout=POLL_INTERVAL * 2)
                         continue
 
-                # Start features up to capacity
+                # Build dependency-aware batches from ready features
                 slots = self.max_concurrency - current
-                logger.debug("Spawning loop: %d ready, %d slots available, max_concurrency=%d",
-                    len(ready), slots, self.max_concurrency)
-                features_to_start = ready[:slots]
-                logger.debug("Features to start: %s", [f['id'] for f in features_to_start])
+                batches = self.build_feature_batches(ready, feature_dicts, scheduling_scores)
 
-                debug_log.log("SPAWN", "Starting features batch",
+                logger.debug("Spawning loop: %d ready, %d slots available, %d batches built",
+                    len(ready), slots, len(batches))
+
+                debug_log.log("SPAWN", "Starting feature batches",
                     ready_count=len(ready),
                     slots_available=slots,
-                    features_to_start=[f['id'] for f in features_to_start])
+                    batch_count=len(batches),
+                    batches=[[f['id'] for f in b] for b in batches[:slots]])
 
-                for i, feature in enumerate(features_to_start):
-                    logger.debug("Starting feature %d/%d: #%d - %s",
-                        i + 1, len(features_to_start), feature['id'], feature['name'])
-                    success, msg = self.start_feature(feature["id"])
+                for batch in batches[:slots]:
+                    batch_ids = [f["id"] for f in batch]
+                    batch_names = [f"{f['id']}:{f['name']}" for f in batch]
+                    logger.debug("Starting batch: %s", batch_ids)
+                    success, msg = self.start_feature_batch(batch_ids)
                     if not success:
-                        logger.debug("Failed to start feature #%d: %s", feature['id'], msg)
-                        debug_log.log("SPAWN", f"FAILED to start feature #{feature['id']}",
-                            feature_name=feature['name'],
+                        logger.debug("Failed to start batch %s: %s", batch_ids, msg)
+                        debug_log.log("SPAWN", f"FAILED to start batch {batch_ids}",
+                            batch_names=batch_names,
                             error=msg)
                     else:
-                        logger.debug("Successfully started feature #%d", feature['id'])
+                        logger.debug("Successfully started batch %s", batch_ids)
                         with self._lock:
                             running_count = len(self.running_coding_agents)
                             logger.debug("Running coding agents after start: %d", running_count)
-                        debug_log.log("SPAWN", f"Successfully started feature #{feature['id']}",
-                            feature_name=feature['name'],
+                        debug_log.log("SPAWN", f"Successfully started batch {batch_ids}",
+                            batch_names=batch_names,
                             running_coding_agents=running_count)
 
-                await asyncio.sleep(0.5)  # Brief delay for subprocess to claim feature before re-querying
+                await asyncio.sleep(0.5)
 
             except Exception as e:
                 print(f"Orchestrator error: {e}", flush=True)
@@ -1376,6 +1637,7 @@ async def run_parallel_orchestrator(
     yolo_mode: bool = False,
     testing_agent_ratio: int = 1,
     testing_batch_size: int = DEFAULT_TESTING_BATCH_SIZE,
+    batch_size: int = 3,
 ) -> None:
     """Run the unified orchestrator.
 
@@ -1386,6 +1648,7 @@ async def run_parallel_orchestrator(
         yolo_mode: Whether to run in YOLO mode (skip testing agents)
         testing_agent_ratio: Number of regression agents to maintain (0-3)
         testing_batch_size: Number of features per testing batch (1-5)
+        batch_size: Max features per coding agent batch (1-3)
     """
     print(f"[ORCHESTRATOR] run_parallel_orchestrator called with max_concurrency={max_concurrency}", flush=True)
     orchestrator = ParallelOrchestrator(
@@ -1395,6 +1658,7 @@ async def run_parallel_orchestrator(
         yolo_mode=yolo_mode,
         testing_agent_ratio=testing_agent_ratio,
         testing_batch_size=testing_batch_size,
+        batch_size=batch_size,
     )
 
     # Set up cleanup to run on exit (handles normal exit, exceptions)
@@ -1480,6 +1744,12 @@ def main():
         default=DEFAULT_TESTING_BATCH_SIZE,
         help=f"Number of features per testing batch (1-5, default: {DEFAULT_TESTING_BATCH_SIZE})",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=3,
+        help="Max features per coding agent batch (1-5, default: 3)",
+    )
 
     args = parser.parse_args()
 
@@ -1507,6 +1777,7 @@ def main():
             yolo_mode=args.yolo,
             testing_agent_ratio=args.testing_agent_ratio,
             testing_batch_size=args.testing_batch_size,
+            batch_size=args.batch_size,
         ))
     except KeyboardInterrupt:
         print("\n\nInterrupted by user", flush=True)

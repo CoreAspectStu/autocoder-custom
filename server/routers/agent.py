@@ -17,11 +17,11 @@ from ..utils.project_helpers import get_project_path as _get_project_path
 from ..utils.validation import validate_project_name
 
 
-def _get_settings_defaults() -> tuple[bool, str, int, bool]:
+def _get_settings_defaults() -> tuple[bool, str, int, bool, int]:
     """Get defaults from global settings.
 
     Returns:
-        Tuple of (yolo_mode, model, testing_agent_ratio, playwright_headless)
+        Tuple of (yolo_mode, model, testing_agent_ratio, playwright_headless, batch_size)
     """
     import sys
     root = Path(__file__).parent.parent.parent
@@ -42,7 +42,12 @@ def _get_settings_defaults() -> tuple[bool, str, int, bool]:
 
     playwright_headless = (settings.get("playwright_headless") or "true").lower() == "true"
 
-    return yolo_mode, model, testing_agent_ratio, playwright_headless
+    try:
+        batch_size = int(settings.get("batch_size", "3"))
+    except (ValueError, TypeError):
+        batch_size = 3
+
+    return yolo_mode, model, testing_agent_ratio, playwright_headless, batch_size
 
 
 router = APIRouter(prefix="/api/projects/{project_name}/agent", tags=["agent"])
@@ -91,12 +96,14 @@ async def start_agent(
     manager = get_project_manager(project_name)
 
     # Get defaults from global settings if not provided in request
-    default_yolo, default_model, default_testing_ratio, playwright_headless = _get_settings_defaults()
+    default_yolo, default_model, default_testing_ratio, playwright_headless, default_batch_size = _get_settings_defaults()
 
     yolo_mode = request.yolo_mode if request.yolo_mode is not None else default_yolo
     model = request.model if request.model else default_model
     max_concurrency = request.max_concurrency or 1
     testing_agent_ratio = request.testing_agent_ratio if request.testing_agent_ratio is not None else default_testing_ratio
+
+    batch_size = default_batch_size
 
     success, message = await manager.start(
         yolo_mode=yolo_mode,
@@ -104,6 +111,7 @@ async def start_agent(
         max_concurrency=max_concurrency,
         testing_agent_ratio=testing_agent_ratio,
         playwright_headless=playwright_headless,
+        batch_size=batch_size,
     )
 
     # Notify scheduler of manual start (to prevent auto-stop during scheduled window)

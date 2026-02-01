@@ -133,6 +133,13 @@ Authentication:
         help="Work on a specific feature ID only (used by orchestrator for coding agents)",
     )
 
+    parser.add_argument(
+        "--feature-ids",
+        type=str,
+        default=None,
+        help="Comma-separated feature IDs to implement in batch (e.g., '5,8,12')",
+    )
+
     # Agent type for subprocess mode
     parser.add_argument(
         "--agent-type",
@@ -168,6 +175,13 @@ Authentication:
         type=int,
         default=3,
         help="Number of features per testing batch (1-5, default: 3)",
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=3,
+        help="Max features per coding agent batch (1-3, default: 3)",
     )
 
     return parser.parse_args()
@@ -222,6 +236,15 @@ def main() -> None:
             print(f"Error: --testing-feature-ids must be comma-separated integers, got: {args.testing_feature_ids}")
             return
 
+    # Parse batch coding feature IDs (comma-separated string -> list[int])
+    coding_feature_ids: list[int] | None = None
+    if args.feature_ids:
+        try:
+            coding_feature_ids = [int(x.strip()) for x in args.feature_ids.split(",") if x.strip()]
+        except ValueError:
+            print(f"Error: --feature-ids must be comma-separated integers, got: {args.feature_ids}")
+            return
+
     try:
         if args.agent_type:
             # Subprocess mode - spawned by orchestrator for a specific role
@@ -232,6 +255,7 @@ def main() -> None:
                     max_iterations=args.max_iterations or 1,
                     yolo_mode=args.yolo,
                     feature_id=args.feature_id,
+                    feature_ids=coding_feature_ids,
                     agent_type=args.agent_type,
                     testing_feature_id=args.testing_feature_id,
                     testing_feature_ids=testing_feature_ids,
@@ -254,6 +278,7 @@ def main() -> None:
                     yolo_mode=args.yolo,
                     testing_agent_ratio=args.testing_ratio,
                     testing_batch_size=args.testing_batch_size,
+                    batch_size=args.batch_size,
                 )
             )
     except KeyboardInterrupt:

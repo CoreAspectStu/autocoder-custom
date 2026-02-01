@@ -298,6 +298,7 @@ class AgentProcessManager:
         max_concurrency: int | None = None,
         testing_agent_ratio: int = 1,
         playwright_headless: bool = True,
+        batch_size: int = 3,
     ) -> tuple[bool, str]:
         """
         Start the agent as a subprocess.
@@ -348,6 +349,9 @@ class AgentProcessManager:
 
         # Add testing agent configuration
         cmd.extend(["--testing-ratio", str(testing_agent_ratio)])
+
+        # Add --batch-size flag for multi-feature batching
+        cmd.extend(["--batch-size", str(batch_size)])
 
         try:
             # Start subprocess with piped stdout/stderr

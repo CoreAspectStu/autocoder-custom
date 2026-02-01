@@ -92,6 +92,7 @@ async def get_settings():
         ollama_mode=_is_ollama_mode(),
         testing_agent_ratio=_parse_int(all_settings.get("testing_agent_ratio"), 1),
         playwright_headless=_parse_bool(all_settings.get("playwright_headless"), default=True),
+        batch_size=_parse_int(all_settings.get("batch_size"), 3),
     )
 
 
@@ -110,6 +111,9 @@ async def update_settings(update: SettingsUpdate):
     if update.playwright_headless is not None:
         set_setting("playwright_headless", "true" if update.playwright_headless else "false")
 
+    if update.batch_size is not None:
+        set_setting("batch_size", str(update.batch_size))
+
     # Return updated settings
     all_settings = get_all_settings()
     return SettingsResponse(
@@ -119,4 +123,5 @@ async def update_settings(update: SettingsUpdate):
         ollama_mode=_is_ollama_mode(),
         testing_agent_ratio=_parse_int(all_settings.get("testing_agent_ratio"), 1),
         playwright_headless=_parse_bool(all_settings.get("playwright_headless"), default=True),
+        batch_size=_parse_int(all_settings.get("batch_size"), 3),
     )

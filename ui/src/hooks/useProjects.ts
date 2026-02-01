@@ -267,6 +267,7 @@ const DEFAULT_SETTINGS: Settings = {
   ollama_mode: false,
   testing_agent_ratio: 1,
   playwright_headless: true,
+  batch_size: 3,
 }
 
 export function useAvailableModels() {

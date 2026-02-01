@@ -31,6 +31,7 @@ from progress import (
 )
 from prompts import (
     copy_spec_to_project,
+    get_batch_feature_prompt,
     get_coding_prompt,
     get_initializer_prompt,
     get_single_feature_prompt,
@@ -139,6 +140,7 @@ async def run_autonomous_agent(
     max_iterations: Optional[int] = None,
     yolo_mode: bool = False,
     feature_id: Optional[int] = None,
+    feature_ids: Optional[list[int]] = None,
     agent_type: Optional[str] = None,
     testing_feature_id: Optional[int] = None,
     testing_feature_ids: Optional[list[int]] = None,
@@ -152,6 +154,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         yolo_mode: If True, skip browser testing in coding agent prompts
         feature_id: If set, work only on this specific feature (used by orchestrator for coding agents)
+        feature_ids: If set, work on these features in batch (used by orchestrator for batch mode)
         agent_type: Type of agent: "initializer", "coding", "testing", or None (auto-detect)
         testing_feature_id: For testing agents, the pre-claimed feature ID to test (legacy single mode)
         testing_feature_ids: For testing agents, list of feature IDs to batch test
@@ -165,7 +168,9 @@ async def run_autonomous_agent(
         print(f"Agent type: {agent_type}")
     if yolo_mode:
         print("Mode: YOLO (testing agents disabled)")
-    if feature_id:
+    if feature_ids and len(feature_ids) > 1:
+        print(f"Feature batch: {', '.join(f'#{fid}' for fid in feature_ids)}")
+    elif feature_id:
         print(f"Feature assignment: #{feature_id}")
     if max_iterations:
         print(f"Max iterations: {max_iterations}")
@@ -239,6 +244,8 @@ async def run_autonomous_agent(
         import os
         if agent_type == "testing":
             agent_id = f"testing-{os.getpid()}"  # Unique ID for testing agents
+        elif feature_ids and len(feature_ids) > 1:
+            agent_id = f"batch-{feature_ids[0]}"
         elif feature_id:
             agent_id = f"feature-{feature_id}"
         else:
@@ -250,9 +257,13 @@ async def run_autonomous_agent(
             prompt = get_initializer_prompt(project_dir)
         elif agent_type == "testing":
             prompt = get_testing_prompt(project_dir, testing_feature_id, testing_feature_ids)
-        elif feature_id:
+        elif feature_ids and len(feature_ids) > 1:
+            # Batch mode (used by orchestrator for multi-feature coding agents)
+            prompt = get_batch_feature_prompt(feature_ids, project_dir, yolo_mode)
+        elif feature_id or (feature_ids is not None and len(feature_ids) == 1):
             # Single-feature mode (used by orchestrator for coding agents)
-            prompt = get_single_feature_prompt(feature_id, project_dir, yolo_mode)
+            fid = feature_id if feature_id is not None else feature_ids[0]  # type: ignore[index]
+            prompt = get_single_feature_prompt(fid, project_dir, yolo_mode)
         else:
             # General coding prompt (legacy path)
             prompt = get_coding_prompt(project_dir, yolo_mode=yolo_mode)
@@ -356,12 +367,19 @@ async def run_autonomous_agent(
                 print("The autonomous agent has finished its work.")
                 break
 
-            # Single-feature mode OR testing agent: exit after one session
-            if feature_id is not None or agent_type == "testing":
+            # Single-feature mode, batch mode, or testing agent: exit after one session
+            if feature_ids and len(feature_ids) > 1:
+                print(f"\nBatch mode: Features {', '.join(f'#{fid}' for fid in feature_ids)} session complete.")
+                break
+            elif feature_id is not None or (feature_ids is not None and len(feature_ids) == 1):
+                fid = feature_id if feature_id is not None else feature_ids[0]  # type: ignore[index]
                 if agent_type == "testing":
                     print("\nTesting agent complete. Terminating session.")
                 else:
-                    print(f"\nSingle-feature mode: Feature #{feature_id} session complete.")
+                    print(f"\nSingle-feature mode: Feature #{fid} session complete.")
+                break
+            elif agent_type == "testing":
+                print("\nTesting agent complete. Terminating session.")
                 break
 
             # Reset rate limit retries only if no rate limit signal was detected

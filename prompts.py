@@ -217,6 +217,52 @@ If blocked, use `feature_skip` and document the blocker.
     return single_feature_header + base_prompt
 
 
+def get_batch_feature_prompt(
+    feature_ids: list[int],
+    project_dir: Path | None = None,
+    yolo_mode: bool = False,
+) -> str:
+    """Prepend batch-feature assignment header to base coding prompt.
+
+    Used in parallel mode to assign multiple features to an agent.
+    Features should be implemented sequentially in the given order.
+
+    Args:
+        feature_ids: List of feature IDs to implement in order
+        project_dir: Optional project directory for project-specific prompts
+        yolo_mode: If True, strip browser testing instructions from the base prompt
+
+    Returns:
+        The prompt with batch-feature header prepended
+    """
+    base_prompt = get_coding_prompt(project_dir, yolo_mode=yolo_mode)
+    ids_str = ", ".join(f"#{fid}" for fid in feature_ids)
+
+    batch_header = f"""## ASSIGNED FEATURES (BATCH): {ids_str}
+
+You have been assigned {len(feature_ids)} features to implement sequentially.
+Process them IN ORDER: {ids_str}
+
+### Workflow for each feature:
+1. Call `feature_claim_and_get` with the feature ID to get its details
+2. Implement the feature fully
+3. Verify it works (browser testing if applicable)
+4. Call `feature_mark_passing` to mark it complete
+5. Git commit the changes
+6. Move to the next feature
+
+### Important:
+- Complete each feature fully before starting the next
+- Mark each feature passing individually as you go
+- If blocked on a feature, use `feature_skip` and move to the next one
+- Other agents are handling other features - focus only on yours
+
+---
+
+"""
+    return batch_header + base_prompt
+
+
 def get_app_spec(project_dir: Path) -> str:
     """
     Load the app spec from the project.
