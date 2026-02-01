@@ -508,7 +508,7 @@ export async function getNextScheduledRun(projectName: string): Promise<NextRunR
 // ============================================================================
 
 export async function listUATTests(): Promise<FeatureListResponse> {
-  return fetchJSON('/api/uat/tests')
+  return fetchJSON('/uat/tests')
 }
 
 export async function getUATTest(testId: number): Promise<Feature> {
@@ -521,7 +521,7 @@ export async function getUATStatsSummary(): Promise<{
   in_progress: number
   percentage: number
 }> {
-  return fetchJSON('/api/uat/stats/summary')
+  return fetchJSON('/uat/stats/summary')
 }
 
 export async function createUATTest(testData: {
@@ -594,7 +594,7 @@ export async function triggerUATExecution(
   agents_spawned?: number
   tests_assigned?: number
 }> {
-  return fetchJSON('/api/uat/trigger', {
+  return fetchJSON('/uat/trigger', {
     method: 'POST',
     body: JSON.stringify({
       cycle_id: cycleId,
