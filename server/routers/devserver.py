@@ -7,7 +7,6 @@ Uses project registry for path lookups and project_config for command detection.
 """
 
 import logging
-import re
 import sys
 from pathlib import Path
 
@@ -27,39 +26,20 @@ from ..services.project_config import (
     get_project_config,
     set_dev_command,
 )
+from ..utils.project_helpers import get_project_path as _get_project_path
+from ..utils.validation import validate_project_name
 
-# Add root to path for registry import
+# Add root to path for security module import
 _root = Path(__file__).parent.parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from registry import get_project_path as registry_get_project_path
 from security import extract_commands, get_effective_commands, is_command_allowed
 
 logger = logging.getLogger(__name__)
 
 
-def _get_project_path(project_name: str) -> Path | None:
-    """Get project path from registry."""
-    return registry_get_project_path(project_name)
-
-
 router = APIRouter(prefix="/api/projects/{project_name}/devserver", tags=["devserver"])
-
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-
-def validate_project_name(name: str) -> str:
-    """Validate and sanitize project name to prevent path traversal."""
-    if not re.match(r'^[a-zA-Z0-9_-]{1,50}$', name):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid project name"
-        )
-    return name
 
 
 def get_project_dir(project_name: str) -> Path:

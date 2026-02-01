@@ -9,6 +9,7 @@ Fallback chain:
 2. Base template: .claude/templates/{name}.template.md
 """
 
+import re
 import shutil
 from pathlib import Path
 
@@ -70,42 +71,119 @@ def get_initializer_prompt(project_dir: Path | None = None) -> str:
     return load_prompt("initializer_prompt", project_dir)
 
 
-def get_coding_prompt(project_dir: Path | None = None) -> str:
-    """Load the coding agent prompt (project-specific if available)."""
-    return load_prompt("coding_prompt", project_dir)
+def _strip_browser_testing_sections(prompt: str) -> str:
+    """Strip browser automation and Playwright testing instructions from prompt.
+
+    Used in YOLO mode where browser testing is skipped entirely. Replaces
+    browser-related sections with a brief YOLO-mode note while preserving
+    all non-testing instructions (implementation, git, progress notes, etc.).
+
+    Args:
+        prompt: The full coding prompt text.
+
+    Returns:
+        The prompt with browser testing sections replaced by YOLO guidance.
+    """
+    original_prompt = prompt
+
+    # Replace STEP 5 (browser automation verification) with YOLO note
+    prompt = re.sub(
+        r"### STEP 5: VERIFY WITH BROWSER AUTOMATION.*?(?=### STEP 5\.5:)",
+        "### STEP 5: VERIFY FEATURE (YOLO MODE)\n\n"
+        "**YOLO mode is active.** Skip browser automation testing. "
+        "Instead, verify your feature works by ensuring:\n"
+        "- Code compiles without errors (lint and type-check pass)\n"
+        "- Server starts without errors after your changes\n"
+        "- No obvious runtime errors in server logs\n\n",
+        prompt,
+        flags=re.DOTALL,
+    )
+
+    # Replace the screenshots-only marking rule with YOLO-appropriate wording
+    prompt = prompt.replace(
+        "**ONLY MARK A FEATURE AS PASSING AFTER VERIFICATION WITH SCREENSHOTS.**",
+        "**YOLO mode: Mark a feature as passing after lint/type-check succeeds and server starts cleanly.**",
+    )
+
+    # Replace the BROWSER AUTOMATION reference section
+    prompt = re.sub(
+        r"## BROWSER AUTOMATION\n\n.*?(?=---)",
+        "## VERIFICATION (YOLO MODE)\n\n"
+        "Browser automation is disabled in YOLO mode. "
+        "Verify features by running lint, type-check, and confirming the dev server starts without errors.\n\n",
+        prompt,
+        flags=re.DOTALL,
+    )
+
+    # In STEP 4, replace browser automation reference with YOLO guidance
+    prompt = prompt.replace(
+        "2. Test manually using browser automation (see Step 5)",
+        "2. Verify code compiles (lint and type-check pass)",
+    )
+
+    if prompt == original_prompt:
+        print("[YOLO] Warning: No browser testing sections found to strip. "
+              "Project-specific prompt may need manual YOLO adaptation.")
+
+    return prompt
 
 
-def get_testing_prompt(project_dir: Path | None = None, testing_feature_id: int | None = None) -> str:
-    """Load the testing agent prompt (project-specific if available).
+def get_coding_prompt(project_dir: Path | None = None, yolo_mode: bool = False) -> str:
+    """Load the coding agent prompt (project-specific if available).
 
     Args:
         project_dir: Optional project directory for project-specific prompts
-        testing_feature_id: If provided, the pre-assigned feature ID to test.
-            The orchestrator claims the feature before spawning the agent.
+        yolo_mode: If True, strip browser automation / Playwright testing
+            instructions and replace with YOLO-mode guidance. This reduces
+            prompt tokens since YOLO mode skips all browser testing anyway.
 
     Returns:
-        The testing prompt, with pre-assigned feature instructions if applicable.
+        The coding prompt, optionally stripped of testing instructions.
+    """
+    prompt = load_prompt("coding_prompt", project_dir)
+
+    if yolo_mode:
+        prompt = _strip_browser_testing_sections(prompt)
+
+    return prompt
+
+
+def get_testing_prompt(
+    project_dir: Path | None = None,
+    testing_feature_id: int | None = None,
+    testing_feature_ids: list[int] | None = None,
+) -> str:
+    """Load the testing agent prompt (project-specific if available).
+
+    Supports both single-feature and multi-feature testing modes. When
+    testing_feature_ids is provided, the template's {{TESTING_FEATURE_IDS}}
+    placeholder is replaced with the comma-separated list. Falls back to
+    the legacy single-feature header when only testing_feature_id is given.
+
+    Args:
+        project_dir: Optional project directory for project-specific prompts
+        testing_feature_id: If provided, the pre-assigned feature ID to test (legacy single mode).
+        testing_feature_ids: If provided, a list of feature IDs to test (batch mode).
+            Takes precedence over testing_feature_id when both are set.
+
+    Returns:
+        The testing prompt, with feature assignment instructions populated.
     """
     base_prompt = load_prompt("testing_prompt", project_dir)
 
+    # Batch mode: replace the {{TESTING_FEATURE_IDS}} placeholder in the template
+    if testing_feature_ids is not None and len(testing_feature_ids) > 0:
+        ids_str = ", ".join(str(fid) for fid in testing_feature_ids)
+        return base_prompt.replace("{{TESTING_FEATURE_IDS}}", ids_str)
+
+    # Legacy single-feature mode: prepend header and replace placeholder
     if testing_feature_id is not None:
-        # Prepend pre-assigned feature instructions
-        pre_assigned_header = f"""## ASSIGNED FEATURE
+        # Replace the placeholder with the single ID for template consistency
+        base_prompt = base_prompt.replace("{{TESTING_FEATURE_IDS}}", str(testing_feature_id))
+        return base_prompt
 
-**You are assigned to regression test Feature #{testing_feature_id}.**
-
-### Your workflow:
-1. Call `feature_get_by_id` with ID {testing_feature_id} to get the feature details
-2. Verify the feature through the UI using browser automation
-3. If regression found, call `feature_mark_failing` with feature_id={testing_feature_id}
-4. Exit when done (no cleanup needed)
-
----
-
-"""
-        return pre_assigned_header + base_prompt
-
-    return base_prompt
+    # No feature assignment -- return template with placeholder cleared
+    return base_prompt.replace("{{TESTING_FEATURE_IDS}}", "(none assigned)")
 
 
 def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, yolo_mode: bool = False) -> str:
@@ -118,13 +196,13 @@ def get_single_feature_prompt(feature_id: int, project_dir: Path | None = None, 
     Args:
         feature_id: The specific feature ID to work on
         project_dir: Optional project directory for project-specific prompts
-        yolo_mode: Ignored (kept for backward compatibility). Testing is now
-                   handled by separate testing agents, not YOLO prompts.
+        yolo_mode: If True, strip browser testing instructions from the base
+            coding prompt for reduced token usage in YOLO mode.
 
     Returns:
         The prompt with single-feature header prepended
     """
-    base_prompt = get_coding_prompt(project_dir)
+    base_prompt = get_coding_prompt(project_dir, yolo_mode=yolo_mode)
 
     # Minimal header - the base prompt already contains the full workflow
     single_feature_header = f"""## ASSIGNED FEATURE: #{feature_id}

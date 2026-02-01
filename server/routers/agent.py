@@ -6,24 +6,15 @@ API endpoints for agent control (start/stop/pause/resume).
 Uses project registry for path lookups.
 """
 
-import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
 from ..schemas import AgentActionResponse, AgentStartRequest, AgentStatus
+from ..services.chat_constants import ROOT_DIR
 from ..services.process_manager import get_manager
-
-
-def _get_project_path(project_name: str) -> Path:
-    """Get project path from registry."""
-    import sys
-    root = Path(__file__).parent.parent.parent
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-    from registry import get_project_path
-    return get_project_path(project_name)
+from ..utils.project_helpers import get_project_path as _get_project_path
+from ..utils.validation import validate_project_name
 
 
 def _get_settings_defaults() -> tuple[bool, str, int]:
@@ -53,19 +44,6 @@ def _get_settings_defaults() -> tuple[bool, str, int]:
 
 
 router = APIRouter(prefix="/api/projects/{project_name}/agent", tags=["agent"])
-
-# Root directory for process manager
-ROOT_DIR = Path(__file__).parent.parent.parent
-
-
-def validate_project_name(name: str) -> str:
-    """Validate and sanitize project name to prevent path traversal."""
-    if not re.match(r'^[a-zA-Z0-9_-]{1,50}$', name):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid project name"
-        )
-    return name
 
 
 def get_project_manager(project_name: str):

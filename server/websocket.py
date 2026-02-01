@@ -16,8 +16,11 @@ from typing import Set
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .schemas import AGENT_MASCOTS
+from .services.chat_constants import ROOT_DIR
 from .services.dev_server_manager import get_devserver_manager
 from .services.process_manager import get_manager
+from .utils.project_helpers import get_project_path as _get_project_path
+from .utils.validation import is_valid_project_name as validate_project_name
 
 # Lazy imports
 _count_passing_tests = None
@@ -95,11 +98,13 @@ class AgentTracker:
 
         # Coding agent start: "Started coding agent for feature #X"
         if line.startswith("Started coding agent for feature #"):
-            try:
-                feature_id = int(re.search(r'#(\d+)', line).group(1))
-                return await self._handle_agent_start(feature_id, line, agent_type="coding")
-            except (AttributeError, ValueError):
-                pass
+            m = re.search(r'#(\d+)', line)
+            if m:
+                try:
+                    feature_id = int(m.group(1))
+                    return await self._handle_agent_start(feature_id, line, agent_type="coding")
+                except ValueError:
+                    pass
 
         # Testing agent start: "Started testing agent for feature #X (PID xxx)"
         testing_start_match = TESTING_AGENT_START_PATTERN.match(line)
@@ -116,12 +121,14 @@ class AgentTracker:
 
         # Coding agent complete: "Feature #X completed/failed" (without "testing" keyword)
         if line.startswith("Feature #") and ("completed" in line or "failed" in line) and "testing" not in line:
-            try:
-                feature_id = int(re.search(r'#(\d+)', line).group(1))
-                is_success = "completed" in line
-                return await self._handle_agent_complete(feature_id, is_success, agent_type="coding")
-            except (AttributeError, ValueError):
-                pass
+            m = re.search(r'#(\d+)', line)
+            if m:
+                try:
+                    feature_id = int(m.group(1))
+                    is_success = "completed" in line
+                    return await self._handle_agent_complete(feature_id, is_success, agent_type="coding")
+                except ValueError:
+                    pass
 
         # Check for feature-specific output lines: [Feature #X] content
         # Both coding and testing agents use this format now
@@ -444,7 +451,7 @@ class OrchestratorTracker:
         timestamp = datetime.now().isoformat()
 
         # Add to recent events (keep last 5)
-        event = {
+        event: dict[str, str | int] = {
             'eventType': event_type,
             'message': message,
             'timestamp': timestamp,
@@ -485,17 +492,6 @@ class OrchestratorTracker:
             self.ready_count = 0
             self.blocked_count = 0
             self.recent_events.clear()
-
-
-def _get_project_path(project_name: str) -> Path:
-    """Get project path from registry."""
-    import sys
-    root = Path(__file__).parent.parent
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-    from registry import get_project_path
-    return get_project_path(project_name)
 
 
 def _get_count_passing_tests():
@@ -563,15 +559,6 @@ class ConnectionManager:
 
 # Global connection manager
 manager = ConnectionManager()
-
-# Root directory
-ROOT_DIR = Path(__file__).parent.parent
-
-
-def validate_project_name(name: str) -> bool:
-    """Validate project name to prevent path traversal."""
-    return bool(re.match(r'^[a-zA-Z0-9_-]{1,50}$', name))
-
 
 async def poll_progress(websocket: WebSocket, project_name: str, project_dir: Path):
     """Poll database for progress changes and send updates."""
@@ -652,7 +639,7 @@ async def project_websocket(websocket: WebSocket, project_name: str):
                 agent_index, _ = await agent_tracker.get_agent_info(feature_id)
 
             # Send the raw log line with optional feature/agent attribution
-            log_msg = {
+            log_msg: dict[str, str | int] = {
                 "type": "log",
                 "line": line,
                 "timestamp": datetime.now().isoformat(),

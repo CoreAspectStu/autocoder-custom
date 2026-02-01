@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
 
@@ -24,11 +25,12 @@ from ..schemas import (
 )
 
 # Lazy imports to avoid circular dependencies
+# These are initialized by _init_imports() before first use.
 _imports_initialized = False
-_check_spec_exists = None
-_scaffold_project_prompts = None
-_get_project_prompts_dir = None
-_count_passing_tests = None
+_check_spec_exists: Callable[..., Any] | None = None
+_scaffold_project_prompts: Callable[..., Any] | None = None
+_get_project_prompts_dir: Callable[..., Any] | None = None
+_count_passing_tests: Callable[..., Any] | None = None
 
 
 def _init_imports():
@@ -99,6 +101,7 @@ def validate_project_name(name: str) -> str:
 def get_project_stats(project_dir: Path) -> ProjectStats:
     """Get statistics for a project."""
     _init_imports()
+    assert _count_passing_tests is not None  # guaranteed by _init_imports()
     passing, in_progress, total = _count_passing_tests(project_dir)
     percentage = (passing / total * 100) if total > 0 else 0.0
     return ProjectStats(
@@ -113,6 +116,7 @@ def get_project_stats(project_dir: Path) -> ProjectStats:
 async def list_projects():
     """List all registered projects."""
     _init_imports()
+    assert _check_spec_exists is not None  # guaranteed by _init_imports()
     (_, _, _, list_registered_projects, validate_project_path,
      get_project_concurrency, _) = _get_registry_functions()
 
@@ -145,6 +149,7 @@ async def list_projects():
 async def create_project(project: ProjectCreate):
     """Create a new project at the specified path."""
     _init_imports()
+    assert _scaffold_project_prompts is not None  # guaranteed by _init_imports()
     (register_project, _, get_project_path, list_registered_projects,
      _, _, _) = _get_registry_functions()
 
@@ -225,6 +230,8 @@ async def create_project(project: ProjectCreate):
 async def get_project(name: str):
     """Get detailed information about a project."""
     _init_imports()
+    assert _check_spec_exists is not None  # guaranteed by _init_imports()
+    assert _get_project_prompts_dir is not None  # guaranteed by _init_imports()
     (_, _, get_project_path, _, _, get_project_concurrency, _) = _get_registry_functions()
 
     name = validate_project_name(name)
@@ -296,6 +303,7 @@ async def delete_project(name: str, delete_files: bool = False):
 async def get_project_prompts(name: str):
     """Get the content of project prompt files."""
     _init_imports()
+    assert _get_project_prompts_dir is not None  # guaranteed by _init_imports()
     (_, _, get_project_path, _, _, _, _) = _get_registry_functions()
 
     name = validate_project_name(name)
@@ -307,7 +315,7 @@ async def get_project_prompts(name: str):
     if not project_dir.exists():
         raise HTTPException(status_code=404, detail="Project directory not found")
 
-    prompts_dir = _get_project_prompts_dir(project_dir)
+    prompts_dir: Path = _get_project_prompts_dir(project_dir)
 
     def read_file(filename: str) -> str:
         filepath = prompts_dir / filename
@@ -329,6 +337,7 @@ async def get_project_prompts(name: str):
 async def update_project_prompts(name: str, prompts: ProjectPromptsUpdate):
     """Update project prompt files."""
     _init_imports()
+    assert _get_project_prompts_dir is not None  # guaranteed by _init_imports()
     (_, _, get_project_path, _, _, _, _) = _get_registry_functions()
 
     name = validate_project_name(name)
@@ -480,6 +489,8 @@ async def reset_project(name: str, full_reset: bool = False):
 async def update_project_settings(name: str, settings: ProjectSettingsUpdate):
     """Update project-level settings (concurrency, etc.)."""
     _init_imports()
+    assert _check_spec_exists is not None  # guaranteed by _init_imports()
+    assert _get_project_prompts_dir is not None  # guaranteed by _init_imports()
     (_, _, get_project_path, _, _, get_project_concurrency,
      set_project_concurrency) = _get_registry_functions()
 

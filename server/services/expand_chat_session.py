@@ -16,27 +16,18 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from dotenv import load_dotenv
 
 from ..schemas import ImageAttachment
+from .chat_constants import API_ENV_VARS, ROOT_DIR, make_multimodal_message
 
 # Load environment variables from .env file if present
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-# Environment variables to pass through to Claude CLI for API configuration
-API_ENV_VARS = [
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_AUTH_TOKEN",
-    "API_TIMEOUT_MS",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-]
 
 # Feature MCP tools needed for expand session
 EXPAND_FEATURE_TOOLS = [
@@ -44,22 +35,6 @@ EXPAND_FEATURE_TOOLS = [
     "mcp__features__feature_create_bulk",
     "mcp__features__feature_get_stats",
 ]
-
-
-async def _make_multimodal_message(content_blocks: list[dict]) -> AsyncGenerator[dict, None]:
-    """
-    Create an async generator that yields a properly formatted multimodal message.
-    """
-    yield {
-        "type": "user",
-        "message": {"role": "user", "content": content_blocks},
-        "parent_tool_use_id": None,
-        "session_id": "default",
-    }
-
-
-# Root directory of the project
-ROOT_DIR = Path(__file__).parent.parent.parent
 
 
 class ExpandChatSession:
@@ -179,7 +154,12 @@ class ExpandChatSession:
         system_prompt = skill_content.replace("$ARGUMENTS", project_path)
 
         # Build environment overrides for API configuration
-        sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
+        # Filter to only include vars that are actually set (non-None)
+        sdk_env: dict[str, str] = {}
+        for var in API_ENV_VARS:
+            value = os.getenv(var)
+            if value:
+                sdk_env[var] = value
 
         # Determine model from environment or use default
         # This allows using alternative APIs (e.g., GLM via z.ai) that may not support Claude model names
@@ -207,9 +187,12 @@ class ExpandChatSession:
                     allowed_tools=[
                         "Read",
                         "Glob",
+                        "Grep",
+                        "WebFetch",
+                        "WebSearch",
                         *EXPAND_FEATURE_TOOLS,
                     ],
-                    mcp_servers=mcp_servers,
+                    mcp_servers=mcp_servers,  # type: ignore[arg-type]  # SDK accepts dict config at runtime
                     permission_mode="bypassPermissions",
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
@@ -303,7 +286,7 @@ class ExpandChatSession:
 
         # Build the message content
         if attachments and len(attachments) > 0:
-            content_blocks = []
+            content_blocks: list[dict[str, Any]] = []
             if message:
                 content_blocks.append({"type": "text", "text": message})
             for att in attachments:
@@ -315,7 +298,7 @@ class ExpandChatSession:
                         "data": att.base64Data,
                     }
                 })
-            await self.client.query(_make_multimodal_message(content_blocks))
+            await self.client.query(make_multimodal_message(content_blocks))
             logger.info(f"Sent multimodal message with {len(attachments)} image(s)")
         else:
             await self.client.query(message)

@@ -25,24 +25,12 @@ from .assistant_database import (
     create_conversation,
     get_messages,
 )
+from .chat_constants import API_ENV_VARS, ROOT_DIR
 
 # Load environment variables from .env file if present
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-# Root directory of the project
-ROOT_DIR = Path(__file__).parent.parent.parent
-
-# Environment variables to pass through to Claude CLI for API configuration
-API_ENV_VARS = [
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_AUTH_TOKEN",
-    "API_TIMEOUT_MS",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-]
 
 # Read-only feature MCP tools
 READONLY_FEATURE_MCP_TOOLS = [
@@ -215,7 +203,7 @@ class AssistantChatSession:
         # Create a new conversation if we don't have one
         if is_new_conversation:
             conv = create_conversation(self.project_dir, self.project_name)
-            self.conversation_id = conv.id
+            self.conversation_id = int(conv.id)  # type coercion: Column[int] -> int
             yield {"type": "conversation_created", "conversation_id": self.conversation_id}
 
         # Build permissions list for assistant access (read + feature management)
@@ -270,7 +258,11 @@ class AssistantChatSession:
         system_cli = shutil.which("claude")
 
         # Build environment overrides for API configuration
-        sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
+        sdk_env: dict[str, str] = {}
+        for var in API_ENV_VARS:
+            value = os.getenv(var)
+            if value:
+                sdk_env[var] = value
 
         # Determine model from environment or use default
         # This allows using alternative APIs (e.g., GLM via z.ai) that may not support Claude model names
@@ -286,7 +278,7 @@ class AssistantChatSession:
                     # This avoids Windows command line length limit (~8191 chars)
                     setting_sources=["project"],
                     allowed_tools=[*READONLY_BUILTIN_TOOLS, *ASSISTANT_FEATURE_TOOLS],
-                    mcp_servers=mcp_servers,
+                    mcp_servers=mcp_servers,  # type: ignore[arg-type]  # SDK accepts dict config at runtime
                     permission_mode="bypassPermissions",
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
@@ -312,6 +304,8 @@ class AssistantChatSession:
                 greeting = f"Hello! I'm your project assistant for **{self.project_name}**. I can help you understand the codebase, explain features, and answer questions about the project. What would you like to know?"
 
                 # Store the greeting in the database
+                # conversation_id is guaranteed non-None here (set on line 206 above)
+                assert self.conversation_id is not None
                 add_message(self.project_dir, self.conversation_id, "assistant", greeting)
 
                 yield {"type": "text", "content": greeting}

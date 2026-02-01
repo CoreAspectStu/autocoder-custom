@@ -141,6 +141,7 @@ async def run_autonomous_agent(
     feature_id: Optional[int] = None,
     agent_type: Optional[str] = None,
     testing_feature_id: Optional[int] = None,
+    testing_feature_ids: Optional[list[int]] = None,
 ) -> None:
     """
     Run the autonomous agent loop.
@@ -152,7 +153,8 @@ async def run_autonomous_agent(
         yolo_mode: If True, skip browser testing in coding agent prompts
         feature_id: If set, work only on this specific feature (used by orchestrator for coding agents)
         agent_type: Type of agent: "initializer", "coding", "testing", or None (auto-detect)
-        testing_feature_id: For testing agents, the pre-claimed feature ID to test
+        testing_feature_id: For testing agents, the pre-claimed feature ID to test (legacy single mode)
+        testing_feature_ids: For testing agents, list of feature IDs to batch test
     """
     print("\n" + "=" * 70)
     print("  AUTONOMOUS CODING AGENT")
@@ -241,19 +243,19 @@ async def run_autonomous_agent(
             agent_id = f"feature-{feature_id}"
         else:
             agent_id = None
-        client = create_client(project_dir, model, yolo_mode=yolo_mode, agent_id=agent_id)
+        client = create_client(project_dir, model, yolo_mode=yolo_mode, agent_id=agent_id, agent_type=agent_type)
 
         # Choose prompt based on agent type
         if agent_type == "initializer":
             prompt = get_initializer_prompt(project_dir)
         elif agent_type == "testing":
-            prompt = get_testing_prompt(project_dir, testing_feature_id)
+            prompt = get_testing_prompt(project_dir, testing_feature_id, testing_feature_ids)
         elif feature_id:
             # Single-feature mode (used by orchestrator for coding agents)
             prompt = get_single_feature_prompt(feature_id, project_dir, yolo_mode)
         else:
             # General coding prompt (legacy path)
-            prompt = get_coding_prompt(project_dir)
+            prompt = get_coding_prompt(project_dir, yolo_mode=yolo_mode)
 
         # Run session with async context manager
         # Wrap in try/except to handle MCP server startup failures gracefully

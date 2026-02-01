@@ -324,7 +324,6 @@ blocked_commands:
 - `examples/project_allowed_commands.yaml` - Project config example (all commented by default)
 - `examples/org_config.yaml` - Org config example (all commented by default)
 - `examples/README.md` - Comprehensive guide with use cases, testing, and troubleshooting
-- `PHASE3_SPEC.md` - Specification for mid-session approval feature (future enhancement)
 
 ### Ollama Local Models (Optional)
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, create_engine, func
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class Base(DeclarativeBase):
 
 # Engine cache to avoid creating new engines for each request
 # Key: project directory path (as posix string), Value: SQLAlchemy engine
-_engine_cache: dict[str, object] = {}
+_engine_cache: dict[str, Engine] = {}
 
 # Lock for thread-safe access to the engine cache
 # Prevents race conditions when multiple threads create engines simultaneously

@@ -15,7 +15,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Awaitable, Callable, Literal, Set
+from typing import Any, Awaitable, Callable, Literal, Set
 
 import psutil
 
@@ -353,7 +353,7 @@ class AgentProcessManager:
             # stdin=DEVNULL prevents blocking if Claude CLI or child process tries to read stdin
             # CREATE_NO_WINDOW on Windows prevents console window pop-ups
             # PYTHONUNBUFFERED ensures output isn't delayed
-            popen_kwargs = {
+            popen_kwargs: dict[str, Any] = {
                 "stdin": subprocess.DEVNULL,
                 "stdout": subprocess.PIPE,
                 "stderr": subprocess.STDOUT,

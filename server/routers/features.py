@@ -8,10 +8,12 @@ API endpoints for feature/test case management.
 import logging
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
 from ..schemas import (
+    DependencyGraphEdge,
     DependencyGraphNode,
     DependencyGraphResponse,
     DependencyUpdate,
@@ -22,6 +24,7 @@ from ..schemas import (
     FeatureResponse,
     FeatureUpdate,
 )
+from ..utils.project_helpers import get_project_path as _get_project_path
 from ..utils.validation import validate_project_name
 
 # Lazy imports to avoid circular dependencies
@@ -29,17 +32,6 @@ _create_database = None
 _Feature = None
 
 logger = logging.getLogger(__name__)
-
-
-def _get_project_path(project_name: str) -> Path:
-    """Get project path from registry."""
-    import sys
-    root = Path(__file__).parent.parent.parent
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-    from registry import get_project_path
-    return get_project_path(project_name)
 
 
 def _get_db_classes():
@@ -349,6 +341,7 @@ async def get_dependency_graph(project_name: str):
                 deps = f.dependencies or []
                 blocking = [d for d in deps if d not in passing_ids]
 
+                status: Literal["pending", "in_progress", "done", "blocked"]
                 if f.passes:
                     status = "done"
                 elif blocking:
@@ -368,7 +361,7 @@ async def get_dependency_graph(project_name: str):
                 ))
 
                 for dep_id in deps:
-                    edges.append({"source": dep_id, "target": f.id})
+                    edges.append(DependencyGraphEdge(source=dep_id, target=f.id))
 
             return DependencyGraphResponse(nodes=nodes, edges=edges)
     except HTTPException:

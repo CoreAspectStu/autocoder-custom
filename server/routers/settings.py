@@ -9,17 +9,16 @@ Settings are stored in the registry database and shared across all projects.
 import mimetypes
 import os
 import sys
-from pathlib import Path
 
 from fastapi import APIRouter
 
 from ..schemas import ModelInfo, ModelsResponse, SettingsResponse, SettingsUpdate
+from ..services.chat_constants import ROOT_DIR
 
 # Mimetype fix for Windows - must run before StaticFiles is mounted
 mimetypes.add_type("text/javascript", ".js", True)
 
-# Add root to path for registry import
-ROOT_DIR = Path(__file__).parent.parent.parent
+# Ensure root is on sys.path for registry import
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
