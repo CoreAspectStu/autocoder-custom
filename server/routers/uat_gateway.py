@@ -141,7 +141,7 @@ async def run_playwright_tests_direct(
 
     # First, count the total tests using --list option
     print(f"🔍 Counting total tests...", flush=True)
-    list_cmd = ["npx", "playwright", "test", "--list"]
+    list_cmd = ["npx", "playwright", "test", "--list", f"--config={test_dir}/playwright.config.ts"]
     if test_filter:
         list_cmd.append(test_filter)
     else:
@@ -167,6 +167,7 @@ async def run_playwright_tests_direct(
     # Build Playwright command using list reporter
     cmd = [
         "npx", "playwright", "test",
+        f"--config={test_dir}/playwright.config.ts",
         f"--reporter=list",
         f"--base-url={base_url}"
     ]
@@ -196,6 +197,7 @@ async def run_playwright_tests_direct(
         'total_tests': test_count,
         'passed_tests': 0,
         'failed_tests': 0,
+        'duration_ms': 0,  # Will be updated if .last-run.json exists
         'failures': [],  # List of detailed failure info
         'stdout': result.stdout[:10000] if result.stdout else '',
         'stderr': result.stderr[:5000] if result.stderr else ''
@@ -296,8 +298,7 @@ async def run_playwright_tests_direct(
                 test_results.update({
                     'total_tests': total_test_runs,
                     'passed_tests': max(0, passed_tests),
-                    'failed_tests': failed_tests,
-                    'duration_ms': 0  # Not tracking duration yet
+                    'failed_tests': failed_tests
                 })
 
             print(f"📊 Test results: "
