@@ -2707,6 +2707,25 @@ async def approve_test_plan(cycle_id: str):
             print(f"   Tests created: {len(test_ids)}")
             print(f"   Test IDs: {test_ids[:5]}{'...' if len(test_ids) > 5 else ''}")
 
+            # Step 5: Generate Playwright test files
+            print(f"📁 Generating Playwright test files...")
+            try:
+                from api.registry import get_project_path
+                project_path = get_project_path(test_plan.project_name)
+
+                # Generate test files
+                files_created = _generate_playwright_tests(
+                    project_path=str(project_path),
+                    scenarios=scenarios,
+                    cycle_id=cycle_id
+                )
+                print(f"   Generated {files_created} test files in e2e/")
+            except Exception as e:
+                print(f"   ⚠️  Warning: Failed to generate test files: {e}")
+                print(f"   Tests are in database but Playwright files need manual creation")
+                import traceback
+                traceback.print_exc()
+
             return ApproveTestPlanResponse(
                 success=True,
                 cycle_id=cycle_id,
@@ -2855,3 +2874,167 @@ def _parse_test_scenarios_from_prd(
                 })
 
     return scenarios
+
+
+def _generate_playwright_tests(
+    project_path: str,
+    scenarios: List[Dict[str, Any]],
+    cycle_id: str
+) -> int:
+    """
+    Generate Playwright test files from approved test scenarios.
+
+    Creates:
+    - e2e/ directory structure
+    - playwright.config.ts
+    - One test file per journey with all scenarios for that journey
+    - tests.config.ts for shared configuration
+
+    Args:
+        project_path: Path to the project directory
+        scenarios: List of test scenario dictionaries
+        cycle_id: Cycle ID for test identification
+
+    Returns:
+        Number of test files created
+    """
+    from pathlib import Path
+    import json
+
+    project_dir = Path(project_path)
+    e2e_dir = project_dir / "e2e"
+
+    # Create e2e directory
+    e2e_dir.mkdir(parents=True, exist_ok=True)
+    print(f"   Created e2e directory at {e2e_dir}")
+
+    # Group scenarios by journey
+    scenarios_by_journey = {}
+    for scenario in scenarios:
+        journey = scenario['journey']
+        if journey not in scenarios_by_journey:
+            scenarios_by_journey[journey] = []
+        scenarios_by_journey[journey].append(scenario)
+
+    # Generate playwright.config.ts if it doesn't exist
+    config_path = e2e_dir / "playwright.config.ts"
+    if not config_path.exists():
+        config_content = '''import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : 3,
+  reporter: 'html',
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+'''
+        with open(config_path, 'w') as f:
+            f.write(config_content)
+        print(f"   Created playwright.config.ts")
+
+    # Generate one test file per journey
+    files_created = 0
+    for journey, journey_scenarios in scenarios_by_journey.items():
+        # Sanitize journey name for filename
+        journey_filename = journey.replace(' ', '_').replace('-', '_').lower()
+        test_file_path = e2e_dir / f"{journey_filename}.spec.ts"
+
+        # Generate test file content
+        test_content = f"""import {{ test }} from '@playwright/test';
+
+// {journey.title()} Journey Tests
+// UAT Cycle: {cycle_id}
+// Generated: {datetime.now().isoformat()}
+
+test.describe('{journey.title()} Journey', () => {{
+"""
+
+        # Generate each test case
+        for scenario in journey_scenarios:
+            scenario_name = scenario['scenario'].replace('[{cycle_id}] ', '').strip()
+            test_content += f"""
+  test('{scenario_name}', async ({{ page }}) => {{
+    // TODO: Implement test steps for: {scenario_name}
+    // Description: {scenario['description']}
+
+    // Test steps from plan:
+"""
+            for i, step in enumerate(scenario.get('steps', []), 1):
+                test_content += f"    // {i}. {step}\\n"
+
+            test_content += f"""
+    // Expected result: {scenario['expected_result']}
+
+    // Placeholder assertion - replace with actual test implementation
+    await page.goto('/');
+    expect(await page.locator('h1')).toBeVisible();
+
+    // Test marked as pending implementation
+    test.skip(true, 'Test implementation pending - generated from UAT test plan');
+  }});
+
+"""
+
+        test_content += "});\n"
+
+        # Write test file
+        with open(test_file_path, 'w') as f:
+            f.write(test_content)
+        files_created += 1
+        print(f"   Created {journey_filename}.spec.ts ({len(journey_scenarios)} tests)")
+
+    # Create package.json scripts if they don't exist
+    package_json_path = project_dir / "package.json"
+    if package_json_path.exists():
+        try:
+            with open(package_json_path, 'r') as f:
+                package_json = json.load(f)
+
+            # Ensure test scripts exist
+            if 'scripts' not in package_json:
+                package_json['scripts'] = {}
+
+            scripts_to_add = {
+                'test:e2e': 'playwright test',
+                'test:e2e:ui': 'playwright test --ui',
+                'test:e2e:headed': 'playwright test --headed',
+                'test:e2e:debug': 'playwright test --debug',
+            }
+
+            updated = False
+            for script_name, script_cmd in scripts_to_add.items():
+                if script_name not in package_json['scripts']:
+                    package_json['scripts'][script_name] = script_cmd
+                    updated = True
+
+            if updated:
+                with open(package_json_path, 'w') as f:
+                    json.dump(package_json, f, indent=2)
+                print(f"   Added test scripts to package.json")
+        except Exception as e:
+            print(f"   ⚠️  Could not update package.json: {e}")
+
+    print(f"   Generated {files_created} test files covering {len(scenarios)} scenarios")
+    return files_created
+
