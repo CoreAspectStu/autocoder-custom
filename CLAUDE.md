@@ -54,6 +54,12 @@ python autonomous_agent_demo.py --project-dir my-app --yolo
 
 # Parallel mode: run multiple agents concurrently (1-5 agents)
 python autonomous_agent_demo.py --project-dir my-app --parallel --max-concurrency 3
+
+# Batch mode: implement multiple features per agent session (1-3)
+python autonomous_agent_demo.py --project-dir my-app --batch-size 3
+
+# Batch specific features by ID
+python autonomous_agent_demo.py --project-dir my-app --batch-features 1,2,3
 ```
 
 ### YOLO Mode (Rapid Prototyping)
@@ -68,7 +74,7 @@ python autonomous_agent_demo.py --project-dir my-app --yolo
 ```
 
 **What's different in YOLO mode:**
-- No regression testing (skips `feature_get_for_regression`)
+- No regression testing
 - No Playwright MCP server (browser automation disabled)
 - Features marked passing after lint/type-check succeeds
 - Faster iteration for prototyping
@@ -97,10 +103,13 @@ npm run lint     # Run ESLint
 ### Python
 
 ```bash
-ruff check .                      # Lint
-mypy .                            # Type check
-python test_security.py           # Security unit tests (163 tests)
-python test_security_integration.py  # Integration tests (9 tests)
+ruff check .                          # Lint
+mypy .                                # Type check
+python test_security.py               # Security unit tests (12 tests)
+python test_security_integration.py   # Integration tests (9 tests)
+python -m pytest test_client.py       # Client tests (20 tests)
+python -m pytest test_dependency_resolver.py  # Dependency resolver tests (12 tests)
+python -m pytest test_rate_limit_utils.py     # Rate limit tests (22 tests)
 ```
 
 ### React UI
@@ -108,10 +117,16 @@ python test_security_integration.py  # Integration tests (9 tests)
 ```bash
 cd ui
 npm run lint          # ESLint
-npm run build         # Type check + build
+npm run build         # Type check + build (Vite 7)
 npm run test:e2e      # Playwright end-to-end tests
 npm run test:e2e:ui   # Playwright tests with UI
 ```
+
+### CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to master:
+- **Python job**: ruff lint + security tests
+- **UI job**: ESLint + TypeScript build
 
 ### Code Quality
 
@@ -124,16 +139,21 @@ Configuration in `pyproject.toml`:
 ### Core Python Modules
 
 - `start.py` - CLI launcher with project creation/selection menu
-- `autonomous_agent_demo.py` - Entry point for running the agent
+- `autonomous_agent_demo.py` - Entry point for running the agent (supports `--yolo`, `--parallel`, `--batch-size`, `--batch-features`)
 - `autocoder_paths.py` - Central path resolution with dual-path backward compatibility and migration
 - `agent.py` - Agent session loop using Claude Agent SDK
-- `client.py` - ClaudeSDKClient configuration with security hooks and MCP servers
+- `client.py` - ClaudeSDKClient configuration with security hooks, MCP servers, and Vertex AI support
 - `security.py` - Bash command allowlist validation (ALLOWED_COMMANDS whitelist)
-- `prompts.py` - Prompt template loading with project-specific fallback
+- `prompts.py` - Prompt template loading with project-specific fallback and batch feature prompts
 - `progress.py` - Progress tracking, database queries, webhook notifications
-- `registry.py` - Project registry for mapping names to paths (cross-platform)
+- `registry.py` - Project registry for mapping names to paths (cross-platform), global settings model
 - `parallel_orchestrator.py` - Concurrent agent execution with dependency-aware scheduling
+- `auth.py` - Authentication error detection for Claude CLI
+- `env_constants.py` - Shared environment variable constants (API_ENV_VARS) used by client.py and chat sessions
+- `rate_limit_utils.py` - Rate limit detection, retry parsing, exponential backoff with jitter
+- `api/database.py` - SQLAlchemy models (Feature, Schedule, ScheduleOverride)
 - `api/dependency_resolver.py` - Cycle detection (Kahn's algorithm + DFS) and dependency validation
+- `api/migration.py` - JSON-to-SQLite migration utility
 
 ### Project Registry
 
@@ -147,13 +167,36 @@ The registry uses:
 
 ### Server API (server/)
 
-The FastAPI server provides REST endpoints for the UI:
+The FastAPI server provides REST and WebSocket endpoints for the UI:
 
-- `server/routers/projects.py` - Project CRUD with registry integration
-- `server/routers/features.py` - Feature management
-- `server/routers/agent.py` - Agent control (start/stop/pause/resume)
-- `server/routers/filesystem.py` - Filesystem browser API with security controls
-- `server/routers/spec_creation.py` - WebSocket for interactive spec creation
+**Routers** (`server/routers/`):
+- `projects.py` - Project CRUD with registry integration
+- `features.py` - Feature management
+- `agent.py` - Agent control (start/stop/pause/resume)
+- `filesystem.py` - Filesystem browser API with security controls
+- `spec_creation.py` - WebSocket for interactive spec creation
+- `expand_project.py` - Interactive project expansion via natural language
+- `assistant_chat.py` - Read-only project assistant chat (WebSocket/REST)
+- `terminal.py` - Interactive terminal I/O with PTY support (WebSocket bidirectional)
+- `devserver.py` - Dev server control (start/stop) and config
+- `schedules.py` - CRUD for time-based agent scheduling
+- `settings.py` - Global settings management (model selection, YOLO, batch size, headless browser)
+
+**Services** (`server/services/`):
+- `process_manager.py` - Agent process lifecycle management
+- `project_config.py` - Project type detection and dev command management
+- `terminal_manager.py` - Terminal session management with PTY (`pywinpty` on Windows)
+- `scheduler_service.py` - APScheduler-based automated agent scheduling
+- `dev_server_manager.py` - Dev server lifecycle management
+- `assistant_chat_session.py` / `assistant_database.py` - Assistant chat sessions with SQLite persistence
+- `spec_chat_session.py` - Spec creation chat sessions
+- `expand_chat_session.py` - Expand project chat sessions
+- `chat_constants.py` - Shared constants for chat services
+
+**Utilities** (`server/utils/`):
+- `process_utils.py` - Process management utilities
+- `project_helpers.py` - Project path resolution helpers
+- `validation.py` - Project name validation
 
 ### Feature Management
 
@@ -164,18 +207,26 @@ Features are stored in SQLite (`features.db`) via SQLAlchemy. The agent interact
 
 MCP tools available to the agent:
 - `feature_get_stats` - Progress statistics
-- `feature_get_next` - Get highest-priority pending feature (respects dependencies)
-- `feature_claim_next` - Atomically claim next available feature (for parallel mode)
-- `feature_get_for_regression` - Random passing features for regression testing
+- `feature_get_by_id` - Get a single feature by ID
+- `feature_get_summary` - Get summary of all features
+- `feature_get_ready` - Get features ready to work on (dependencies met)
+- `feature_get_blocked` - Get features blocked by unmet dependencies
+- `feature_get_graph` - Get full dependency graph
+- `feature_claim_and_get` - Atomically claim next available feature (for parallel mode)
+- `feature_mark_in_progress` - Mark feature as in progress
 - `feature_mark_passing` - Mark feature complete
+- `feature_mark_failing` - Mark feature as failing
 - `feature_skip` - Move feature to end of queue
+- `feature_clear_in_progress` - Clear in-progress status
 - `feature_create_bulk` - Initialize all features (used by initializer)
+- `feature_create` - Create a single feature
 - `feature_add_dependency` - Add dependency between features (with cycle detection)
 - `feature_remove_dependency` - Remove a dependency
+- `feature_set_dependencies` - Set all dependencies for a feature at once
 
 ### React UI (ui/)
 
-- Tech stack: React 19, TypeScript, TanStack Query, Tailwind CSS v4, Radix UI, dagre (graph layout)
+- Tech stack: React 19, TypeScript, Vite 7, TanStack Query, Tailwind CSS v4, Radix UI, dagre (graph layout), xterm.js (terminal)
 - `src/App.tsx` - Main app with project selection, kanban board, agent controls
 - `src/hooks/useWebSocket.ts` - Real-time updates via WebSocket (progress, agent status, logs, agent updates)
 - `src/hooks/useProjects.ts` - React Query hooks for API calls
@@ -187,6 +238,12 @@ Key components:
 - `DependencyGraph.tsx` - Interactive node graph visualization with dagre layout
 - `CelebrationOverlay.tsx` - Confetti animation on feature completion
 - `FolderBrowser.tsx` - Server-side filesystem browser for project folder selection
+- `Terminal.tsx` / `TerminalTabs.tsx` - xterm.js-based multi-tab terminal
+- `AssistantPanel.tsx` / `AssistantChat.tsx` - AI assistant for project Q&A
+- `ExpandProjectModal.tsx` / `ExpandProjectChat.tsx` - Add features via natural language
+- `DevServerControl.tsx` - Dev server start/stop control
+- `ScheduleModal.tsx` - Schedule management UI
+- `SettingsModal.tsx` - Global settings panel
 
 Keyboard shortcuts (press `?` for help):
 - `D` - Toggle debug panel
@@ -247,15 +304,6 @@ The following directories (relative to home) are always blocked:
 - `.gnupg`, `.gpg`, `.password-store` - Encryption keys
 - `.docker`, `.config/gcloud` - Container/cloud configs
 - `.npmrc`, `.pypirc`, `.netrc` - Package manager credentials
-
-**Example Output:**
-
-```
-Created security settings at /path/to/project/.claude_settings.json
-   - Sandbox enabled (OS-level bash isolation)
-   - Filesystem restricted to: /path/to/project
-   - Extra read paths (validated): /Users/me/docs, /opt/shared-libs
-```
 
 #### Per-Project Allowed Commands
 
@@ -318,12 +366,28 @@ blocked_commands:
 
 **Files:**
 - `security.py` - Command validation logic and hardcoded blocklist
-- `test_security.py` - Unit tests for security system (136 tests)
-- `test_security_integration.py` - Integration tests with real hooks (9 tests)
-- `TEST_SECURITY.md` - Quick testing reference guide
+- `test_security.py` - Unit tests for security system
+- `test_security_integration.py` - Integration tests with real hooks
 - `examples/project_allowed_commands.yaml` - Project config example (all commented by default)
 - `examples/org_config.yaml` - Org config example (all commented by default)
 - `examples/README.md` - Comprehensive guide with use cases, testing, and troubleshooting
+
+### Vertex AI Configuration (Optional)
+
+Run coding agents via Google Cloud Vertex AI:
+
+1. Install and authenticate gcloud CLI: `gcloud auth application-default login`
+2. Configure `.env`:
+   ```
+   CLAUDE_CODE_USE_VERTEX=1
+   CLOUD_ML_REGION=us-east5
+   ANTHROPIC_VERTEX_PROJECT_ID=your-gcp-project-id
+   ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-5@20251101
+   ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-5@20250929
+   ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-3-5-haiku@20241022
+   ```
+
+**Note:** Use `@` instead of `-` in model names for Vertex AI.
 
 ### Ollama Local Models (Optional)
 
@@ -360,8 +424,24 @@ Run coding agents using local models via Ollama v0.14.0+:
 
 ## Claude Code Integration
 
-- `.claude/commands/create-spec.md` - `/create-spec` slash command for interactive spec creation
-- `.claude/skills/frontend-design/SKILL.md` - Skill for distinctive UI design
+**Slash commands** (`.claude/commands/`):
+- `/create-spec` - Interactive spec creation for new projects
+- `/expand-project` - Expand existing project with new features
+- `/gsd-to-autocoder-spec` - Convert GSD codebase mapping to app_spec.txt
+- `/check-code` - Run lint and type-check for code quality
+- `/checkpoint` - Create comprehensive checkpoint commit
+- `/review-pr` - Review pull requests
+
+**Custom agents** (`.claude/agents/`):
+- `coder.md` - Elite software architect agent for code implementation (Opus)
+- `code-review.md` - Code review agent for quality/security/performance analysis (Opus)
+- `deep-dive.md` - Technical investigator for deep analysis and debugging (Opus)
+
+**Skills** (`.claude/skills/`):
+- `frontend-design` - Distinctive, production-grade UI design
+- `gsd-to-autocoder-spec` - Convert GSD codebase mapping to Autocoder app_spec format
+
+**Other:**
 - `.claude/templates/` - Prompt templates copied to new projects
 - `examples/` - Configuration examples and documentation for security settings
 
@@ -392,7 +472,7 @@ The UI receives updates via WebSocket (`/ws/projects/{project_name}`):
 
 When running with `--parallel`, the orchestrator:
 1. Spawns multiple Claude agents as subprocesses (up to `--max-concurrency`)
-2. Each agent claims features atomically via `feature_claim_next`
+2. Each agent claims features atomically via `feature_claim_and_get`
 3. Features blocked by unmet dependencies are skipped
 4. Browser contexts are isolated per agent using `--isolated` flag
 5. AgentTracker parses output and emits `agent_update` messages for UI
@@ -404,6 +484,16 @@ The orchestrator enforces strict bounds on concurrent processes:
 - `MAX_TOTAL_AGENTS = 10` - Hard limit on total agents (coding + testing)
 - Testing agents are capped at `max_concurrency` (same as coding agents)
 - Total process count never exceeds 11 Python processes (1 orchestrator + 5 coding + 5 testing)
+
+### Multi-Feature Batching
+
+Agents can implement multiple features per session using `--batch-size` (1-3, default: 3):
+- `--batch-size N` - Max features per coding agent batch
+- `--testing-batch-size N` - Features per testing batch (1-5, default: 3)
+- `--batch-features 1,2,3` - Specific feature IDs for batch implementation
+- `--testing-batch-features 1,2,3` - Specific feature IDs for batch regression testing
+- `prompts.py` provides `get_batch_feature_prompt()` for multi-feature prompt generation
+- Configurable in UI via settings panel
 
 ### Design System
 

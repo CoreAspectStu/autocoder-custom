@@ -28,7 +28,7 @@ import { ThemeSelector } from './components/ThemeSelector'
 import { ResetProjectModal } from './components/ResetProjectModal'
 import { ProjectSetupRequired } from './components/ProjectSetupRequired'
 import { getDependencyGraph, startAgent } from './lib/api'
-import { Loader2, Settings, Moon, Sun, RotateCcw } from 'lucide-react'
+import { Loader2, Settings, Moon, Sun, RotateCcw, BookOpen } from 'lucide-react'
 import type { Feature } from './lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -334,6 +334,17 @@ function App() {
                   )}
                 </>
               )}
+
+              {/* Docs link */}
+              <Button
+                onClick={() => { window.location.hash = '#/docs' }}
+                variant="outline"
+                size="sm"
+                title="Documentation"
+                aria-label="Open Documentation"
+              >
+                <BookOpen size={18} />
+              </Button>
 
               {/* Theme selector */}
               <ThemeSelector
