@@ -41,6 +41,8 @@ const VIEW_MODE_KEY = 'autocoder-view-mode'
 // Bottom padding for main content when debug panel is collapsed (40px header + 8px margin)
 const COLLAPSED_DEBUG_PANEL_CLEARANCE = 48
 
+type InitializerStatus = 'idle' | 'starting' | 'error'
+
 function App() {
   // Initialize selected project from localStorage
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
@@ -63,6 +65,8 @@ function App() {
   const [isSpecCreating, setIsSpecCreating] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [showSpecChat, setShowSpecChat] = useState(false)  // For "Create Spec" button in empty kanban
+  const [specInitializerStatus, setSpecInitializerStatus] = useState<InitializerStatus>('idle')
+  const [specInitializerError, setSpecInitializerError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
       const stored = localStorage.getItem(VIEW_MODE_KEY)
@@ -496,22 +500,30 @@ function App() {
           <SpecCreationChat
             projectName={selectedProject}
             onComplete={async (_specPath, yoloMode) => {
-              // Auto-start the agent after spec creation (same as NewProjectModal)
+              setSpecInitializerStatus('starting')
               try {
                 await startAgent(selectedProject, {
                   yoloMode: yoloMode ?? false,
                   maxConcurrency: 3,
                 })
+                // Success — close chat and refresh
+                setShowSpecChat(false)
+                setSpecInitializerStatus('idle')
+                queryClient.invalidateQueries({ queryKey: ['projects'] })
+                queryClient.invalidateQueries({ queryKey: ['features', selectedProject] })
               } catch (err) {
-                console.error('Failed to start agent:', err)
+                setSpecInitializerStatus('error')
+                setSpecInitializerError(err instanceof Error ? err.message : 'Failed to start agent')
               }
-              setShowSpecChat(false)
-              // Refresh projects to update has_spec
-              queryClient.invalidateQueries({ queryKey: ['projects'] })
-              queryClient.invalidateQueries({ queryKey: ['features', selectedProject] })
             }}
-            onCancel={() => setShowSpecChat(false)}
-            onExitToProject={() => setShowSpecChat(false)}
+            onCancel={() => { setShowSpecChat(false); setSpecInitializerStatus('idle') }}
+            onExitToProject={() => { setShowSpecChat(false); setSpecInitializerStatus('idle') }}
+            initializerStatus={specInitializerStatus}
+            initializerError={specInitializerError}
+            onRetryInitializer={() => {
+              setSpecInitializerError(null)
+              setSpecInitializerStatus('idle')
+            }}
           />
         </div>
       )}
