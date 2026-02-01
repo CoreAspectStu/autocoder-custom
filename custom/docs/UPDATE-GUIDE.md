@@ -1,11 +1,23 @@
 # AutoCoder Update Guide
 
-**Last Updated:** 2026-01-22
+**Last Updated:** 2026-02-01
 **Purpose:** Safe upstream updates while preserving custom work
 
 ## 📋 Pre-Update Checklist
 
-Before pulling upstream changes:
+**⚠️ NEW: Run the automated readiness check first:**
+```bash
+cd ~/projects/autocoder
+./bin/check-upgrade-readiness.sh
+```
+
+This checks for:
+- Uncommitted changes (will block upgrade)
+- Pending database migrations (will warn)
+- Service health status
+- Backup branch exists
+
+Then proceed with manual steps:
 
 1. **Verify clean working directory:**
    ```bash
@@ -21,12 +33,16 @@ Before pulling upstream changes:
 
 3. **Check what's coming:**
    ```bash
-   git fetch origin master
-   git log --oneline HEAD..origin/master | head -20  # See incoming commits
-   git diff --stat HEAD..origin/master  # See file changes
+   git fetch upstream master
+   git log --oneline HEAD..upstream/master | head -20  # See incoming commits
+   git diff --stat HEAD..upstream/master  # See file changes
    ```
 
-4. **Document current custom work** (see below for what we have)
+4. **Check for schema changes** (if merging custom work):
+   ```bash
+   # Search for database schema changes in incoming commits
+   git diff HEAD..upstream/master -- "*.py" | grep -E "Column|ADD COLUMN|ALTER TABLE"
+   ```
 
 ---
 
@@ -235,6 +251,30 @@ After successful update:
 - `custom/README.md` - Overview of all customizations
 - `custom/docs/auth-settings-customization.md` - Auth system details (deprecated)
 - `custom/patches/README.md` - Patch system (currently unused, consider removing)
+
+---
+
+## 📜 Past Incidents & Lessons Learned
+
+### 2026-02-01: Database Schema Mismatch After Upgrade
+
+**Problem:** After merging upstream fixes and custom UAT work, project assistants failed with "table conversations has no column named mode".
+
+**Root Cause:**
+- Custom UAT work added `mode` column to `conversations` table
+- Migration script existed but was never executed
+- Code expected new schema but databases had old schema
+
+**Resolution:**
+- Manually ran `assistant_db_add_mode_column.py` on all 7 project databases
+- Created `check-upgrade-readiness.sh` to catch this in future
+
+**Lessons:**
+1. Schema changes require automated migrations
+2. Run readiness check before any upgrade
+3. Never merge custom work without checking for pending migrations
+
+**Full Postmortem:** `docs/postmortem-2026-02-01-upgrade.md`
 
 ---
 
