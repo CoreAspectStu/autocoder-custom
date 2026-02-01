@@ -1050,24 +1050,53 @@ async def list_uat_tests():
             # Convert row to dict
             test_dict = dict(row)
 
+            # Map UAT test fields to FeatureResponse schema
+            # UAT: phase, journey, scenario, description, steps (JSON)
+            # Feature: category, name, description, steps (list), dependencies (list)
+
+            # Parse steps from JSON if available
+            steps_json = test_dict.get('steps', '[]')
+            if isinstance(steps_json, str):
+                import json
+                try:
+                    steps_list = json.loads(steps_json)
+                except:
+                    steps_list = []
+            elif isinstance(steps_json, list):
+                steps_list = steps_json
+            else:
+                steps_list = []
+
+            # Create FeatureResponse-compatible dict
+            feature_response = {
+                'id': test_dict['id'],
+                'priority': test_dict['priority'],
+                'category': test_dict.get('journey', 'uat'),  # Use journey as category
+                'name': test_dict.get('scenario', test_dict.get('description', '')),
+                'description': test_dict.get('description', ''),
+                'steps': steps_list if steps_list else ['No steps defined'],
+                'dependencies': [],  # UAT tests don't use feature dependencies
+                'passes': False,
+                'in_progress': False,
+            }
+
             # Map UAT status to FeatureResponse structure
             # UAT statuses: pending, in_progress, passed, failed, needs-human, parked
             status = test_dict.get('status', 'pending')
 
-            # Compute passes and in_progress flags from status
             if status == 'passed':
-                test_dict['passes'] = True
-                test_dict['in_progress'] = False
-                done.append(test_dict)
+                feature_response['passes'] = True
+                feature_response['in_progress'] = False
+                done.append(feature_response)
             elif status == 'in_progress':
-                test_dict['passes'] = False
-                test_dict['in_progress'] = True
-                in_progress.append(test_dict)
+                feature_response['passes'] = False
+                feature_response['in_progress'] = True
+                in_progress.append(feature_response)
             else:
                 # pending, failed, needs-human, parked all go to pending column
-                test_dict['passes'] = False
-                test_dict['in_progress'] = False
-                pending.append(test_dict)
+                feature_response['passes'] = False
+                feature_response['in_progress'] = False
+                pending.append(feature_response)
 
         return FeatureListResponse(
             pending=pending,
