@@ -63,21 +63,19 @@ export function KanbanColumn({
               {onAddFeature && (
                 <button
                   onClick={onAddFeature}
-                  className="neo-btn neo-btn-primary text-sm py-1.5 px-3"
+                  className="neo-btn neo-btn-primary text-sm py-1.5 px-2"
                   title={isUATMode ? "Add UAT Test (N)" : "Add new feature (N)"}
                 >
-                  <Plus size={16} className="mr-1" />
-                  <span className="hidden md:inline">{isUATMode ? 'Add UAT Test' : 'Add Feature'}</span>
+                  <Plus size={16} />
                 </button>
               )}
               {onExpandProject && showExpandButton && (
                 <button
                   onClick={onExpandProject}
-                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-3"
+                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-2"
                   title={isUATMode ? "Generate UAT Plan (E)" : "Expand project with AI (E)"}
                 >
-                  <Sparkles size={16} className="mr-1" />
-                  <span className="hidden md:inline">{isUATMode ? 'Generate UAT Plan' : 'Expand Project'}</span>
+                  <Sparkles size={16} />
                 </button>
               )}
             </div>
