@@ -31,6 +31,9 @@ import json
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Import FeatureListResponse from schemas to match features API structure
+from ..schemas import FeatureListResponse, FeatureResponse
+
 try:
     from custom.uat_gateway.orchestrator.orchestrator import Orchestrator, OrchestratorConfig
     from custom.uat_gateway.state_manager.state_manager import StateManager
@@ -984,21 +987,16 @@ def get_uat_db_session():
         session.close()
 
 
-class UATTestListResponse(BaseModel):
-    """Response model for listing UAT tests"""
-    total: int
-    passing: int
-    in_progress: int
-    features: List[Dict[str, Any]]
-
-
-@router.get("/tests", response_model=UATTestListResponse)
+@router.get("/tests", response_model=FeatureListResponse)
 async def list_uat_tests():
     """
     List all UAT tests from uat_tests.db
 
     This endpoint mirrors the features API but queries from the UAT database
     instead of the dev features database.
+
+    Returns tests organized by status (pending/in_progress/done) to match
+    the FeatureListResponse schema expected by the frontend.
     """
     try:
         with get_uat_db_session() as session:
@@ -1007,19 +1005,25 @@ async def list_uat_tests():
             # Query all UAT tests
             uat_tests = session.query(Feature).order_by(Feature.priority).all()
 
-            # Convert to dict format
-            tests_list = [test.to_dict() for test in uat_tests]
+            # Organize by status (matching features router logic)
+            pending = []
+            in_progress = []
+            done = []
 
-            # Calculate statistics
-            total = len(tests_list)
-            passing = sum(1 for t in tests_list if t.get('passes', False))
-            in_progress = sum(1 for t in tests_list if t.get('in_progress', False))
+            for test in uat_tests:
+                # Convert Feature model to dict matching FeatureResponse structure
+                test_dict = test.to_dict()
+                if test.passes:
+                    done.append(test_dict)
+                elif test.in_progress:
+                    in_progress.append(test_dict)
+                else:
+                    pending.append(test_dict)
 
-            return UATTestListResponse(
-                total=total,
-                passing=passing,
+            return FeatureListResponse(
+                pending=pending,
                 in_progress=in_progress,
-                features=tests_list
+                done=done,
             )
 
     except Exception as e:
