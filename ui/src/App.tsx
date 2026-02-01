@@ -406,8 +406,9 @@ function App() {
               />
             )}
 
-            {/* Initializing Features State - show when agent is running but no features yet */}
-            {features &&
+            {/* Initializing Features State - show when agent is running but no features yet (DEV MODE ONLY) */}
+            {!isUATMode &&
+             features &&
              features.pending.length === 0 &&
              features.in_progress.length === 0 &&
              features.done.length === 0 &&
@@ -420,6 +421,35 @@ function App() {
                 <p className="text-neo-text-secondary">
                   The agent is reading your spec and creating features. This may take a moment.
                 </p>
+              </div>
+            )}
+
+            {/* UAT Mode - No tests yet */}
+            {isUATMode &&
+             features &&
+             features.pending.length === 0 &&
+             features.in_progress.length === 0 &&
+             features.done.length === 0 && (
+              <div className="neo-card p-8 text-center border-2 border-dashed border-purple-300 dark:border-purple-700">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <h3 className="font-display font-bold text-xl mb-2">
+                  Ready to Generate UAT Test Plan
+                </h3>
+                <p className="text-neo-text-secondary mb-4">
+                  Open the assistant to generate an intelligent test plan based on your PRD and completed features.
+                </p>
+                <div className="flex items-center justify-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Click the assistant button in the bottom-right corner to begin</span>
+                </div>
               </div>
             )}
 
