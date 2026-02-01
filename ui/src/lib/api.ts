@@ -331,34 +331,38 @@ export async function validatePath(path: string): Promise<PathValidationResponse
 // ============================================================================
 
 export async function listAssistantConversations(
-  projectName: string
+  projectName: string,
+  mode: 'dev' | 'uat' = 'dev'
 ): Promise<AssistantConversation[]> {
-  return fetchJSON(`/assistant/conversations/${encodeURIComponent(projectName)}`)
+  return fetchJSON(`/assistant/conversations/${encodeURIComponent(projectName)}?mode=${mode}`)
 }
 
 export async function getAssistantConversation(
   projectName: string,
-  conversationId: number
+  conversationId: number,
+  mode: 'dev' | 'uat' = 'dev'
 ): Promise<AssistantConversationDetail> {
   return fetchJSON(
-    `/assistant/conversations/${encodeURIComponent(projectName)}/${conversationId}`
+    `/assistant/conversations/${encodeURIComponent(projectName)}/${conversationId}?mode=${mode}`
   )
 }
 
 export async function createAssistantConversation(
-  projectName: string
+  projectName: string,
+  mode: 'dev' | 'uat' = 'dev'
 ): Promise<AssistantConversation> {
-  return fetchJSON(`/assistant/conversations/${encodeURIComponent(projectName)}`, {
+  return fetchJSON(`/assistant/conversations/${encodeURIComponent(projectName)}?mode=${mode}`, {
     method: 'POST',
   })
 }
 
 export async function deleteAssistantConversation(
   projectName: string,
-  conversationId: number
+  conversationId: number,
+  mode: 'dev' | 'uat' = 'dev'
 ): Promise<void> {
   await fetchJSON(
-    `/assistant/conversations/${encodeURIComponent(projectName)}/${conversationId}`,
+    `/assistant/conversations/${encodeURIComponent(projectName)}/${conversationId}?mode=${mode}`,
     { method: 'DELETE' }
   )
 }
@@ -504,7 +508,7 @@ export async function getNextScheduledRun(projectName: string): Promise<NextRunR
 // ============================================================================
 
 export async function listUATTests(): Promise<FeatureListResponse> {
-  return fetchJSON('/uat/tests')
+  return fetchJSON('/api/uat/tests')
 }
 
 export async function getUATTest(testId: number): Promise<Feature> {
@@ -517,7 +521,7 @@ export async function getUATStatsSummary(): Promise<{
   in_progress: number
   percentage: number
 }> {
-  return fetchJSON('/uat/stats/summary')
+  return fetchJSON('/api/uat/stats/summary')
 }
 
 export async function createUATTest(testData: {
@@ -534,7 +538,7 @@ export async function createUATTest(testData: {
   message: string
   test: Feature
 }> {
-  const response = await fetch('/uat/tests', {
+  const response = await fetch('/api/uat/tests', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -590,23 +594,13 @@ export async function triggerUATExecution(
   agents_spawned?: number
   tests_assigned?: number
 }> {
-  const response = await fetch('/uat/trigger', {
+  return fetchJSON('/api/uat/trigger', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({
       cycle_id: cycleId,
       project_name: projectName
     }),
   })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to trigger UAT execution')
-  }
-
-  return response.json()
 }
 
 export async function getUATProgress(cycleId: string): Promise<{

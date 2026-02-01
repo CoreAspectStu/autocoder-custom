@@ -95,7 +95,7 @@ export function TestAgentCard({ agent }: TestAgentCardProps) {
 
       {/* Header with avatar and test name */}
       <div className="flex items-center gap-2 mb-2">
-        <AgentAvatar name={`Agent ${agent.agentId}`} state={agent.state === 'running' ? 'working' : 'idle'} size="sm" />
+        <AgentAvatar name={`Agent ${agent.agentId}` as any} state={agent.state === 'running' ? 'working' : 'idle'} size="sm" />
         <div className="flex-1 min-w-0">
           <div className="font-bold text-xs truncate text-neo-text-primary">
             {agent.testName}

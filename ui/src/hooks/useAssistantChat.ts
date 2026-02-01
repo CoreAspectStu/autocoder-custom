@@ -9,6 +9,7 @@ type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
 interface UseAssistantChatOptions {
   projectName: string;
+  mode?: 'dev' | 'uat';  // Add mode option
   onError?: (error: string) => void;
 }
 
@@ -29,6 +30,7 @@ function generateId(): string {
 
 export function useAssistantChat({
   projectName,
+  mode = 'dev',
   onError,
 }: UseAssistantChatOptions): UseAssistantChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -77,7 +79,8 @@ export function useAssistantChat({
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/assistant/ws/${encodeURIComponent(projectName)}`;
+    // Append mode as query parameter for backend context
+    const wsUrl = `${protocol}//${host}/api/assistant/ws/${encodeURIComponent(projectName)}?mode=${mode}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

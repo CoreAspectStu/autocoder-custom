@@ -999,32 +999,81 @@ async def list_uat_tests():
     the FeatureListResponse schema expected by the frontend.
     """
     try:
-        with get_uat_db_session() as session:
-            from api.database import Feature
+        import sqlite3
+        import json
+        from pathlib import Path
 
-            # Query all UAT tests
-            uat_tests = session.query(Feature).order_by(Feature.priority).all()
+        # Connect directly to UAT database
+        uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
 
-            # Organize by status (matching features router logic)
-            pending = []
-            in_progress = []
-            done = []
-
-            for test in uat_tests:
-                # Convert Feature model to dict matching FeatureResponse structure
-                test_dict = test.to_dict()
-                if test.passes:
-                    done.append(test_dict)
-                elif test.in_progress:
-                    in_progress.append(test_dict)
-                else:
-                    pending.append(test_dict)
-
+        if not uat_db_path.exists():
+            # Return empty lists if no UAT database exists yet
             return FeatureListResponse(
-                pending=pending,
-                in_progress=in_progress,
-                done=done,
+                pending=[],
+                in_progress=[],
+                done=[],
             )
+
+        conn = sqlite3.connect(str(uat_db_path))
+        conn.row_factory = sqlite3.Row  # Enable column access by name
+        cursor = conn.cursor()
+
+        # Query UAT test features from the correct table (Feature #174)
+        cursor.execute("""
+            SELECT
+                id,
+                priority,
+                scenario as name,
+                description,
+                status,
+                phase,
+                journey,
+                test_type,
+                expected_result,
+                devlayer_card_id,
+                started_at,
+                completed_at,
+                created_at
+            FROM uat_test_features
+            ORDER BY priority ASC
+        """)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        # Organize by status (matching features router logic)
+        pending = []
+        in_progress = []
+        done = []
+
+        for row in rows:
+            # Convert row to dict
+            test_dict = dict(row)
+
+            # Map UAT status to FeatureResponse structure
+            # UAT statuses: pending, in_progress, passed, failed, needs-human, parked
+            status = test_dict.get('status', 'pending')
+
+            # Compute passes and in_progress flags from status
+            if status == 'passed':
+                test_dict['passes'] = True
+                test_dict['in_progress'] = False
+                done.append(test_dict)
+            elif status == 'in_progress':
+                test_dict['passes'] = False
+                test_dict['in_progress'] = True
+                in_progress.append(test_dict)
+            else:
+                # pending, failed, needs-human, parked all go to pending column
+                test_dict['passes'] = False
+                test_dict['in_progress'] = False
+                pending.append(test_dict)
+
+        return FeatureListResponse(
+            pending=pending,
+            in_progress=in_progress,
+            done=done,
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -1037,18 +1086,67 @@ async def list_uat_tests():
 async def get_uat_test(test_id: int):
     """Get a specific UAT test by ID"""
     try:
-        with get_uat_db_session() as session:
-            from api.database import Feature
+        import sqlite3
+        from pathlib import Path
 
-            test = session.query(Feature).filter(Feature.id == test_id).first()
+        # Connect directly to UAT database
+        uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
 
-            if not test:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"UAT test {test_id} not found"
-                )
+        if not uat_db_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"UAT database not found"
+            )
 
-            return test.to_dict()
+        conn = sqlite3.connect(str(uat_db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Query specific UAT test by ID
+        cursor.execute("""
+            SELECT
+                id,
+                priority,
+                scenario as name,
+                description,
+                status,
+                phase,
+                journey,
+                test_type,
+                expected_result,
+                devlayer_card_id,
+                started_at,
+                completed_at,
+                created_at
+            FROM uat_test_features
+            WHERE id = ?
+        """, (test_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"UAT test {test_id} not found"
+            )
+
+        # Convert to dict
+        test_dict = dict(row)
+
+        # Map status to passes/in_progress flags
+        status = test_dict.get('status', 'pending')
+        if status == 'passed':
+            test_dict['passes'] = True
+            test_dict['in_progress'] = False
+        elif status == 'in_progress':
+            test_dict['passes'] = False
+            test_dict['in_progress'] = True
+        else:
+            test_dict['passes'] = False
+            test_dict['in_progress'] = False
+
+        return test_dict
 
     except HTTPException:
         raise

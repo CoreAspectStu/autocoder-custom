@@ -22,20 +22,11 @@ export function UATModeToggle({ projectName, hasFeatures }: UATModeToggleProps) 
 
   return (
     <div className="flex items-center gap-2">
-      {/* Mode badge */}
-      <span className="text-xs font-bold uppercase tracking-wide">
-        {isUAT ? (
-          <span className="text-purple-600 dark:text-purple-400">UAT Mode</span>
-        ) : (
-          <span className="text-gray-600 dark:text-gray-400">Dev Mode</span>
-        )}
-      </span>
-
-      {/* Toggle button */}
+      {/* Toggle button with optional UAT MODE badge */}
       <button
         onClick={handleToggle}
         className={`
-          neo-btn text-sm py-2 px-3 transition-all duration-300
+          neo-btn text-sm py-2 px-3 transition-all duration-300 flex items-center gap-2
           ${isUAT
             ? 'bg-purple-500 hover:bg-purple-600 text-white border-purple-600 dark:border-purple-400'
             : 'bg-neo-card hover:bg-neo-bg text-neo-text border-neo-border'
