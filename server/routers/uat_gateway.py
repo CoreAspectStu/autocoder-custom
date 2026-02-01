@@ -1068,11 +1068,12 @@ async def list_uat_tests():
                 steps_list = []
 
             # Create FeatureResponse-compatible dict
+            # Note: SQL query aliases 'scenario as name', so we use 'name' here
             feature_response = {
                 'id': test_dict['id'],
                 'priority': test_dict['priority'],
                 'category': test_dict.get('journey', 'uat'),  # Use journey as category
-                'name': test_dict.get('scenario', test_dict.get('description', '')),
+                'name': test_dict.get('name', test_dict.get('description', '')),
                 'description': test_dict.get('description', ''),
                 'steps': steps_list if steps_list else ['No steps defined'],
                 'dependencies': [],  # UAT tests don't use feature dependencies
