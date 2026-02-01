@@ -83,7 +83,7 @@ function App() {
 
   // Switch data source based on UAT mode
   const { data: devFeatures } = useFeatures(selectedProject)
-  const { data: uatTests } = useUATTests()
+  const { data: uatTests } = useUATTests(isUATMode ? selectedProject : null)
 
   // Use the appropriate data source based on mode
   // Provide default empty structure when UAT tests are undefined (API endpoint may not exist yet)

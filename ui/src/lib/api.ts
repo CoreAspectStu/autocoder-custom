@@ -507,8 +507,9 @@ export async function getNextScheduledRun(projectName: string): Promise<NextRunR
 // UAT Tests API (queries uat_tests.db instead of features.db)
 // ============================================================================
 
-export async function listUATTests(): Promise<FeatureListResponse> {
-  return fetchJSON('/uat/tests')
+export async function listUATTests(project?: string): Promise<FeatureListResponse> {
+  const url = project ? `/uat/tests?project=${encodeURIComponent(project)}` : '/uat/tests'
+  return fetchJSON(url)
 }
 
 export async function getUATTest(testId: number): Promise<Feature> {

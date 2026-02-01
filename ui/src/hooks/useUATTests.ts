@@ -16,10 +16,10 @@ import * as api from '../lib/api'
  * Fetch UAT tests from uat_tests.db
  * Used when UAT mode is active
  */
-export function useUATTests() {
+export function useUATTests(project?: string | null) {
   return useQuery({
-    queryKey: ['uat-tests'],
-    queryFn: api.listUATTests,
+    queryKey: ['uat-tests', project],
+    queryFn: () => api.listUATTests(project || undefined),
     refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
     staleTime: 2000, // Consider data fresh for 2 seconds
   })

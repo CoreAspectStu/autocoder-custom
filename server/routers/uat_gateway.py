@@ -988,12 +988,16 @@ def get_uat_db_session():
 
 
 @router.get("/tests", response_model=FeatureListResponse)
-async def list_uat_tests():
+async def list_uat_tests(project: Optional[str] = None):
     """
-    List all UAT tests from uat_tests.db
+    List UAT tests from uat_tests.db, optionally filtered by project.
 
     This endpoint mirrors the features API but queries from the UAT database
     instead of the dev features database.
+
+    Args:
+        project: Optional project name to filter tests. When specified, returns
+                 only tests from the latest approved cycle for that project.
 
     Returns tests organized by status (pending/in_progress/done) to match
     the FeatureListResponse schema expected by the frontend.
@@ -1018,8 +1022,33 @@ async def list_uat_tests():
         conn.row_factory = sqlite3.Row  # Enable column access by name
         cursor = conn.cursor()
 
+        # If project specified, find the latest approved cycle for that project
+        cycle_filter = ""
+        if project:
+            cursor.execute("""
+                SELECT cycle_id
+                FROM uat_test_plan
+                WHERE project_name = ? AND approved = 1
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (project,))
+            result = cursor.fetchone()
+            if result:
+                cycle_id = result['cycle_id']
+                # Filter tests by cycle_id (stored as prefix in scenario field)
+                # Scenario format: [YYYYMMDD_HHMMSS] Test name
+                cycle_filter = f"WHERE scenario LIKE '[{cycle_id[:15]}]%'"
+            else:
+                # No approved cycle found for this project
+                conn.close()
+                return FeatureListResponse(
+                    pending=[],
+                    in_progress=[],
+                    done=[],
+                )
+
         # Query UAT test features from the correct table (Feature #174)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 id,
                 priority,
@@ -1035,6 +1064,7 @@ async def list_uat_tests():
                 completed_at,
                 created_at
             FROM uat_test_features
+            {cycle_filter}
             ORDER BY priority ASC
         """)
 
