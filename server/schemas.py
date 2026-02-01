@@ -398,6 +398,7 @@ class SettingsResponse(BaseModel):
     glm_mode: bool = False  # True if GLM API is configured via .env
     ollama_mode: bool = False  # True if Ollama API is configured via .env
     testing_agent_ratio: int = 1  # Regression testing agents (0-3)
+    playwright_headless: bool = True
 
 
 class ModelsResponse(BaseModel):
@@ -411,6 +412,7 @@ class SettingsUpdate(BaseModel):
     yolo_mode: bool | None = None
     model: str | None = None
     testing_agent_ratio: int | None = None  # 0-3
+    playwright_headless: bool | None = None
 
     @field_validator('model')
     @classmethod

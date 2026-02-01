@@ -297,6 +297,7 @@ class AgentProcessManager:
         parallel_mode: bool = False,
         max_concurrency: int | None = None,
         testing_agent_ratio: int = 1,
+        playwright_headless: bool = True,
     ) -> tuple[bool, str]:
         """
         Start the agent as a subprocess.
@@ -307,6 +308,7 @@ class AgentProcessManager:
             parallel_mode: DEPRECATED - ignored, always uses unified orchestrator
             max_concurrency: Max concurrent coding agents (1-5, default 1)
             testing_agent_ratio: Number of regression testing agents (0-3, default 1)
+            playwright_headless: If True, run browser in headless mode
 
         Returns:
             Tuple of (success, message)
@@ -358,7 +360,7 @@ class AgentProcessManager:
                 "stdout": subprocess.PIPE,
                 "stderr": subprocess.STDOUT,
                 "cwd": str(self.project_dir),
-                "env": {**os.environ, "PYTHONUNBUFFERED": "1"},
+                "env": {**os.environ, "PYTHONUNBUFFERED": "1", "PLAYWRIGHT_HEADLESS": "true" if playwright_headless else "false"},
             }
             if sys.platform == "win32":
                 popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW

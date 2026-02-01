@@ -17,11 +17,11 @@ from ..utils.project_helpers import get_project_path as _get_project_path
 from ..utils.validation import validate_project_name
 
 
-def _get_settings_defaults() -> tuple[bool, str, int]:
+def _get_settings_defaults() -> tuple[bool, str, int, bool]:
     """Get defaults from global settings.
 
     Returns:
-        Tuple of (yolo_mode, model, testing_agent_ratio)
+        Tuple of (yolo_mode, model, testing_agent_ratio, playwright_headless)
     """
     import sys
     root = Path(__file__).parent.parent.parent
@@ -40,7 +40,9 @@ def _get_settings_defaults() -> tuple[bool, str, int]:
     except (ValueError, TypeError):
         testing_agent_ratio = 1
 
-    return yolo_mode, model, testing_agent_ratio
+    playwright_headless = (settings.get("playwright_headless") or "true").lower() == "true"
+
+    return yolo_mode, model, testing_agent_ratio, playwright_headless
 
 
 router = APIRouter(prefix="/api/projects/{project_name}/agent", tags=["agent"])
@@ -89,7 +91,7 @@ async def start_agent(
     manager = get_project_manager(project_name)
 
     # Get defaults from global settings if not provided in request
-    default_yolo, default_model, default_testing_ratio = _get_settings_defaults()
+    default_yolo, default_model, default_testing_ratio, playwright_headless = _get_settings_defaults()
 
     yolo_mode = request.yolo_mode if request.yolo_mode is not None else default_yolo
     model = request.model if request.model else default_model
@@ -101,6 +103,7 @@ async def start_agent(
         model=model,
         max_concurrency=max_concurrency,
         testing_agent_ratio=testing_agent_ratio,
+        playwright_headless=playwright_headless,
     )
 
     # Notify scheduler of manual start (to prevent auto-stop during scheduled window)

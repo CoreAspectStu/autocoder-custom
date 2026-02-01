@@ -91,6 +91,7 @@ async def get_settings():
         glm_mode=_is_glm_mode(),
         ollama_mode=_is_ollama_mode(),
         testing_agent_ratio=_parse_int(all_settings.get("testing_agent_ratio"), 1),
+        playwright_headless=_parse_bool(all_settings.get("playwright_headless"), default=True),
     )
 
 
@@ -106,6 +107,9 @@ async def update_settings(update: SettingsUpdate):
     if update.testing_agent_ratio is not None:
         set_setting("testing_agent_ratio", str(update.testing_agent_ratio))
 
+    if update.playwright_headless is not None:
+        set_setting("playwright_headless", "true" if update.playwright_headless else "false")
+
     # Return updated settings
     all_settings = get_all_settings()
     return SettingsResponse(
@@ -114,4 +118,5 @@ async def update_settings(update: SettingsUpdate):
         glm_mode=_is_glm_mode(),
         ollama_mode=_is_ollama_mode(),
         testing_agent_ratio=_parse_int(all_settings.get("testing_agent_ratio"), 1),
+        playwright_headless=_parse_bool(all_settings.get("playwright_headless"), default=True),
     )

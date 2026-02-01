@@ -529,12 +529,14 @@ export interface Settings {
   glm_mode: boolean
   ollama_mode: boolean
   testing_agent_ratio: number  // Regression testing agents (0-3)
+  playwright_headless: boolean
 }
 
 export interface SettingsUpdate {
   yolo_mode?: boolean
   model?: string
   testing_agent_ratio?: number
+  playwright_headless?: boolean
 }
 
 export interface ProjectSettingsUpdate {
