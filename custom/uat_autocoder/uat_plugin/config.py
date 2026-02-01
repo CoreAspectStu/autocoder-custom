@@ -496,7 +496,7 @@ def get_config(validate: bool = True) -> UATConfig:
         validate: If True, validate configuration (default: True)
 
     Usage:
-        from custom.uat_plugin.config import get_config
+        from uat_plugin.config import get_config
         config = get_config()
         print(config.max_concurrent_agents)
 

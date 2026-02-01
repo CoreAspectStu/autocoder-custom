@@ -1934,13 +1934,18 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
             sys.path.insert(0, str(uat_backend_path))
 
         from uat_plugin.test_planner import TestPlannerAgent
+        from uat_plugin.database import DatabaseManager
 
-        # Initialize test planner with project's app_spec.txt
+        # Initialize test planner with project's app_spec.txt and features.db
         print(f"🔍 Generating test plan for {request.project_name}...")
         print(f"   Project path: {project_path}")
         print(f"   Spec: {app_spec_path}")
 
-        planner = TestPlannerAgent(app_spec_path=str(app_spec_path))
+        # Create database manager with project's features.db
+        features_db_path = project_path / "features.db"
+        db_manager = DatabaseManager(features_db_path=str(features_db_path))
+
+        planner = TestPlannerAgent(app_spec_path=str(app_spec_path), db_manager=db_manager)
 
         # Generate the test plan
         print("📋 Analyzing project and generating test framework...")
@@ -2394,8 +2399,12 @@ async def modify_test_plan(request: ModifyTestPlanRequest):
         if request.user_message:
             print(f"   User request: {request.user_message}")
 
+        # Create database manager with project's features.db
+        features_db_path = project_path / "features.db"
+        db_manager = DatabaseManager(features_db_path=str(features_db_path))
+
         # Initialize test planner
-        planner = TestPlannerAgent(app_spec_path=str(app_spec_path))
+        planner = TestPlannerAgent(app_spec_path=str(app_spec_path), db_manager=db_manager)
 
         # Generate original plan first (in production, this would be loaded from state)
         original_plan = planner.generate_test_plan()

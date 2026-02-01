@@ -558,7 +558,7 @@ class TestPlannerAgent:
         """
         self.app_spec_path = app_spec_path or os.path.join(os.getcwd(), 'app_spec.txt')
 
-        from custom.uat_plugin.database import get_db_manager
+        from uat_plugin.database import get_db_manager
         self.db = db_manager or get_db_manager()
 
     def generate_test_plan(self) -> Dict[str, Any]:

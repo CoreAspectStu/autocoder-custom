@@ -21,8 +21,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from custom.uat_plugin.test_planner import TestPlannerAgent
-from custom.uat_plugin.database import get_db_manager, UATTestPlan
+from uat_plugin.test_planner import TestPlannerAgent
+from uat_plugin.database import get_db_manager, UATTestPlan
 
 # ============================================================================
 # Pydantic Models for API
@@ -389,7 +389,7 @@ async def approve_test_plan(cycle_id: str):
         HTTPException 400: If already approved
     """
     try:
-        from custom.uat_plugin.database import UATTestFeature
+        from uat_plugin.database import UATTestFeature
 
         with db.uat_session() as session:
             plan = session.query(UATTestPlan).filter(
@@ -566,7 +566,7 @@ async def trigger_test_execution(request: TriggerExecutionRequest):
         }
 
         # Start orchestrator in background thread
-        from custom.uat_plugin.orchestrator import create_orchestrator
+        from uat_plugin.orchestrator import create_orchestrator
         orchestrator = create_orchestrator()
 
         thread = threading.Thread(
@@ -616,7 +616,7 @@ async def get_test_progress(cycle_id: str):
 
         # Query actual test execution progress from database
         # Filter tests by cycle_id (stored in scenario field during plan approval)
-        from custom.uat_plugin.database import UATTestFeature
+        from uat_plugin.database import UATTestFeature
 
         with db.uat_session() as session:
             # Filter tests by cycle_id - cycle_id is embedded in scenario field
@@ -665,7 +665,7 @@ async def get_test_progress(cycle_id: str):
             active_agents = exec_info.get('agents_spawned', 0)
         else:
             # If not running, check orchestrator directly (for completed executions)
-            from custom.uat_plugin.orchestrator import create_orchestrator
+            from uat_plugin.orchestrator import create_orchestrator
             orchestrator = create_orchestrator()
             active_agents = orchestrator.get_spawned_agent_count()
 

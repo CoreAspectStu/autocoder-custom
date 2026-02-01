@@ -713,7 +713,7 @@ def update_status_with_history(
         ...     session.commit()
     """
     # Import status_machine here to avoid circular imports
-    from custom.uat_plugin.status_machine import is_valid_transition
+    from uat_plugin.status_machine import is_valid_transition
 
     # Get current test
     test = session.query(UATTestFeature).filter(
