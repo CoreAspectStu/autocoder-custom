@@ -63,7 +63,7 @@ export function KanbanColumn({
               {onAddFeature && (
                 <button
                   onClick={onAddFeature}
-                  className="neo-btn neo-btn-primary text-sm py-1.5 px-2"
+                  className="neo-btn neo-btn-primary text-sm py-1.5 px-3 inline-flex items-center gap-1"
                   title={isUATMode ? "Add UAT Test (N)" : "Add new feature (N)"}
                 >
                   <Plus size={16} />
@@ -72,7 +72,7 @@ export function KanbanColumn({
               {onExpandProject && showExpandButton && (
                 <button
                   onClick={onExpandProject}
-                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-2"
+                  className="neo-btn bg-[var(--color-neo-progress)] text-[var(--color-neo-text-on-bright)] text-sm py-1.5 px-3 inline-flex items-center gap-1"
                   title={isUATMode ? "Generate UAT Plan (E)" : "Expand project with AI (E)"}
                 >
                   <Sparkles size={16} />
