@@ -383,11 +383,22 @@ class TestGenerator:
             self.logger.warning("No tests to write")
             return []
 
+        # DEBUG: Log current working directory and output directory
+        import os
+        cwd = os.getcwd()
+        self.logger.info(f"DEBUG: Current working directory: {cwd}")
+        self.logger.info(f"DEBUG: Output directory from config: {self.config.output_directory}")
+        self.logger.info(f"DEBUG: Output directory is absolute: {os.path.isabs(self.config.output_directory)}")
+
         written_paths = []
 
         # Write each generated test to disk
         for generated_test in generated_tests:
             try:
+                # DEBUG: Log the full output path
+                self.logger.info(f"DEBUG: Writing test to: {generated_test.output_path}")
+                self.logger.info(f"DEBUG: Output path is absolute: {os.path.isabs(generated_test.output_path)}")
+
                 # Ensure output directory exists
                 os.makedirs(os.path.dirname(generated_test.output_path), exist_ok=True)
 
@@ -1496,7 +1507,6 @@ export const expect = test.expect;
 
         # Combine into complete test file
         test_code = f"""{imports}
-import {{ test, expect }} from '@playwright/test';
 
 // Test generated from journey: {journey.name}
 // Journey ID: {journey.journey_id}
@@ -1589,7 +1599,7 @@ test.describe('{journey.name}', () => {{
         Returns:
             Import statements as string
         """
-        return """import { test } from '@playwright/test';"""
+        return """import { test, expect } from '@playwright/test';"""
 
     def _generate_test_body(self, journey: Journey, scenario: Scenario) -> str:
         """

@@ -86,7 +86,11 @@ function App() {
   const { data: uatTests } = useUATTests()
 
   // Use the appropriate data source based on mode
-  const features = isUATMode ? uatTests : devFeatures
+  // Provide default empty structure when UAT tests are undefined (API endpoint may not exist yet)
+  // This prevents crashes when toggling UAT mode before backend is fully implemented
+  const features = isUATMode
+    ? (uatTests ?? { pending: [], in_progress: [], done: [] })
+    : devFeatures
 
   const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
@@ -589,6 +593,7 @@ function App() {
           />
           <AssistantPanel
             projectName={selectedProject}
+            mode={isUATMode ? 'uat' : 'dev'}
             isOpen={assistantOpen}
             onClose={() => setAssistantOpen(false)}
           />

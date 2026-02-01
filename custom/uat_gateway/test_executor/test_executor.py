@@ -753,6 +753,11 @@ module.exports = {{
         # Add specific test file if specified
         if test_file:
             cmd.append(test_file)
+        else:
+            # Always add the test directory from config
+            # This ensures we run the UAT-generated tests, not existing project tests
+            cmd.append(str(self.config.test_directory))
+            self.logger.debug(f"Using test directory: {self.config.test_directory}")
 
         # Feature #61: Add reporter configuration
         # Support multiple reporters: HTML for human viewing, JSON for parsing

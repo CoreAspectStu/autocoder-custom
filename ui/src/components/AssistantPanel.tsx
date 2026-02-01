@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Bot } from 'lucide-react'
+import { X, Bot, FlaskConical } from 'lucide-react'
 import { AssistantChat } from './AssistantChat'
 import { useConversation } from '../hooks/useConversations'
 import type { ChatMessage } from '../lib/types'
@@ -16,13 +16,15 @@ interface AssistantPanelProps {
   projectName: string
   isOpen: boolean
   onClose: () => void
+  mode?: 'dev' | 'uat'  // Add mode prop
 }
 
 const STORAGE_KEY_PREFIX = 'assistant-conversation-'
 
-function getStoredConversationId(projectName: string): number | null {
+function getStoredConversationId(projectName: string, mode: 'dev' | 'uat'): number | null {
   try {
-    const stored = localStorage.getItem(`${STORAGE_KEY_PREFIX}${projectName}`)
+    const key = `${STORAGE_KEY_PREFIX}${projectName}-${mode}`
+    const stored = localStorage.getItem(key)
     if (stored) {
       const data = JSON.parse(stored)
       return data.conversationId || null
@@ -33,8 +35,8 @@ function getStoredConversationId(projectName: string): number | null {
   return null
 }
 
-function setStoredConversationId(projectName: string, conversationId: number | null) {
-  const key = `${STORAGE_KEY_PREFIX}${projectName}`
+function setStoredConversationId(projectName: string, mode: 'dev' | 'uat', conversationId: number | null) {
+  const key = `${STORAGE_KEY_PREFIX}${projectName}-${mode}`
   if (conversationId) {
     localStorage.setItem(key, JSON.stringify({ conversationId }))
   } else {
@@ -42,13 +44,13 @@ function setStoredConversationId(projectName: string, conversationId: number | n
   }
 }
 
-export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelProps) {
+export function AssistantPanel({ projectName, isOpen, onClose, mode = 'dev' }: AssistantPanelProps) {
   // Ref for the close button (used to blur focus on close)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Load initial conversation ID from localStorage
+  // Load initial conversation ID from localStorage (mode-aware)
   const [conversationId, setConversationId] = useState<number | null>(() =>
-    getStoredConversationId(projectName)
+    getStoredConversationId(projectName, mode)
   )
 
   // Fetch conversation details when we have an ID
@@ -65,15 +67,15 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
     timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
   }))
 
-  // Persist conversation ID changes to localStorage
+  // Persist conversation ID changes to localStorage (mode-aware)
   useEffect(() => {
-    setStoredConversationId(projectName, conversationId)
-  }, [projectName, conversationId])
+    setStoredConversationId(projectName, mode, conversationId)
+  }, [projectName, mode, conversationId])
 
-  // Reset conversation ID when project changes
+  // Reset conversation ID when project or mode changes
   useEffect(() => {
-    setConversationId(getStoredConversationId(projectName))
-  }, [projectName])
+    setConversationId(getStoredConversationId(projectName, mode))
+  }, [projectName, mode])
 
   // Handle starting a new chat
   const handleNewChat = useCallback(() => {
@@ -133,11 +135,15 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
               className="bg-neo-card border-2 border-neo-border p-1.5"
               style={{ boxShadow: 'var(--shadow-neo-sm)' }}
             >
-              <Bot size={18} />
+              {mode === 'uat' ? <FlaskConical size={18} className="text-purple-600" /> : <Bot size={18} />}
             </div>
             <div>
-              <h2 className="font-display font-bold text-neo-text-on-bright">Project Assistant</h2>
-              <p className="text-xs text-neo-text-on-bright opacity-80 font-mono">{projectName}</p>
+              <h2 className="font-display font-bold text-neo-text-on-bright">
+                {mode === 'uat' ? 'UAT Test Planner' : 'Project Assistant'}
+              </h2>
+              <p className="text-xs text-neo-text-on-bright opacity-80 font-mono">
+                {projectName} {mode === 'uat' && <span className="text-purple-600">(UAT Mode)</span>}
+              </p>
             </div>
           </div>
           <button
@@ -162,6 +168,7 @@ export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelP
           {isOpen && (
             <AssistantChat
               projectName={projectName}
+              mode={mode}
               conversationId={conversationId}
               initialMessages={initialMessages}
               isLoadingConversation={isLoadingConversation}

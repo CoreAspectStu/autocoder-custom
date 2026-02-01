@@ -16,6 +16,7 @@ import type { ChatMessage } from '../lib/types'
 
 interface AssistantChatProps {
   projectName: string
+  mode?: 'dev' | 'uat'  // Add mode prop
   conversationId?: number | null
   initialMessages?: ChatMessage[]
   isLoadingConversation?: boolean
@@ -26,6 +27,7 @@ interface AssistantChatProps {
 
 export function AssistantChat({
   projectName,
+  mode = 'dev',
   conversationId,
   initialMessages,
   isLoadingConversation,
@@ -55,6 +57,7 @@ export function AssistantChat({
     clearMessages,
   } = useAssistantChat({
     projectName,
+    mode,
     onError: handleError,
   })
 

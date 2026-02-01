@@ -72,8 +72,14 @@ READONLY_BUILTIN_TOOLS = [
 ]
 
 
-def get_system_prompt(project_name: str, project_dir: Path) -> str:
-    """Generate the system prompt for the assistant with project context."""
+def get_system_prompt(project_name: str, project_dir: Path, mode: str = 'dev') -> str:
+    """Generate the system prompt for the assistant with project context.
+
+    Args:
+        project_name: Name of the project
+        project_dir: Absolute path to the project directory
+        mode: 'dev' or 'uat' - adjusts the assistant's role and context
+    """
     # Try to load app_spec.txt for context
     app_spec_content = ""
     app_spec_path = project_dir / "prompts" / "app_spec.txt"
@@ -86,7 +92,25 @@ def get_system_prompt(project_name: str, project_dir: Path) -> str:
         except Exception as e:
             logger.warning(f"Failed to read app_spec.txt: {e}")
 
-    return f"""You are a helpful project assistant and backlog manager for the "{project_name}" project.
+    # Adjust role and context based on mode
+    if mode == 'uat':
+        role = f"UAT Test Planner for the \"{project_name}\" project"
+        context = """You are currently in **UAT Mode** (User Acceptance Testing).
+- You help with UAT test planning, test execution, and blocker resolution
+- Test scenarios are managed in uat_tests.db, separate from development features
+- When creating test plans, identify untested user journeys and propose test frameworks
+- Ask about blockers upfront (email verification, SMS, payment gateways - wait/skip/mock options)
+- Provide UAT-specific guidance on test phases (smoke, functional, regression, UAT)"""
+    else:
+        role = f"helpful project assistant and backlog manager for the \"{project_name}\" project"
+        context = """You are currently in **Dev Mode** (Development).
+- You help with codebase understanding, feature planning, and backlog management
+- Features are managed in features.db
+- Provide development-focused guidance on implementation and architecture"""
+
+    return f"""You are a {role}.
+
+{context}
 
 Your role is to help users understand the codebase, answer questions about features, and manage the project backlog. You can READ files and CREATE/MANAGE features, but you cannot modify source code.
 
@@ -166,7 +190,7 @@ class AssistantChatSession:
     Persists conversation history to SQLite.
     """
 
-    def __init__(self, project_name: str, project_dir: Path, conversation_id: Optional[int] = None):
+    def __init__(self, project_name: str, project_dir: Path, conversation_id: Optional[int] = None, mode: str = 'dev'):
         """
         Initialize the session.
 
@@ -174,10 +198,12 @@ class AssistantChatSession:
             project_name: Name of the project
             project_dir: Absolute path to the project directory
             conversation_id: Optional existing conversation ID to resume
+            mode: 'dev' or 'uat' - separates Dev vs UAT conversation contexts
         """
         self.project_name = project_name
         self.project_dir = project_dir
         self.conversation_id = conversation_id
+        self.mode = mode  # Store mode for context-aware system prompt
         self.client: Optional[ClaudeSDKClient] = None
         self._client_entered: bool = False
         self.created_at = datetime.now()
@@ -207,7 +233,7 @@ class AssistantChatSession:
 
         # Create a new conversation if we don't have one
         if is_new_conversation:
-            conv = create_conversation(self.project_dir, self.project_name)
+            conv = create_conversation(self.project_dir, self.project_name, self.mode)
             self.conversation_id = conv.id
             yield {"type": "conversation_created", "conversation_id": self.conversation_id}
 
@@ -247,8 +273,8 @@ class AssistantChatSession:
             },
         }
 
-        # Get system prompt with project context
-        system_prompt = get_system_prompt(self.project_name, self.project_dir)
+        # Get system prompt with project context and mode
+        system_prompt = get_system_prompt(self.project_name, self.project_dir, self.mode)
 
         # Write system prompt to CLAUDE.md file to avoid Windows command line length limit
         # The SDK will read this via setting_sources=["project"]
@@ -419,20 +445,27 @@ class AssistantChatSession:
 
 
 # Session registry with thread safety
+# Key format: "{project_name}:{mode}" to separate Dev and UAT sessions
 _sessions: dict[str, AssistantChatSession] = {}
 _sessions_lock = threading.Lock()
 
 
-def get_session(project_name: str) -> Optional[AssistantChatSession]:
-    """Get an existing session for a project."""
+def _make_session_key(project_name: str, mode: str) -> str:
+    """Create a composite session key from project name and mode."""
+    return f"{project_name}:{mode}"
+
+
+def get_session(project_name: str, mode: str = 'dev') -> Optional[AssistantChatSession]:
+    """Get an existing session for a project in a specific mode."""
     with _sessions_lock:
-        return _sessions.get(project_name)
+        return _sessions.get(_make_session_key(project_name, mode))
 
 
 async def create_session(
     project_name: str,
     project_dir: Path,
-    conversation_id: Optional[int] = None
+    conversation_id: Optional[int] = None,
+    mode: str = 'dev'
 ) -> AssistantChatSession:
     """
     Create a new session for a project, closing any existing one.
@@ -441,39 +474,42 @@ async def create_session(
         project_name: Name of the project
         project_dir: Absolute path to the project directory
         conversation_id: Optional conversation ID to resume
+        mode: 'dev' or 'uat' - separates Dev vs UAT session contexts
     """
     old_session: Optional[AssistantChatSession] = None
+    session_key = _make_session_key(project_name, mode)
 
     with _sessions_lock:
-        old_session = _sessions.pop(project_name, None)
-        session = AssistantChatSession(project_name, project_dir, conversation_id)
-        _sessions[project_name] = session
+        old_session = _sessions.pop(session_key, None)
+        session = AssistantChatSession(project_name, project_dir, conversation_id, mode)
+        _sessions[session_key] = session
 
     if old_session:
         try:
             await old_session.close()
         except Exception as e:
-            logger.warning(f"Error closing old session for {project_name}: {e}")
+            logger.warning(f"Error closing old session for {project_name} ({mode}): {e}")
 
     return session
 
 
-async def remove_session(project_name: str) -> None:
-    """Remove and close a session."""
+async def remove_session(project_name: str, mode: str = 'dev') -> None:
+    """Remove and close a session for a specific mode."""
     session: Optional[AssistantChatSession] = None
+    session_key = _make_session_key(project_name, mode)
 
     with _sessions_lock:
-        session = _sessions.pop(project_name, None)
+        session = _sessions.pop(session_key, None)
 
     if session:
         try:
             await session.close()
         except Exception as e:
-            logger.warning(f"Error closing session for {project_name}: {e}")
+            logger.warning(f"Error closing session for {project_name} ({mode}): {e}")
 
 
 def list_sessions() -> list[str]:
-    """List all active session project names."""
+    """List all active session keys in 'project:mode' format."""
     with _sessions_lock:
         return list(_sessions.keys())
 

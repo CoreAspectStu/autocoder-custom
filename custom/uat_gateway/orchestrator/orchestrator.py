@@ -49,6 +49,10 @@ class OrchestratorConfig:
     kanban_api_url: Optional[str] = None
     kanban_api_token: Optional[str] = None
 
+    # Feature: Explicit project directory for path resolution
+    # If not specified, resolves to spec file's parent directory
+    project_directory: Optional[str] = None
+
     # Execution options
     parallel_execution: bool = True
     max_parallel_tests: int = 3
@@ -195,10 +199,33 @@ class Orchestrator:
         self.journey_extractor = JourneyExtractor()
         self.logger.info("✓ JourneyExtractor initialized")
 
+        # Convert relative paths to absolute paths based on spec file location
+        # This ensures test files are written to the correct location
+        spec_path = Path(self.config.spec_path)
+        spec_dir = spec_path.parent.resolve() if spec_path.exists() else Path.cwd()
+
+        def resolve_path(path_str: str) -> str:
+            """Convert relative path to absolute based on spec file location"""
+            path = Path(path_str)
+            if path.is_absolute():
+                return str(path)
+            else:
+                abs_path = (spec_dir / path).resolve()
+                self.logger.debug(f"Resolved relative path '{path_str}' to '{abs_path}'")
+                return str(abs_path)
+
+        # Resolve test_directory to absolute path
+        resolved_test_dir = resolve_path(self.config.test_directory)
+        self.logger.info(f"Test directory: {self.config.test_directory} -> {resolved_test_dir}")
+
+        # Resolve output_directory to absolute path
+        resolved_output_dir = resolve_path(self.config.output_directory)
+        self.logger.info(f"Output directory: {self.config.output_directory} -> {resolved_output_dir}")
+
         # Test Generator
         from uat_gateway.test_generator.test_generator import TestConfig
         test_config = TestConfig(
-            output_directory=self.config.test_directory,
+            output_directory=resolved_test_dir,
             base_url=self.config.base_url
         )
         self.test_generator = TestGenerator(config=test_config)
@@ -207,8 +234,8 @@ class Orchestrator:
         # Test Executor
         from uat_gateway.test_executor.test_executor import ExecutionConfig
         execution_config = ExecutionConfig(
-            test_directory=self.config.test_directory,
-            output_directory=self.config.output_directory,
+            test_directory=resolved_test_dir,
+            output_directory=resolved_output_dir,
             base_url=self.config.base_url
         )
         self.test_executor = TestExecutor(config=execution_config)
@@ -652,7 +679,11 @@ class Orchestrator:
             return spec
         except Exception as e:
             self.logger.error(f"Failed to parse spec: {e}")
-            self.result.errors.append(f"Spec parsing failed: {e}")
+            # Only append to self.result if it exists (not None)
+            # This handles the case where _parse_spec is called from dry-run mode
+            # before self.result is initialized in run_cycle()
+            if self.result is not None:
+                self.result.errors.append(f"Spec parsing failed: {e}")
             return None
 
     def _extract_journeys(self, spec: Dict[str, Any]) -> List[Journey]:
@@ -662,7 +693,8 @@ class Orchestrator:
             return journeys
         except Exception as e:
             self.logger.error(f"Failed to extract journeys: {e}")
-            self.result.errors.append(f"Journey extraction failed: {e}")
+            if self.result is not None:
+                self.result.errors.append(f"Journey extraction failed: {e}")
             return []
 
     def _create_kanban_cards_early(self, journeys: List[Journey]):
@@ -699,7 +731,34 @@ class Orchestrator:
             # Load journeys into test generator
             self.test_generator.load_journeys(journeys)
 
-            # Generate tests for all journeys
+            # DEBUG: Log working directory context
+            import os
+            cwd = os.getcwd()
+            self.logger.info(f"DEBUG: Orchestrator working directory: {cwd}")
+            self.logger.info(f"DEBUG: test_directory config: {self.config.test_directory}")
+            self.logger.info(f"DEBUG: test_directory is absolute: {os.path.isabs(self.config.test_directory)}")
+            self.logger.info(f"DEBUG: test_generator output_directory: {self.test_generator.config.output_directory}")
+            self.logger.info(f"DEBUG: test_generator output_directory is absolute: {os.path.isabs(self.test_generator.config.output_directory)}")
+
+            # Generate tests for all journeys AND write to disk
+            # This ensures tests are available for execution
+            self.logger.info(f"Writing tests to directory: {self.test_generator.config.output_directory}")
+            written_paths = self.test_generator.write_tests()
+            self.logger.info(f"Written {len(written_paths)} test files to: {written_paths[:3] if written_paths else 'None'}...")
+
+            if not written_paths:
+                self.logger.warning("No test files were written to disk")
+            else:
+                # Verify files exist
+                import os
+                for path in written_paths[:3]:
+                    abs_path = os.path.abspath(path)
+                    self.logger.info(f"  Verifying: {path}")
+                    self.logger.info(f"    Absolute path: {abs_path}")
+                    self.logger.info(f"    Exists: {os.path.exists(path)}")
+                    self.logger.info(f"    Exists (absolute): {os.path.exists(abs_path)}")
+
+            # Return generated tests for reference
             all_tests = self.test_generator.generate_tests()
 
             return all_tests

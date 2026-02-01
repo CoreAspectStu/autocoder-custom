@@ -102,17 +102,17 @@ export function UATTestModal({ feature, onClose }: UATTestModalProps) {
             <div className="flex-1">
               {/* Badges */}
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className={`neo-badge ${getPhaseColor(feature.phase)}`}>
-                  {feature.phase.toUpperCase()}
+                <span className={`neo-badge ${getPhaseColor(feature.phase || 'unknown')}`}>
+                  {(feature.phase || 'unknown').toUpperCase()}
                 </span>
                 <span className="neo-badge bg-purple-500 text-white">
                   {feature.journey}
                 </span>
-                <span className={`neo-badge ${getStatusColor(feature.status)}`}>
-                  {feature.status.replace('_', ' ').toUpperCase()}
+                <span className={`neo-badge ${getStatusColor(feature.status || 'pending')}`}>
+                  {(feature.status || 'pending').replace('_', ' ').toUpperCase()}
                 </span>
                 <span className="neo-badge bg-gray-500 text-white">
-                  {feature.test_type.toUpperCase()}
+                  {(feature.test_type || 'functional').toUpperCase()}
                 </span>
               </div>
 

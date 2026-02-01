@@ -8,10 +8,10 @@ import * as api from '../lib/api'
 /**
  * List all conversations for a project
  */
-export function useConversations(projectName: string | null) {
+export function useConversations(projectName: string | null, mode: 'dev' | 'uat' = 'dev') {
   return useQuery({
-    queryKey: ['conversations', projectName],
-    queryFn: () => api.listAssistantConversations(projectName!),
+    queryKey: ['conversations', projectName, mode],
+    queryFn: () => api.listAssistantConversations(projectName!, mode),
     enabled: !!projectName,
     staleTime: 30000, // Cache for 30 seconds
   })
@@ -20,10 +20,10 @@ export function useConversations(projectName: string | null) {
 /**
  * Get a single conversation with all its messages
  */
-export function useConversation(projectName: string | null, conversationId: number | null) {
+export function useConversation(projectName: string | null, conversationId: number | null, mode: 'dev' | 'uat' = 'dev') {
   return useQuery({
-    queryKey: ['conversation', projectName, conversationId],
-    queryFn: () => api.getAssistantConversation(projectName!, conversationId!),
+    queryKey: ['conversation', projectName, conversationId, mode],
+    queryFn: () => api.getAssistantConversation(projectName!, conversationId!, mode),
     enabled: !!projectName && !!conversationId,
     staleTime: 30_000, // Cache for 30 seconds
   })
@@ -32,17 +32,17 @@ export function useConversation(projectName: string | null, conversationId: numb
 /**
  * Delete a conversation
  */
-export function useDeleteConversation(projectName: string) {
+export function useDeleteConversation(projectName: string, mode: 'dev' | 'uat' = 'dev') {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (conversationId: number) =>
-      api.deleteAssistantConversation(projectName, conversationId),
+      api.deleteAssistantConversation(projectName, conversationId, mode),
     onSuccess: (_, deletedId) => {
       // Invalidate conversations list
-      queryClient.invalidateQueries({ queryKey: ['conversations', projectName] })
+      queryClient.invalidateQueries({ queryKey: ['conversations', projectName, mode] })
       // Remove the specific conversation from cache
-      queryClient.removeQueries({ queryKey: ['conversation', projectName, deletedId] })
+      queryClient.removeQueries({ queryKey: ['conversation', projectName, deletedId, mode] })
     },
   })
 }

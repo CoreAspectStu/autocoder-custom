@@ -13,11 +13,17 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandProject, activeAgents = [], onCreateSpec, hasSpec = true, isUATMode = false }: KanbanBoardProps) {
-  const hasFeatures = features && (features.pending.length + features.in_progress.length + features.done.length) > 0
+  // Defensive checks to prevent crashes when API returns undefined or malformed data
+  // This can happen when UAT mode is toggled but the UAT API endpoint doesn't exist yet
+  const safePending = features?.pending ?? []
+  const safeInProgress = features?.in_progress ?? []
+  const safeDone = features?.done ?? []
+
+  const hasFeatures = (safePending.length + safeInProgress.length + safeDone.length) > 0
 
   // Combine all features for dependency status calculation
   const allFeatures = features
-    ? [...features.pending, ...features.in_progress, ...features.done]
+    ? [...safePending, ...safeInProgress, ...safeDone]
     : []
 
   if (!features) {
@@ -41,8 +47,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <KanbanColumn
         title="Pending"
-        count={features.pending.length}
-        features={features.pending}
+        count={safePending.length}
+        features={safePending}
         allFeatures={allFeatures}
         activeAgents={activeAgents}
         color="pending"
@@ -56,8 +62,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
       />
       <KanbanColumn
         title="In Progress"
-        count={features.in_progress.length}
-        features={features.in_progress}
+        count={safeInProgress.length}
+        features={safeInProgress}
         allFeatures={allFeatures}
         activeAgents={activeAgents}
         color="progress"
@@ -65,8 +71,8 @@ export function KanbanBoard({ features, onFeatureClick, onAddFeature, onExpandPr
       />
       <KanbanColumn
         title="Done"
-        count={features.done.length}
-        features={features.done}
+        count={safeDone.length}
+        features={safeDone}
         allFeatures={allFeatures}
         activeAgents={activeAgents}
         color="done"

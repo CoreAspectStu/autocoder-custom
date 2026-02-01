@@ -130,20 +130,11 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
         title={`Start ${pendingTestsCount} pending UAT tests`}
       >
         {isStarting ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Starting...
-          </>
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : status === 'running' ? (
-          <>
-            <CheckCircle className="w-4 h-4" />
-            Running ({agentCount})
-          </>
+          <CheckCircle className="w-4 h-4" />
         ) : (
-          <>
-            <Play className="w-4 h-4" />
-            Start UAT
-          </>
+          <Play className="w-4 h-4" />
         )}
       </button>
     </div>

@@ -34,6 +34,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_name = Column(String(100), nullable=False, index=True)
+    mode = Column(String(10), nullable=False, default='dev', index=True)  # 'dev' or 'uat'
     title = Column(String(200), nullable=True)  # Optional title, derived from first message
     created_at = Column(DateTime, default=_utc_now)
     updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
@@ -101,27 +102,33 @@ def get_session(project_dir: Path):
 # Conversation Operations
 # ============================================================================
 
-def create_conversation(project_dir: Path, project_name: str, title: Optional[str] = None) -> Conversation:
+def create_conversation(project_dir: Path, project_name: str, mode: str = 'dev', title: Optional[str] = None) -> Conversation:
     """Create a new conversation for a project."""
     session = get_session(project_dir)
     try:
         conversation = Conversation(
             project_name=project_name,
+            mode=mode,
             title=title,
         )
         session.add(conversation)
         session.commit()
         session.refresh(conversation)
-        logger.info(f"Created conversation {conversation.id} for project {project_name}")
+        logger.info(f"Created conversation {conversation.id} for project {project_name}, mode: {mode}")
         return conversation
     finally:
         session.close()
 
 
-def get_conversations(project_dir: Path, project_name: str) -> list[dict]:
+def get_conversations(project_dir: Path, project_name: str, mode: str = 'dev') -> list[dict]:
     """Get all conversations for a project with message counts.
 
     Uses a subquery for message_count to avoid N+1 query problem.
+
+    Args:
+        project_dir: Path to the project directory
+        project_name: Name of the project
+        mode: 'dev' or 'uat' - filter conversations by mode
     """
     session = get_session(project_dir)
     try:
@@ -135,7 +142,7 @@ def get_conversations(project_dir: Path, project_name: str) -> list[dict]:
             .subquery()
         )
 
-        # Join conversation with message counts
+        # Join conversation with message counts, filter by project_name AND mode
         conversations = (
             session.query(
                 Conversation,
@@ -146,6 +153,7 @@ def get_conversations(project_dir: Path, project_name: str) -> list[dict]:
                 Conversation.id == message_count_subquery.c.conversation_id
             )
             .filter(Conversation.project_name == project_name)
+            .filter(Conversation.mode == mode)  # CRITICAL: Separate Dev vs UAT conversations
             .order_by(Conversation.updated_at.desc())
             .all()
         )
@@ -164,11 +172,21 @@ def get_conversations(project_dir: Path, project_name: str) -> list[dict]:
         session.close()
 
 
-def get_conversation(project_dir: Path, conversation_id: int) -> Optional[dict]:
-    """Get a conversation with all its messages."""
+def get_conversation(project_dir: Path, conversation_id: int, mode: str = 'dev') -> Optional[dict]:
+    """Get a conversation with all its messages.
+
+    Args:
+        project_dir: Path to the project directory
+        conversation_id: ID of the conversation
+        mode: 'dev' or 'uat' - verify conversation belongs to this mode
+    """
     session = get_session(project_dir)
     try:
-        conversation = session.query(Conversation).filter(Conversation.id == conversation_id).first()
+        # Filter by both ID AND mode to prevent cross-mode access
+        conversation = session.query(Conversation).filter(
+            Conversation.id == conversation_id,
+            Conversation.mode == mode
+        ).first()
         if not conversation:
             return None
         return {
@@ -191,16 +209,26 @@ def get_conversation(project_dir: Path, conversation_id: int) -> Optional[dict]:
         session.close()
 
 
-def delete_conversation(project_dir: Path, conversation_id: int) -> bool:
-    """Delete a conversation and all its messages."""
+def delete_conversation(project_dir: Path, conversation_id: int, mode: str = 'dev') -> bool:
+    """Delete a conversation and all its messages.
+
+    Args:
+        project_dir: Path to the project directory
+        conversation_id: ID of the conversation to delete
+        mode: 'dev' or 'uat' - verify conversation belongs to this mode
+    """
     session = get_session(project_dir)
     try:
-        conversation = session.query(Conversation).filter(Conversation.id == conversation_id).first()
+        # Filter by both ID AND mode to prevent cross-mode deletion
+        conversation = session.query(Conversation).filter(
+            Conversation.id == conversation_id,
+            Conversation.mode == mode
+        ).first()
         if not conversation:
             return False
         session.delete(conversation)
         session.commit()
-        logger.info(f"Deleted conversation {conversation_id}")
+        logger.info(f"Deleted conversation {conversation_id}, mode: {mode}")
         return True
     finally:
         session.close()
