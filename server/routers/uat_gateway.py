@@ -970,7 +970,7 @@ def get_uat_db_session():
     create_database, _ = _get_uat_db_classes()
 
     # UAT database is in the uat-autocoder config directory
-    uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
+    uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
 
     if not uat_db_path.exists():
         # If UAT DB doesn't exist, create an empty one
@@ -1004,7 +1004,7 @@ async def list_uat_tests():
         from pathlib import Path
 
         # Connect directly to UAT database
-        uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
+        uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
 
         if not uat_db_path.exists():
             # Return empty lists if no UAT database exists yet
@@ -1120,7 +1120,7 @@ async def get_uat_test(test_id: int):
         from pathlib import Path
 
         # Connect directly to UAT database
-        uat_db_path = Path.home() / ".autocoder" / "uat_autocoder" / "uat_tests.db"
+        uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
 
         if not uat_db_path.exists():
             raise HTTPException(
