@@ -24,6 +24,7 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
   const [status, setStatus] = useState<'idle' | 'starting' | 'running' | 'error'>('idle')
   const [message, setMessage] = useState<string>('')
   const [agentCount, setAgentCount] = useState<number>(0)
+  const [executionMode, setExecutionMode] = useState<string>('direct')
 
   // Only show in UAT mode with pending tests
   if (!projectName || !isUATMode || pendingTestsCount === 0) {
@@ -48,7 +49,14 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
 
       setStatus('running')
       setAgentCount(result.agents_spawned || 0)
-      setMessage(`${result.agents_spawned || 0} test agents spawned successfully`)
+      setExecutionMode(result.execution_mode || 'direct')
+
+      // Show appropriate message based on execution mode
+      if (result.execution_mode === 'direct') {
+        setMessage(`Playwright tests running - check terminal for output`)
+      } else {
+        setMessage(`${result.agents_spawned || 0} test agents spawned successfully`)
+      }
 
       // Notify parent component
       onExecutionStarted?.()
@@ -100,7 +108,7 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
             <>
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span className="text-gray-600 dark:text-gray-400">
-                {agentCount} agents running
+                {executionMode === 'direct' ? 'Tests running' : `${agentCount} agents running`}
               </span>
             </>
           )}

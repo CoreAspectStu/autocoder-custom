@@ -594,6 +594,7 @@ export async function triggerUATExecution(
   cycle_id: string
   agents_spawned?: number
   tests_assigned?: number
+  execution_mode?: string
 }> {
   return fetchJSON('/uat/trigger', {
     method: 'POST',

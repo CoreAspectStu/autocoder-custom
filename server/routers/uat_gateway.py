@@ -105,6 +105,8 @@ class UATTriggerResponse(BaseModel):
     cycle_id: Optional[str] = None
     message: str
     status_url: Optional[str] = None
+    agents_spawned: Optional[int] = 0  # Number of test agents spawned (0 for direct execution)
+    execution_mode: Optional[str] = "direct"  # "direct" or "orchestrated"
 
 
 @router.get("/health")
@@ -389,8 +391,10 @@ async def trigger_uat_cycle(
         return UATTriggerResponse(
             success=True,
             cycle_id=cycle_id,
-            message="UAT testing cycle started (direct mode)",
-            status_url=f"/api/uat/status/{cycle_id}"
+            message=f"UAT testing cycle started (direct mode) - running {len(list((project_path / 'e2e').glob('*.spec.ts')))} test files",
+            status_url=f"/api/uat/status/{cycle_id}",
+            agents_spawned=0,  # Direct execution uses Playwright, not autonomous agents
+            execution_mode="direct"
         )
 
     # Original orchestrator mode (disabled for now)
