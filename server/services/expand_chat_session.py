@@ -162,6 +162,7 @@ class ExpandChatSession:
                 "allow": [
                     "Read(./**)",
                     "Glob(./**)",
+                    *EXPAND_FEATURE_TOOLS,
                 ],
             },
         }

@@ -429,5 +429,8 @@ def get_db() -> Session:
     db = _session_maker()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

@@ -71,6 +71,9 @@ def get_db_session(project_dir: Path):
     session = SessionLocal()
     try:
         yield session
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
