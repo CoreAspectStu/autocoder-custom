@@ -88,8 +88,8 @@ export function AgentMissionControl({
       {/* Content */}
       <div
         className={`
-          transition-all duration-300 ease-out overflow-hidden
-          ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}
+          transition-all duration-300 ease-out
+          ${isExpanded ? 'max-h-[600px] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}
         `}
       >
         <CardContent className="p-4">
