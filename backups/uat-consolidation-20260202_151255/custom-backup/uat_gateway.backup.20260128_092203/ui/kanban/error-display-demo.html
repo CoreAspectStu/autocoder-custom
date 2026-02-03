@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Error Display Demo - Feature #325</title>
+    <link rel="stylesheet" href="toast-notifications.css">
+    <link rel="stylesheet" href="error-toast.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 50%, #fca5a5 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #991b1b;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #dc2626;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fef2f2;
+            border-radius: 8px;
+            border: 1px solid #fecaca;
+        }
+
+        .section h2 {
+            font-size: 20px;
+            color: #991b1b;
+            margin-bottom: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #ef4444;
+            color: white;
+        }
+
+        button:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: #6b7280;
+        }
+
+        button.secondary:hover {
+            background: #4b5563;
+        }
+
+        .info {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #374151;
+            border-left: 4px solid #ef4444;
+        }
+
+        .info code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        /* Toast container positioning */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            width: 100%;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 API Error Display Demo</h1>
+        <p class="subtitle">Feature #325: Verify API errors are displayed with user-friendly messages</p>
+
+        <div class="section">
+            <h2>1. Simulated API Errors</h2>
+            <p style="margin-bottom: 15px; color: #6b7280;">Click buttons to see how different error types are displayed:</p>
+
+            <div class="button-group">
+                <button onclick="showNotFoundError()">404 Not Found</button>
+                <button onclick="showAuthError()">401 Unauthorized</button>
+                <button onclick="showValidationError()">400 Validation Error</button>
+                <button onclick="showRateLimitError()">429 Rate Limit</button>
+                <button onclick="showServerError()">500 Server Error</button>
+            </div>
+
+            <div class="info">
+                <strong>ℹ️ Info:</strong> These simulate backend error responses with user-friendly messages and actionable suggestions.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Real API Errors</h2>
+            <p style="margin-bottom: 15px; color: #6b7280;">Make real API calls that will return errors:</p>
+
+            <div class="button-group">
+                <button class="secondary" onclick="trigger404Error()">Trigger 404</button>
+                <button class="secondary" onclick="triggerAuthError()">Trigger 401</button>
+                <button class="secondary" onclick="triggerValidationError()">Trigger 400</button>
+            </div>
+
+            <div class="info">
+                <strong>ℹ️ Info:</strong> These make actual API calls to <code>http://localhost:4002</code> and display the error response.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Network Errors</h2>
+            <p style="margin-bottom: 15px; color: #6b7280;">Simulate network/connection problems:</p>
+
+            <div class="button-group">
+                <button class="secondary" onclick="showNetworkError()">Network Failed</button>
+                <button class="secondary" onclick="showTimeoutError()">Request Timeout</button>
+                <button class="secondary" onclick="showCancelledError()">Request Cancelled</button>
+            </div>
+
+            <div class="info">
+                <strong>ℹ️ Info:</strong> These simulate client-side network errors.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>4. Verification Checklist</h2>
+            <div class="info" style="border-left-color: #10b981;">
+                <strong>✅ Feature #325 Acceptance Criteria:</strong>
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>Error is shown in UI with user-friendly message</li>
+                    <li>Action suggestion is provided</li>
+                    <li>Errors are logged to console (check DevTools)</li>
+                    <li>Error code is displayed for debugging</li>
+                    <li>Timestamp is included in error response</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- Load scripts -->
+    <script src="toast-notifications.js"></script>
+    <script src="error-display.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:4002';
+
+        // ============================================================================
+        // Simulated API Errors
+        // ============================================================================
+
+        function showNotFoundError() {
+            displayApiError({
+                error: 'The page or resource you're looking for doesn't exist',
+                error_code: 'NOT_FOUND',
+                action: 'Verify the URL or return to the previous page',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function showAuthError() {
+            displayApiError({
+                error: 'Your session has expired. Please sign in again',
+                error_code: 'AUTH_TOKEN_EXPIRED',
+                action: 'Return to the login page to start a new session',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function showValidationError() {
+            displayApiError({
+                error: 'There was a problem with your request',
+                error_code: 'INVALID_REQUEST',
+                action: 'Check your input and try again. Make sure all required fields are filled correctly',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function showRateLimitError() {
+            displayApiError({
+                error: "You're making requests too quickly. Please wait a moment",
+                error_code: 'RATE_LIMIT_EXCEEDED',
+                action: 'Slow down your request pace. You can try again in a few seconds',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function showServerError() {
+            displayApiError({
+                error: 'Something went wrong on our end. Please try again',
+                error_code: 'INTERNAL_ERROR',
+                action: 'Refresh the page and retry. If the problem continues, contact support with the error code',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // ============================================================================
+        // Real API Errors
+        // ============================================================================
+
+        async function trigger404Error() {
+            try {
+                const response = await fetch(`${API_BASE}/api/nonexistent-endpoint-12345`);
+                const errorData = await response.json();
+                displayApiError(errorData);
+            } catch (error) {
+                displayNetworkError(error);
+            }
+        }
+
+        async function triggerAuthError() {
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: '' }) // Invalid, should trigger auth or validation
+                });
+                const errorData = await response.json();
+                displayApiError(errorData);
+            } catch (error) {
+                displayNetworkError(error);
+            }
+        }
+
+        async function triggerValidationError() {
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer fake-token'
+                    },
+                    body: JSON.stringify({ invalid: 'data' })
+                });
+                const errorData = await response.json();
+                displayApiError(errorData);
+            } catch (error) {
+                displayNetworkError(error);
+            }
+        }
+
+        // ============================================================================
+        // Network Errors
+        // ============================================================================
+
+        function showNetworkError() {
+            displayNetworkError(
+                new Error('Failed to fetch'),
+                'http://localhost:9999/invalid'
+            );
+        }
+
+        function showTimeoutError() {
+            displayNetworkError(
+                new Error('Request timeout'),
+                'http://localhost:4002/api/slow-endpoint'
+            );
+        }
+
+        function showCancelledError() {
+            displayNetworkError(
+                new Error('Request cancelled'),
+                'http://localhost:4002/api/test'
+            );
+        }
+
+        // ============================================================================
+        // Initialize
+        // ============================================================================
+
+        console.log('🚨 Error Display Demo Loaded');
+        console.log('Open the browser console (F12) to see error logs');
+    </script>
+</body>
+</html>

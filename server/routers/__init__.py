@@ -9,6 +9,7 @@ from .agent import router as agent_router
 from .analytics import router as analytics_router
 from .assistant_chat import router as assistant_chat_router
 from .autoscaler import router as autoscaler_router
+from .blocker import router as blocker_router
 from .devserver import router as devserver_router
 from .emergency import router as emergency_router
 from .expand_project import router as expand_project_router
@@ -26,6 +27,13 @@ from .systemd import router as systemd_router
 from .terminal import router as terminal_router
 from .reports import router as reports_router
 from .uat_gateway import router as uat_gateway_router
+from .visual_testing import router as visual_testing_router
+from .a11y_testing import router as a11y_testing_router
+from .api_testing import router as api_testing_router
+from .msw_integration import router as msw_integration_router
+from .tool_orchestrator import router as tool_orchestrator_router
+from .uat_websocket import router as uat_websocket_router
+from .uat_reports import router as uat_reports_router
 
 __all__ = [
     "projects_router",
@@ -47,6 +55,14 @@ __all__ = [
     "devlayer_router",
     "quality_gate_router",
     "autoscaler_router",
+    "blocker_router",
     "reports_router",
     "uat_gateway_router",
+    "visual_testing_router",
+    "a11y_testing_router",
+    "api_testing_router",
+    "msw_integration_router",
+    "tool_orchestrator_router",
+    "uat_websocket_router",
+    "uat_reports_router",
 ]

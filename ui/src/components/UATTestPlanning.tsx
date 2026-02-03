@@ -119,11 +119,6 @@ export function UATTestPlanning({ projectName, onComplete, onCancel }: UATTestPl
     }
   }
 
-  const handleSkipBlockers = () => {
-    // Generate plan without blocker configuration
-    generateTestPlan({})
-  }
-
   // Step 4: Generate test plan
   const generateTestPlan = async (blockerConfig: Record<string, string>) => {
     setStep('generating')
@@ -237,7 +232,6 @@ export function UATTestPlanning({ projectName, onComplete, onCancel }: UATTestPl
           projectName={projectName}
           blockers={blockers}
           onConfigure={handleBlockersConfigured}
-          onSkip={handleSkipBlockers}
         />
       </div>
     )

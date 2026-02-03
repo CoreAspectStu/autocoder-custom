@@ -48,6 +48,12 @@ export function AddFeatureForm({ projectName, onClose }: AddFeatureFormProps) {
       .map(s => s.value.trim())
       .filter(s => s.length > 0)
 
+    // Validate that we have at least one step
+    if (filteredSteps.length === 0) {
+      setError('At least one step is required')
+      return
+    }
+
     try {
       await createFeature.mutateAsync({
         category: category.trim(),
@@ -62,7 +68,8 @@ export function AddFeatureForm({ projectName, onClose }: AddFeatureFormProps) {
     }
   }
 
-  const isValid = category.trim() && name.trim() && description.trim()
+  const isValid = category.trim() && name.trim() && description.trim() &&
+                  steps.some(s => s.value.trim().length > 0)
 
   return (
     <div className="neo-modal-backdrop" onClick={onClose}>

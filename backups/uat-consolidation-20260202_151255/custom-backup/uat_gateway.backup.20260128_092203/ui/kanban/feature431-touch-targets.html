@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #431: Touch Targets are 44x44 Minimum</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f9fafb;
+            padding-bottom: 80px;
+        }
+
+        /* Header Styles */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        /* Test Section Container */
+        .test-section {
+            background: white;
+            margin: 1rem;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section h2 {
+            font-size: 1.5rem;
+            color: #1f2937;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .test-section h3 {
+            font-size: 1.125rem;
+            color: #374151;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .test-section p {
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: #ede9fe;
+            border-left: 4px solid #8b5cf6;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0.5rem;
+        }
+
+        .info-box strong {
+            color: #5b21b6;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box ul {
+            margin-left: 1.5rem;
+            color: #4c1d95;
+        }
+
+        .info-box li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* Button Styles */
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 44px;
+            min-height: 44px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #4338ca;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #1f2937;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 44px;
+            min-height: 44px;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+        }
+
+        .btn-small {
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 14px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 44px;
+            min-height: 44px;
+            transition: all 0.2s;
+        }
+
+        .btn-small:hover {
+            background: #059669;
+        }
+
+        .btn-icon {
+            background: #ec4899;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: #db2777;
+            transform: scale(1.05);
+        }
+
+        /* Button Groups */
+        .button-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 1rem 0;
+            max-width: 300px;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 0.5rem;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin: 1rem 0;
+        }
+
+        /* Card Styles */
+        .uat-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .uat-card__header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .uat-card__emoji {
+            font-size: 2rem;
+        }
+
+        .uat-card__title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .uat-card__description {
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        .uat-card__actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .uat-card__button {
+            padding: 12px 24px;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-height: 44px;
+            min-width: 44px;
+            transition: all 0.2s;
+        }
+
+        .uat-card__button--primary {
+            background: #4f46e5;
+            color: white;
+            border: none;
+        }
+
+        .uat-card__button--secondary {
+            background: #f3f4f6;
+            color: #1f2937;
+            border: 2px solid #e5e7eb;
+        }
+
+        /* Form Styles */
+        .test-form {
+            background: #f9fafb;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            min-height: 44px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .submit-btn {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 12px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 44px;
+            min-height: 44px;
+            transition: all 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: #7c3aed;
+        }
+
+        /* Link Styles */
+        .inline-link {
+            color: #4f46e5;
+            text-decoration: none;
+            padding: 14px 4px;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-block;
+            line-height: 1.2;
+        }
+
+        .inline-link:hover {
+            background: #eef2ff;
+            text-decoration: underline;
+        }
+
+        .nav-link {
+            display: inline-block;
+            padding: 12px 20px;
+            color: #4f46e5;
+            text-decoration: none;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            min-height: 44px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: #eef2ff;
+        }
+
+        .icon-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .icon-link:hover {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        /* Size Indicator */
+        .size-indicator {
+            display: inline-block;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 4px 12px;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #92400e;
+            margin-left: 0.5rem;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0.5rem 0;
+        }
+
+        .status-badge.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Test Result Display */
+        .test-result {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+
+        .test-result h4 {
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .test-result pre {
+            white-space: pre-wrap;
+            color: #4b5563;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .test-section {
+                padding: 1rem;
+            }
+
+            .button-row {
+                flex-direction: column;
+            }
+
+            .button-row button {
+                width: 100%;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Feature #431: Touch Targets</h1>
+        <p>WCAG 2.1 SC 2.5.5 - Minimum 44x44 pixels</p>
+    </div>
+
+    <!-- WCAG Information -->
+    <div class="test-section">
+        <h2>WCAG 2.1 Success Criterion 2.5.5</h2>
+        <div class="info-box">
+            <strong>Target Size (Level AAA)</strong>
+            <ul>
+                <li><strong>Requirement:</strong> Touch targets must be at least 44x44 CSS pixels</li>
+                <li><strong>Purpose:</strong> Ensure people with motor impairments can easily activate targets</li>
+                <li><strong>Exceptions:</strong> Inline text, user agent controls, essential presentations</li>
+                <li><strong>Spacing:</strong> Minimum 8px between adjacent targets</li>
+                <li><strong>Benefits:</strong> Easier for everyone, especially on mobile devices</li>
+            </ul>
+        </div>
+        <p><strong>Why 44x44px?</strong> This size matches the average finger pad size and ensures users can accurately tap targets without accidental activations.</p>
+    </div>
+
+    <!-- AC1: Check button sizes on mobile -->
+    <div class="test-section">
+        <h2>✅ AC1: Check Button Sizes on Mobile</h2>
+        <p>All buttons must meet the minimum 44x44px requirement.</p>
+
+        <h3>Primary Buttons <span class="size-indicator">48px height</span></h3>
+        <div class="button-row">
+            <button class="btn-primary">Save Changes</button>
+            <button class="btn-primary">Submit</button>
+            <button class="btn-primary">Continue</button>
+        </div>
+
+        <h3>Secondary Buttons <span class="size-indicator">48px height</span></h3>
+        <div class="button-row">
+            <button class="btn-secondary">Cancel</button>
+            <button class="btn-secondary">Go Back</button>
+            <button class="btn-secondary">Learn More</button>
+        </div>
+
+        <h3>Small Buttons (with padding) <span class="size-indicator">44px min</span></h3>
+        <div class="button-row">
+            <button class="btn-small">OK</button>
+            <button class="btn-small">Yes</button>
+            <button class="btn-small">No</button>
+            <button class="btn-small">Edit</button>
+        </div>
+
+        <h3>Icon Buttons <span class="size-indicator">48x48px</span></h3>
+        <div class="toolbar">
+            <button class="btn-icon" aria-label="Add">➕</button>
+            <button class="btn-icon" aria-label="Edit">✏️</button>
+            <button class="btn-icon" aria-label="Delete">🗑️</button>
+            <button class="btn-icon" aria-label="Share">📤</button>
+            <button class="btn-icon" aria-label="Settings">⚙️</button>
+        </div>
+
+        <div class="test-result">
+            <h4>Test Result:</h4>
+            <pre id="ac1-result">Running tests...</pre>
+        </div>
+    </div>
+
+    <!-- AC2: Verify minimum 44x44px -->
+    <div class="test-section">
+        <h2>✅ AC2: Verify Minimum 44x44px</h2>
+        <p>All touch targets (buttons, links, inputs) must be at least 44x44px.</p>
+
+        <h3>Card Action Buttons</h3>
+        <div class="uat-card">
+            <div class="uat-card__header">
+                <span class="uat-card__emoji">🧪</span>
+                <h3 class="uat-card__title">Test Scenario Example</h3>
+            </div>
+            <p class="uat-card__description">This card demonstrates properly sized action buttons.</p>
+            <div class="uat-card__actions">
+                <button class="uat-card__button uat-card__button--primary">View Details</button>
+                <button class="uat-card__button uat-card__button--secondary">Edit</button>
+            </div>
+        </div>
+
+        <h3>Form Submit Buttons</h3>
+        <div class="test-form">
+            <div class="form-group">
+                <label for="test-input">Example Input</label>
+                <input type="text" id="test-input" placeholder="Type something..." style="min-height: 48px;">
+            </div>
+            <button type="submit" class="submit-btn">Submit Form</button>
+        </div>
+
+        <div class="test-result">
+            <h4>Test Result:</h4>
+            <pre id="ac2-result">Running tests...</pre>
+        </div>
+    </div>
+
+    <!-- AC3: Verify links are tappable -->
+    <div class="test-section">
+        <h2>✅ AC3: Verify Links Are Tappable</h2>
+        <p>All links must have adequate touch targets (44x44px minimum).</p>
+
+        <h3>Inline Links (with expanded tap area)</h3>
+        <p style="font-size: 1.125rem; line-height: 2;">
+            This is an example of an <a href="#" class="inline-link">inline link</a> within a paragraph.
+            The padding around the link ensures the tap target meets the 44x44px requirement.
+            Even <a href="#" class="inline-link">shorter links</a> have adequate tap areas.
+        </p>
+
+        <h3>Navigation Links <span class="size-indicator">48px height</span></h3>
+        <div class="button-row">
+            <a href="#" class="nav-link">Dashboard</a>
+            <a href="#" class="nav-link">Journeys</a>
+            <a href="#" class="nav-link">Scenarios</a>
+            <a href="#" class="nav-link">Results</a>
+        </div>
+
+        <h3>Icon Links <span class="size-indicator">48x48px</span></h3>
+        <div class="toolbar">
+            <a href="#" class="icon-link" aria-label="Twitter">🐦</a>
+            <a href="#" class="icon-link" aria-label="GitHub">🐙</a>
+            <a href="#" class="icon-link" aria-label="LinkedIn">💼</a>
+            <a href="#" class="icon-link" aria-label="Email">📧</a>
+        </div>
+
+        <div class="test-result">
+            <h4>Test Result:</h4>
+            <pre id="ac3-result">Running tests...</pre>
+        </div>
+    </div>
+
+    <!-- AC4: Verify targets don't overlap -->
+    <div class="test-section">
+        <h2>✅ AC4: Verify Targets Don't Overlap</h2>
+        <p>Adjacent touch targets must have at least 8px spacing.</p>
+
+        <h3>Button Rows (12px gap)</h3>
+        <div class="button-row">
+            <button class="btn-primary">Button 1</button>
+            <button class="btn-primary">Button 2</button>
+            <button class="btn-primary">Button 3</button>
+        </div>
+
+        <h3>Button Columns (12px gap)</h3>
+        <div class="button-group">
+            <button class="btn-secondary">First Option</button>
+            <button class="btn-secondary">Second Option</button>
+            <button class="btn-secondary">Third Option</button>
+        </div>
+
+        <h3>Mixed Buttons and Links</h3>
+        <div class="button-row">
+            <button class="btn-primary">Primary Action</button>
+            <a href="#" class="nav-link">Cancel</a>
+            <button class="btn-icon" aria-label="Help">❓</button>
+        </div>
+
+        <div class="test-result">
+            <h4>Test Result:</h4>
+            <pre id="ac4-result">Running tests...</pre>
+        </div>
+    </div>
+
+    <!-- AC5: Verify spacing is adequate -->
+    <div class="test-section">
+        <h2>✅ AC5: Verify Spacing Is Adequate</h2>
+        <p>Minimum 8px spacing between all interactive elements.</p>
+
+        <h3>Icon Toolbar (12px spacing)</h3>
+        <div class="toolbar">
+            <button class="btn-icon" aria-label="Bold">B</button>
+            <button class="btn-icon" aria-label="Italic">I</button>
+            <button class="btn-icon" aria-label="Underline">U</button>
+            <button class="btn-icon" aria-label="Link">🔗</button>
+            <button class="btn-icon" aria-label="Image">🖼️</button>
+        </div>
+
+        <h3>Card Grid with Spacing</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+            <div class="uat-card">
+                <div class="uat-card__header">
+                    <span class="uat-card__emoji">📋</span>
+                    <h4 class="uat-card__title">Card 1</h4>
+                </div>
+                <button class="uat-card__button uat-card__button--primary" style="width: 100%;">Action</button>
+            </div>
+            <div class="uat-card">
+                <div class="uat-card__header">
+                    <span class="uat-card__emoji">📝</span>
+                    <h4 class="uat-card__title">Card 2</h4>
+                </div>
+                <button class="uat-card__button uat-card__button--primary" style="width: 100%;">Action</button>
+            </div>
+        </div>
+
+        <div class="test-result">
+            <h4>Test Result:</h4>
+            <pre id="ac5-result">Running tests...</pre>
+        </div>
+    </div>
+
+    <!-- Comprehensive Test -->
+    <div class="test-section">
+        <h2>📊 Comprehensive Touch Target Analysis</h2>
+        <p>This section automatically measures and reports all touch targets on the page.</p>
+
+        <div class="test-result">
+            <h4>Touch Target Report:</h4>
+            <pre id="comprehensive-report">Click "Run Analysis" to generate report...</pre>
+        </div>
+
+        <div class="button-row" style="margin-top: 1rem;">
+            <button class="btn-primary" onclick="runTouchTargetAnalysis()">Run Analysis</button>
+            <button class="btn-secondary" onclick="highlightTouchTargets()">Highlight Targets</button>
+        </div>
+
+        <div id="highlight-info" class="info-box" style="display: none; margin-top: 1rem;">
+            <strong>Touch Targets Highlighted</strong>
+            <p>All interactive elements are now outlined in green (compliant) or red (non-compliant).</p>
+        </div>
+    </div>
+
+    <script>
+        // Run on page load
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                runAllTests();
+            }, 500);
+        });
+
+        function runAllTests() {
+            testAC1();
+            testAC2();
+            testAC3();
+            testAC4();
+            testAC5();
+        }
+
+        function testAC1() {
+            const buttons = document.querySelectorAll('button');
+            let results = [];
+            let allPass = true;
+
+            buttons.forEach((btn, i) => {
+                const rect = btn.getBoundingClientRect();
+                const width = Math.round(rect.width);
+                const height = Math.round(rect.height);
+                const pass = width >= 44 && height >= 44;
+
+                if (!pass) allPass = false;
+
+                results.push({
+                    index: i,
+                    text: btn.textContent.trim().substring(0, 20) || '(icon button)',
+                    size: `${width}x${height}px`,
+                    pass: pass
+                });
+            });
+
+            const summary = `AC1: ${buttons.length} buttons tested\n${allPass ? '✅ PASS' : '❌ FAIL'}: All buttons meet 44x44px minimum\n\nDetails:\n` +
+                results.map(r => `${r.pass ? '✅' : '❌'} Button ${r.index}: ${r.text} - ${r.size}`).join('\n');
+
+            document.getElementById('ac1-result').textContent = summary;
+        }
+
+        function testAC2() {
+            const interactive = document.querySelectorAll('button, a, input, select, textarea');
+            let compliant = 0;
+            let nonCompliant = 0;
+
+            interactive.forEach(elem => {
+                const rect = elem.getBoundingClientRect();
+                if (rect.width >= 44 && rect.height >= 44) {
+                    compliant++;
+                } else {
+                    nonCompliant++;
+                }
+            });
+
+            const summary = `AC2: ${interactive.length} interactive elements tested\n` +
+                `✅ Compliant: ${compliant}\n` +
+                (nonCompliant > 0 ? `❌ Non-compliant: ${nonCompliant}\n` : '') +
+                `📊 Compliance Rate: ${(compliant / interactive.length * 100).toFixed(1)}%`;
+
+            document.getElementById('ac2-result').textContent = summary;
+        }
+
+        function testAC3() {
+            const links = document.querySelectorAll('a');
+            let compliant = 0;
+            let nonCompliant = 0;
+
+            links.forEach(link => {
+                const rect = link.getBoundingClientRect();
+                if (rect.width >= 44 && rect.height >= 44) {
+                    compliant++;
+                } else {
+                    nonCompliant++;
+                }
+            });
+
+            const summary = `AC3: ${links.length} links tested\n` +
+                `✅ Tappable: ${compliant}\n` +
+                (nonCompliant > 0 ? `❌ Too small: ${nonCompliant}\n` : '') +
+                `📊 Tappable: ${(compliant / links.length * 100).toFixed(1)}%`;
+
+            document.getElementById('ac3-result').textContent = summary;
+        }
+
+        function testAC4() {
+            const buttonRows = document.querySelectorAll('.button-row, .button-group');
+            let overlaps = 0;
+            let totalChecks = 0;
+
+            buttonRows.forEach(row => {
+                const buttons = Array.from(row.querySelectorAll('button, a')).filter(b => {
+                    const rect = b.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                });
+
+                for (let i = 0; i < buttons.length - 1; i++) {
+                    const rect1 = buttons[i].getBoundingClientRect();
+                    const rect2 = buttons[i + 1].getBoundingClientRect();
+
+                    const spacing = rect2.left - (rect1.right);
+                    const hasOverlap = spacing < 8;
+
+                    totalChecks++;
+                    if (hasOverlap) overlaps++;
+                }
+            });
+
+            const summary = `AC4: ${totalChecks} element pairs checked\n` +
+                (overlaps === 0
+                    ? '✅ PASS: No overlaps detected\nAll targets have ≥8px spacing'
+                    : `❌ FAIL: ${overlaps} overlaps detected`);
+
+            document.getElementById('ac4-result').textContent = summary;
+        }
+
+        function testAC5() {
+            const toolbars = document.querySelectorAll('.toolbar');
+            let spacingIssues = 0;
+            let totalChecks = 0;
+
+            toolbars.forEach(toolbar => {
+                const children = Array.from(toolbar.children);
+                for (let i = 0; i < children.length - 1; i++) {
+                    const rect1 = children[i].getBoundingClientRect();
+                    const rect2 = children[i + 1].getBoundingClientRect();
+
+                    const spacing = rect2.left - (rect1.right);
+                    totalChecks++;
+
+                    if (spacing < 8) spacingIssues++;
+                }
+            });
+
+            const summary = `AC5: ${totalChecks} spacing measurements\n` +
+                (spacingIssues === 0
+                    ? '✅ PASS: All spacings meet 8px minimum'
+                    : `❌ FAIL: ${spacingIssues} spacings < 8px`);
+
+            document.getElementById('ac5-result').textContent = summary;
+        }
+
+        function runTouchTargetAnalysis() {
+            const interactive = document.querySelectorAll('button, a, input:not([type="hidden"]), select, textarea');
+            let results = {
+                buttons: { total: 0, compliant: 0, sizes: [] },
+                links: { total: 0, compliant: 0, sizes: [] },
+                inputs: { total: 0, compliant: 0, sizes: [] }
+            };
+
+            interactive.forEach(elem => {
+                const rect = elem.getBoundingClientRect();
+                const width = Math.round(rect.width);
+                const height = Math.round(rect.height);
+                const isCompliant = width >= 44 && height >= 44;
+
+                const sizeInfo = { width, height, isCompliant };
+
+                if (elem.tagName === 'BUTTON') {
+                    results.buttons.total++;
+                    if (isCompliant) results.buttons.compliant++;
+                    results.buttons.sizes.push(sizeInfo);
+                } else if (elem.tagName === 'A') {
+                    results.links.total++;
+                    if (isCompliant) results.links.compliant++;
+                    results.links.sizes.push(sizeInfo);
+                } else {
+                    results.inputs.total++;
+                    if (isCompliant) results.inputs.compliant++;
+                    results.inputs.sizes.push(sizeInfo);
+                }
+            });
+
+            const total = results.buttons.total + results.links.total + results.inputs.total;
+            const compliant = results.buttons.compliant + results.links.compliant + results.inputs.compliant;
+
+            const report = `📊 Touch Target Analysis Report
+${'='.repeat(60)}
+
+Buttons:
+  Total: ${results.buttons.total}
+  Compliant: ${results.buttons.compliant} (${(results.buttons.compliant/results.buttons.total*100).toFixed(1)}%)
+  Size range: ${Math.min(...results.buttons.sizes.map(s => s.width))}-${Math.max(...results.buttons.sizes.map(s => s.width))}px
+
+Links:
+  Total: ${results.links.total}
+  Compliant: ${results.links.compliant} (${(results.links.compliant/results.links.total*100).toFixed(1)}%)
+  Size range: ${Math.min(...results.links.sizes.map(s => s.width))}-${Math.max(...results.links.sizes.map(s => s.width))}px
+
+Form Inputs:
+  Total: ${results.inputs.total}
+  Compliant: ${results.inputs.compliant} (${(results.inputs.compliant/results.inputs.total*100).toFixed(1)}%)
+  Size range: ${Math.min(...results.inputs.sizes.map(s => s.width))}-${Math.max(...results.inputs.sizes.map(s => s.width))}px
+
+${'='.repeat(60)}
+Overall Compliance: ${(compliant/total*100).toFixed(1)}% (${compliant}/${total} elements)
+${compliant === total ? '✅ ALL ELEMENTS COMPLIANT' : '❌ SOME ELEMENTS BELOW MINIMUM'}`;
+
+            document.getElementById('comprehensive-report').textContent = report;
+        }
+
+        function highlightTouchTargets() {
+            const interactive = document.querySelectorAll('button, a, input, select, textarea');
+
+            interactive.forEach(elem => {
+                const rect = elem.getBoundingClientRect();
+                const isCompliant = rect.width >= 44 && rect.height >= 44;
+
+                elem.style.outline = isCompliant
+                    ? '3px solid #10b981'
+                    : '3px solid #ef4444';
+                elem.style.outlineOffset = '2px';
+            });
+
+            document.getElementById('highlight-info').style.display = 'block';
+
+            setTimeout(() => {
+                interactive.forEach(elem => {
+                    elem.style.outline = '';
+                    elem.style.outlineOffset = '';
+                });
+                document.getElementById('highlight-info').style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

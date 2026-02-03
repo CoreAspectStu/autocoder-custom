@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Loading States - Feature #396</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+        }
+
+        .test-section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .delay-options {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .delay-options label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .delay-options input[type="number"] {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 100px;
+        }
+
+        .delay-options input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .response-area {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 150px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .response-area:empty::before {
+            content: "Response will appear here...";
+            color: #999;
+        }
+
+        /* Loading Indicator Styles */
+        .loading-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10000;
+            animation: slideIn 0.3s ease-out;
+            min-width: 200px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-message {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .loading-progress {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .status-idle {
+            background: #e9ecef;
+            color: #666;
+        }
+
+        .status-loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .acceptance-criteria {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .acceptance-criteria h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .criteria-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        .criteria-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .criteria-checkbox.checked {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+
+        .criteria-text {
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .criteria-text strong {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Feature #396: Loading State Test</h1>
+        <p class="subtitle">Verify loading indicators appear during slow operations</p>
+
+        <div id="status" class="status-badge status-idle">Status: Idle</div>
+
+        <div class="test-section">
+            <h2>Test Controls</h2>
+
+            <div class="delay-options">
+                <label for="delay-input">Delay (ms):</label>
+                <input type="number" id="delay-input" value="2000" min="100" max="10000" step="100">
+            </div>
+
+            <div class="controls">
+                <button id="trigger-delay-btn" onclick="testDelay()">
+                    ⏳ Test Fixed Delay
+                </button>
+                <button id="trigger-random-btn" onclick="testRandomDelay()">
+                    🎲 Test Random Delay
+                </button>
+                <button id="trigger-multiple-btn" onclick="testMultipleDelays()">
+                    📊 Test Multiple Operations
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Response</h2>
+            <div id="response-output" class="response-area"></div>
+        </div>
+
+        <div class="acceptance-criteria">
+            <h3>✅ Acceptance Criteria Checklist</h3>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac1">✓</div>
+                <div class="criteria-text">
+                    <strong>AC1:</strong> Trigger slow operation - Button initiates delayed API call
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac2">✓</div>
+                <div class="criteria-text">
+                    <strong>AC2:</strong> Verify spinner appears - Loading indicator visible during operation
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac3">✓</div>
+                <div class="criteria-text">
+                    <strong>AC3:</strong> Verify progress is shown - Progress message or animation displayed
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac4">✓</div>
+                <div class="criteria-text">
+                    <strong>AC4:</strong> Wait for completion - Operation finishes successfully
+                </div>
+            </div>
+
+            <div class="criteria-item">
+                <div class="criteria-checkbox" id="ac5">✓</div>
+                <div class="criteria-text">
+                    <strong>AC5:</strong> Verify indicator disappears - Loading indicator removed after completion
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+        let activeLoaders = new Map();
+        let requestCounter = 0;
+
+        function updateStatus(status, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = `Status: ${status}`;
+            statusEl.className = `status-badge status-${type}`;
+        }
+
+        function showLoadingIndicator(requestId, message) {
+            // Remove existing indicator if present
+            hideLoadingIndicator(requestId);
+
+            const indicator = document.createElement('div');
+            indicator.className = 'loading-indicator';
+            indicator.id = `loading-${requestId}`;
+            indicator.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div>
+                    <div class="loading-message">${message}</div>
+                    <div class="loading-progress" id="progress-${requestId}">Initializing...</div>
+                </div>
+            `;
+
+            document.body.appendChild(indicator);
+            activeLoaders.set(requestId, indicator);
+
+            // Mark AC1 as checked
+            document.getElementById('ac1').classList.add('checked');
+        }
+
+        function updateLoadingProgress(requestId, progress) {
+            const progressEl = document.getElementById(`progress-${requestId}`);
+            if (progressEl) {
+                progressEl.textContent = progress;
+            }
+        }
+
+        function hideLoadingIndicator(requestId) {
+            const indicator = activeLoaders.get(requestId);
+            if (indicator && indicator.parentNode) {
+                indicator.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (indicator.parentNode) {
+                        indicator.parentNode.removeChild(indicator);
+                    }
+                }, 300);
+            }
+            activeLoaders.delete(requestId);
+        }
+
+        function appendResponse(data) {
+            const output = document.getElementById('response-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${JSON.stringify(data, null, 2)}\n\n`;
+        }
+
+        async function testDelay() {
+            const delayMs = parseInt(document.getElementById('delay-input').value) || 2000;
+            const requestId = `delay-${++requestCounter}`;
+
+            // Update status
+            updateStatus('Loading...', 'loading');
+
+            // Show loading indicator (AC1, AC2)
+            showLoadingIndicator(requestId, `Testing ${delayMs}ms delay...`);
+
+            // Simulate progress updates (AC3)
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 10;
+                if (progress <= 90) {
+                    updateLoadingProgress(requestId, `${progress}% complete...`);
+                }
+            }, delayMs / 10);
+
+            try {
+                // Make API call
+                const response = await fetch(`${API_BASE}/api/test/delay?ms=${delayMs}`);
+                const data = await response.json();
+
+                // Clear progress updates
+                clearInterval(progressInterval);
+                updateLoadingProgress(requestId, '100% complete!');
+
+                // Wait a moment to show completion
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                // Hide loading indicator (AC5)
+                hideLoadingIndicator(requestId);
+
+                // Display response
+                appendResponse({
+                    success: true,
+                    delay: data.delay_ms,
+                    message: data.message,
+                    timestamp: data.timestamp
+                });
+
+                // Update status
+                updateStatus('Success', 'success');
+
+                // Mark ACs as checked
+                document.getElementById('ac1').classList.add('checked');
+                document.getElementById('ac2').classList.add('checked');
+                document.getElementById('ac3').classList.add('checked');
+                document.getElementById('ac4').classList.add('checked');
+                document.getElementById('ac5').classList.add('checked');
+
+            } catch (error) {
+                clearInterval(progressInterval);
+                hideLoadingIndicator(requestId);
+                updateStatus('Error', 'error');
+                appendResponse({ error: error.message });
+            }
+        }
+
+        async function testRandomDelay() {
+            const requestId = `random-${++requestCounter}`;
+
+            updateStatus('Loading...', 'loading');
+            showLoadingIndicator(requestId, 'Testing random delay...');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/test/random?min_ms=500&max_ms=3000`);
+                const data = await response.json();
+
+                updateLoadingProgress(requestId, `Completed with ${data.delay_ms}ms delay`);
+
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                hideLoadingIndicator(requestId);
+                appendResponse({
+                    success: true,
+                    randomDelay: data.delay_ms,
+                    message: data.message
+                });
+
+                updateStatus('Success', 'success');
+
+            } catch (error) {
+                hideLoadingIndicator(requestId);
+                updateStatus('Error', 'error');
+                appendResponse({ error: error.message });
+            }
+        }
+
+        async function testMultipleDelays() {
+            updateStatus('Loading...', 'loading');
+
+            const delays = [1000, 1500, 2000];
+            const promises = delays.map(async (delay, index) => {
+                const requestId = `multi-${++requestCounter}`;
+                showLoadingIndicator(requestId, `Operation ${index + 1}/${delays.length} (${delay}ms)...`);
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/test/delay?ms=${delay}`);
+                    const data = await response.json();
+
+                    updateLoadingProgress(requestId, 'Done!');
+                    await new Promise(resolve => setTimeout(resolve, 200));
+
+                    hideLoadingIndicator(requestId);
+
+                    return {
+                        index: index + 1,
+                        delay: data.delay_ms,
+                        success: true
+                    };
+                } catch (error) {
+                    hideLoadingIndicator(requestId);
+                    return {
+                        index: index + 1,
+                        error: error.message,
+                        success: false
+                    };
+                }
+            });
+
+            const results = await Promise.all(promises);
+
+            appendResponse({
+                operation: 'Multiple concurrent delays',
+                results: results
+            });
+
+            if (results.every(r => r.success)) {
+                updateStatus('Success', 'success');
+            } else {
+                updateStatus('Partial Success', 'error');
+            }
+        }
+
+        // Auto-test on page load for automated testing
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('auto') === 'true') {
+                setTimeout(() => testDelay(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -521,9 +521,30 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, project_name: str):
-        """Accept a WebSocket connection for a project."""
+        """
+        Accept and register a WebSocket connection for a project.
+
+        Note: This method calls accept() internally. If you need to validate
+        before accepting, call websocket.accept() first, validate, close on error,
+        then call register() instead.
+        """
         await websocket.accept()
 
+        async with self._lock:
+            if project_name not in self.active_connections:
+                self.active_connections[project_name] = set()
+            self.active_connections[project_name].add(websocket)
+
+    async def register(self, websocket: WebSocket, project_name: str):
+        """
+        Register an already-accepted WebSocket connection.
+
+        Use this when you need to validate after accepting the connection.
+        Pattern:
+            1. await websocket.accept()
+            2. # validate and close on error
+            3. await manager.register(websocket, project_name)
+        """
         async with self._lock:
             if project_name not in self.active_connections:
                 self.active_connections[project_name] = set()
@@ -617,10 +638,22 @@ async def project_websocket(websocket: WebSocket, project_name: str):
     - Agent status changes
     - Agent stdout/stderr lines
     """
+    # Accept the WebSocket connection FIRST (required by Starlette)
+    # This allows us to send proper error codes to the client
+    await websocket.accept()
+
+    # Security: Only allow connections from localhost
+    client_host = websocket.client.host if websocket.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost", None):
+        await websocket.close(code=4003, reason="Localhost access only")
+        return
+
+    # Validate project name
     if not validate_project_name(project_name):
         await websocket.close(code=4000, reason="Invalid project name")
         return
 
+    # Get project directory
     project_dir = _get_project_path(project_name)
     if not project_dir:
         await websocket.close(code=4004, reason="Project not found in registry")
@@ -630,7 +663,8 @@ async def project_websocket(websocket: WebSocket, project_name: str):
         await websocket.close(code=4004, reason="Project directory not found")
         return
 
-    await manager.connect(websocket, project_name)
+    # Register with connection manager (connection already accepted above)
+    await manager.register(websocket, project_name)
 
     # Get agent manager and register callbacks
     agent_manager = get_manager(project_name, project_dir, ROOT_DIR)

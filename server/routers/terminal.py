@@ -249,6 +249,16 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     - {"type": "pong"} - Keep-alive response
     - {"type": "error", "message": "..."} - Error message
     """
+    # Accept the WebSocket connection FIRST (required by Starlette)
+    # This allows us to send proper error codes to the client
+    await websocket.accept()
+
+    # Security: Only allow connections from localhost
+    client_host = websocket.client.host if websocket.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost", None):
+        await websocket.close(code=4003, reason="Localhost access only")
+        return
+
     # Validate project name
     if not validate_project_name(project_name):
         await websocket.close(
@@ -287,8 +297,6 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
             reason="Terminal not found",
         )
         return
-
-    await websocket.accept()
 
     # Get or create terminal session for this project/terminal
     session = get_terminal_session(project_name, project_dir, terminal_id)

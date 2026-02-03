@@ -76,11 +76,57 @@ class ProjectPromptsUpdate(BaseModel):
 
 class FeatureBase(BaseModel):
     """Base feature attributes."""
-    category: str
-    name: str
-    description: str
-    steps: list[str]
-    dependencies: list[int] = Field(default_factory=list)  # Optional dependencies
+    category: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str = Field(..., min_length=1)
+    steps: list[str] = Field(default_factory=list, description="Array of test/implementation steps (JSON array of strings)")
+    dependencies: list[int] = Field(default_factory=list, description="List of feature IDs this feature depends on")
+
+    @field_validator('steps', mode='before')
+    @classmethod
+    def validate_steps(cls, v: list[str] | None) -> list[str]:
+        """Validate that steps is a non-empty array of strings."""
+        # Handle NULL values from database - convert to empty list
+        if v is None:
+            return []
+
+        if not isinstance(v, list):
+            raise ValueError('steps must be a JSON array of strings')
+
+        # Allow empty steps list (some features may not have explicit steps)
+        if len(v) == 0:
+            return v
+
+        # Filter out empty/whitespace-only steps
+        valid_steps = [step for step in v if step.strip()]
+
+        # If all steps were empty, return empty list
+        if not valid_steps:
+            return valid_steps
+
+        # Validate non-empty steps
+        for i, step in enumerate(valid_steps):
+            if not isinstance(step, str):
+                raise ValueError(f'step {i+1} must be a string, got {type(step).__name__}')
+
+        return valid_steps
+
+    @field_validator('dependencies', mode='before')
+    @classmethod
+    def validate_dependencies(cls, v: list[int] | None) -> list[int]:
+        """Validate that dependencies is an array of positive integers."""
+        # Handle NULL values from database - convert to empty list
+        if v is None:
+            return []
+
+        if not isinstance(v, list):
+            raise ValueError('dependencies must be a JSON array of integers')
+
+        for dep_id in v:
+            if not isinstance(dep_id, int) or dep_id < 1:
+                raise ValueError(f'dependency ID must be a positive integer, got {dep_id}')
+
+        return v
 
 
 class FeatureCreate(FeatureBase):

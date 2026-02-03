@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>
+   UAT Gateway - Cards
+  </title>
+  <link href="uat-card.css" rel="stylesheet"/>
+     <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+ <body>
+  <!-- Skip to content link for accessibility (WCAG 2.1) -->
+  <!-- Allows keyboard users to bypass navigation and jump directly to main content -->
+  <a class="skip-link" href="#main-content">
+   Skip to main content
+  </a>
+
+  <!-- Main landmark for screen readers -->
+  <main aria-label="UAT Gateway Card Grid" id="main-content" role="main" tabindex="-1">
+   <h1 class="sr-only">
+    UAT Gateway Test Cards
+   </h1>
+   <div aria-label="Test Cards" class="uat-card-grid" role="region">
+    <article aria-labelledby="card-1-title" class="uat-card" data-card-type="journey">
+     <header class="uat-card__header">
+      <span aria-label="Identification icon" class="uat-card__emoji" role="img">
+       🆔
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-1-title">
+        User Authentication Journey
+       </h3>
+       <span class="uat-card__id">
+        JOURNEY-20250126-001
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       Complete user authentication workflow including registration, login, logout, and password recovery
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        4 scenarios
+       </span>
+       <span class="uat-card__metadata-item">
+        ~45 min
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--journey">
+        journey
+       </span>
+       <span class="uat-card__label">
+        authentication
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--in-progress">
+       In Progress
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T10:00:00">
+       Updated 2h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="View Details for User Authentication Journey" class="uat-card__button uat-card__button--primary">
+       View Details
+      </button>
+      <button aria-label="Open Test for User Authentication Journey" class="uat-card__button uat-card__button--secondary">
+       Open Test
+      </button>
+     </div>
+    </article>
+    <article aria-labelledby="card-2-title" class="uat-card" data-card-type="scenario">
+     <header class="uat-card__header">
+      <span aria-label="Test tube icon" class="uat-card__emoji" role="img">
+       🧪
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-2-title">
+        Login - Happy Path
+       </h3>
+       <span class="uat-card__id">
+        SCENARIO-20250126-001
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       Verify user can successfully log in with valid credentials and access dashboard
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        8 steps
+       </span>
+       <span class="uat-card__metadata-item">
+        ~8 min
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--scenario">
+        scenario
+       </span>
+       <span class="uat-card__label uat-card__label--happy-path">
+        happy-path
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--done">
+       Done
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T09:00:00">
+       Updated 3h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="View Results for Login - Happy Path" class="uat-card__button uat-card__button--primary">
+       View Results
+      </button>
+      <button aria-label="Re-run Login - Happy Path" class="uat-card__button uat-card__button--secondary">
+       Re-run
+      </button>
+     </div>
+    </article>
+    <article aria-labelledby="card-3-title" class="uat-card" data-card-type="bug">
+     <header class="uat-card__header">
+      <span aria-label="Bug icon" class="uat-card__emoji" role="img">
+       🐛
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-3-title">
+        Login button not responsive
+       </h3>
+       <span class="uat-card__id">
+        BUG-KANBAN-20250126-001
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       Login button does not respond to touch events on mobile devices
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        High severity
+       </span>
+       <span class="uat-card__metadata-item">
+        Priority: 2
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--bug">
+        bug
+       </span>
+       <span class="uat-card__label">
+        mobile
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--todo">
+       To Do
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T11:00:00">
+       Created 1h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="Fix Bug: Login button not responsive" class="uat-card__button uat-card__button--primary">
+       Fix Bug
+      </button>
+      <button aria-label="View Test for Login button bug" class="uat-card__button uat-card__button--secondary">
+       View Test
+      </button>
+     </div>
+    </article>
+    <article aria-labelledby="card-4-title" class="uat-card" data-card-type="journey">
+     <header class="uat-card__header">
+      <span aria-label="Credit card icon" class="uat-card__emoji" role="img">
+       💳
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-4-title">
+        Payment Processing Journey
+       </h3>
+       <span class="uat-card__id">
+        JOURNEY-20250126-002
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       Complete payment workflow including card entry, validation, processing, and confirmation
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        6 scenarios
+       </span>
+       <span class="uat-card__metadata-item">
+        ~60 min
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--journey">
+        journey
+       </span>
+       <span class="uat-card__label">
+        payment
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--backlog">
+       Backlog
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T07:00:00">
+       Created 4h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="Start Testing Payment Processing Journey" class="uat-card__button uat-card__button--primary">
+       Start Testing
+      </button>
+      <button aria-label="Configure Payment Processing Journey" class="uat-card__button uat-card__button--secondary">
+       Configure
+      </button>
+     </div>
+    </article>
+    <article aria-labelledby="card-5-title" class="uat-card" data-card-type="scenario">
+     <header class="uat-card__header">
+      <span aria-label="Test tube icon" class="uat-card__emoji" role="img">
+       🧪
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-5-title">
+        Login - Invalid Password
+       </h3>
+       <span class="uat-card__id">
+        SCENARIO-20250126-002
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       Verify appropriate error message when user enters incorrect password
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        5 steps
+       </span>
+       <span class="uat-card__metadata-item">
+        ~5 min
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--scenario">
+        scenario
+       </span>
+       <span class="uat-card__label uat-card__label--error-path">
+        error-path
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--done">
+       Done
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T09:00:00">
+       Updated 3h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="View Results for Login - Invalid Password" class="uat-card__button uat-card__button--primary">
+       View Results
+      </button>
+      <button aria-label="Re-run Login - Invalid Password" class="uat-card__button uat-card__button--secondary">
+       Re-run
+      </button>
+     </div>
+    </article>
+    <article aria-labelledby="card-6-title" class="uat-card" data-card-type="journey">
+     <header class="uat-card__header">
+      <span aria-label="Person icon" class="uat-card__emoji" role="img">
+       👤
+      </span>
+      <div class="uat-card__title-group">
+       <h3 class="uat-card__title" id="card-6-title">
+        User Profile Management Journey
+       </h3>
+       <span class="uat-card__id">
+        JOURNEY-20250126-003
+       </span>
+      </div>
+     </header>
+     <div class="uat-card__body">
+      <p class="uat-card__description">
+       User profile viewing, editing, avatar upload, and preferences management
+      </p>
+      <div class="uat-card__metadata">
+       <span class="uat-card__metadata-item">
+        3 scenarios
+       </span>
+       <span class="uat-card__metadata-item">
+        ~30 min
+       </span>
+      </div>
+      <div class="uat-card__labels">
+       <span class="uat-card__label uat-card__label--journey">
+        journey
+       </span>
+       <span class="uat-card__label">
+        profile
+       </span>
+      </div>
+     </div>
+     <footer class="uat-card__footer">
+      <span class="uat-card__status uat-card__status--in-review">
+       In Review
+      </span>
+      <time class="uat-card__timestamp" datetime="2025-01-26T10:00:00">
+       Updated 2h ago
+      </time>
+     </footer>
+     <div class="uat-card__actions">
+      <button aria-label="Review Tests for User Profile Management Journey" class="uat-card__button uat-card__button--primary">
+       Review Tests
+      </button>
+      <button aria-label="Approve User Profile Management Journey" class="uat-card__button uat-card__button--secondary">
+       Approve
+      </button>
+     </div>
+    </article>
+   </div>
+  </main>
+ </body>
+</html>

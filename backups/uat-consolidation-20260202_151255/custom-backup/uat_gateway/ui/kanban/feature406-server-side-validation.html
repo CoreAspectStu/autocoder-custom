@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #406: Server-Side Validation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        h2 {
+            color: #444;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-box {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .response-box.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .response-box.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .info-box {
+            background: #e0e7ff;
+            border: 1px solid #c7d2fe;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #3730a3;
+        }
+
+        .validation-error {
+            background: #fee2e2;
+            border-left: 3px solid #ef4444;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .validation-error .field {
+            font-weight: 600;
+            color: #991b1b;
+        }
+
+        .validation-error .message {
+            color: #7f1d1d;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Feature #406: Server-Side Validation</h1>
+        <p class="subtitle">Verification that validation is enforced on the server side</p>
+
+        <div class="info-box">
+            <strong>📋 What this demonstrates:</strong><br>
+            Even if client-side validation is bypassed, the server validates all input and returns detailed error messages.
+        </div>
+
+        <div class="section">
+            <h2>Test 1: Invalid Journey Name (Too Short)</h2>
+            <div class="form-group">
+                <label>Journey Name:</label>
+                <input type="text" id="journeyName1" placeholder="Too short name" value="ab">
+            </div>
+            <div class="form-group">
+                <label>Description:</label>
+                <textarea id="description1" rows="2" placeholder="Description">Test journey</textarea>
+            </div>
+            <button onclick="testInvalidName()">Submit Invalid Data</button>
+            <div id="response1"></div>
+        </div>
+
+        <div class="section">
+            <h2>Test 2: Multiple Validation Errors</h2>
+            <div class="form-group">
+                <label>Journey Name (too long):</label>
+                <input type="text" id="journeyName2" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+            </div>
+            <div class="form-group">
+                <label>Description (too long):</label>
+                <textarea id="description2" rows="2">xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</textarea>
+            </div>
+            <div class="form-group">
+                <label>Priority (out of range):</label>
+                <input type="number" id="priority" value="999">
+            </div>
+            <button onclick="testMultipleErrors()">Submit Multiple Invalid Fields</button>
+            <div id="response2"></div>
+        </div>
+
+        <div class="section">
+            <h2>Test 3: Valid Data (Should Succeed)</h2>
+            <div class="form-group">
+                <label>Journey Name:</label>
+                <input type="text" id="journeyName3" placeholder="Valid name" value="Valid Journey Test">
+            </div>
+            <div class="form-group">
+                <label>Description:</label>
+                <textarea id="description3" rows="2" placeholder="Description">This is a valid journey with proper data</textarea>
+            </div>
+            <div class="form-group">
+                <label>Priority:</label>
+                <input type="number" id="priority3" value="5" min="1" max="10">
+            </div>
+            <button onclick="testValidData()">Submit Valid Data</button>
+            <div id="response3"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+        let authToken = null;
+        let csrfToken = null;
+
+        // Authenticate on page load
+        async function authenticate() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login?username=admin&password=admin123`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    console.log('Authenticated successfully');
+
+                    // Get CSRF token
+                    const csrfResponse = await fetch(`${API_BASE}/api/csrf-token`);
+                    const csrfData = await csrfResponse.json();
+                    csrfToken = csrfData.csrf_token;
+                    console.log('CSRF token obtained');
+                }
+            } catch (error) {
+                console.error('Authentication failed:', error);
+            }
+        }
+
+        function displayResponse(elementId, status, data) {
+            const element = document.getElementById(elementId);
+
+            const statusClass = status === 'success' ? 'success' : 'error';
+            const statusText = status === 'success' ? '✓ Success' : '✗ Validation Failed';
+
+            let html = `<div class="status ${statusClass}">${statusText}</div>`;
+
+            if (status === 'error' && data.details && data.details.validation_errors) {
+                // Display validation errors
+                html += '<div class="response-box error">';
+                data.details.validation_errors.forEach(error => {
+                    html += `
+                        <div class="validation-error">
+                            <span class="field">Field: ${error.field}</span><br>
+                            <span class="message">${error.message}</span>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            } else {
+                // Display raw response
+                html += `<div class="response-box ${statusClass}"><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+            }
+
+            element.innerHTML = html;
+        }
+
+        async function testInvalidName() {
+            const responseDiv = document.getElementById('response1');
+            responseDiv.innerHTML = '<span class="loading"></span> Testing...';
+
+            const data = {
+                name: document.getElementById('journeyName1').value,
+                description: document.getElementById('description1').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-CSRF-Token': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const responseData = await response.json();
+                displayResponse('response1', response.ok ? 'success' : 'error', responseData);
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testMultipleErrors() {
+            const responseDiv = document.getElementById('response2');
+            responseDiv.innerHTML = '<span class="loading"></span> Testing...';
+
+            const data = {
+                name: document.getElementById('journeyName2').value,
+                description: document.getElementById('description2').value,
+                priority: parseInt(document.getElementById('priority').value)
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-CSRF-Token': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const responseData = await response.json();
+                displayResponse('response2', response.ok ? 'success' : 'error', responseData);
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testValidData() {
+            const responseDiv = document.getElementById('response3');
+            responseDiv.innerHTML = '<span class="loading"></span> Testing...';
+
+            const data = {
+                name: document.getElementById('journeyName3').value,
+                description: document.getElementById('description3').value,
+                priority: parseInt(document.getElementById('priority3').value)
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'X-CSRF-Token': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const responseData = await response.json();
+                displayResponse('response3', response.ok ? 'success' : 'error', responseData);
+            } catch (error) {
+                responseDiv.innerHTML = `<div class="status error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Authenticate when page loads
+        window.addEventListener('load', authenticate);
+    </script>
+</body>
+</html>

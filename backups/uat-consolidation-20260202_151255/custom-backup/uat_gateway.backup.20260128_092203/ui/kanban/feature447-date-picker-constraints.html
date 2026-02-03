@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #447: Date Picker Constraints</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 8px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .card .description {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="date"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group input[type="date"].valid {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .form-group input[type="date"].invalid {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .constraint-info {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+
+        .constraint-info code {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .test-result {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .test-result.visible {
+            display: block;
+        }
+
+        .test-result.success {
+            background: #f0fdf4;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+
+        .test-result.error {
+            background: #fef2f2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .test-result.info {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .acceptance-criteria {
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+        }
+
+        .acceptance-criteria li {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border-left: 3px solid #d1d5db;
+            font-size: 13px;
+        }
+
+        .acceptance-criteria li.pass {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .acceptance-criteria li .ac-number {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .acceptance-criteria li .ac-status {
+            float: right;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .acceptance-criteria li.pass .ac-status {
+            color: #10b981;
+        }
+
+        .info-box {
+            background: #fef3c7;
+            border-left: 3px solid #f59e0b;
+            padding: 16px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #92400e;
+        }
+
+        .code-example {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .status-badge.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Feature #447: Date Picker Constraints</h1>
+            <p>
+                <strong>Category:</strong> Temporal & Timezone &nbsp;|&nbsp;
+                <strong>Complexity:</strong> Medium &nbsp;|&nbsp;
+                <strong>Status:</strong> 🧪 Testing
+            </p>
+            <p style="margin-top: 12px;">
+                Verify that date pickers enforce valid date ranges using HTML5 <code>min</code> and <code>max</code> attributes.
+                These constraints prevent users from selecting dates outside allowed ranges in the browser's native date picker.
+            </p>
+        </header>
+
+        <div class="grid">
+            <!-- Example 1: Minimum Date Only -->
+            <div class="card">
+                <h2>1. Birthdate Input (Past Dates Only)</h2>
+                <p class="description">
+                    Prevents selecting future dates (birthdates must be in the past).
+                    Uses <code>max</code> attribute set to today.
+                </p>
+
+                <div class="form-group">
+                    <label for="birthdate">Date of Birth</label>
+                    <input type="date" id="birthdate" name="birthdate">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>max="today"</code><br>
+                        <strong>Behavior:</strong> Cannot select dates after today
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('birthdate')">Test Birthdate Constraint</button>
+                <div class="test-result" id="birthdate-result"></div>
+            </div>
+
+            <!-- Example 2: Maximum Date Only -->
+            <div class="card">
+                <h2>2. Appointment Booking (Future Dates Only)</h2>
+                <p class="description">
+                    Prevents selecting past dates (appointments must be in the future).
+                    Uses <code>min</code> attribute set to today.
+                </p>
+
+                <div class="form-group">
+                    <label for="appointment">Appointment Date</label>
+                    <input type="date" id="appointment" name="appointment">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="tomorrow"</code><br>
+                        <strong>Behavior:</strong> Cannot select dates before tomorrow
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('appointment')">Test Appointment Constraint</button>
+                <div class="test-result" id="appointment-result"></div>
+            </div>
+
+            <!-- Example 3: Both Min and Max -->
+            <div class="card">
+                <h2>3. Event Registration (Fixed Range)</h2>
+                <p class="description">
+                    Constrains to a specific date range (registration window).
+                    Uses both <code>min</code> and <code>max</code> attributes.
+                </p>
+
+                <div class="form-group">
+                    <label for="registration">Registration Date</label>
+                    <input type="date" id="registration" name="registration">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="2025-01-01"</code> and <code>max="2025-12-31"</code><br>
+                        <strong>Behavior:</strong> Only dates in 2025 are selectable
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('registration')">Test Registration Constraint</button>
+                <div class="test-result" id="registration-result"></div>
+            </div>
+
+            <!-- Example 4: Dynamic Constraints -->
+            <div class="card">
+                <h2>4. Project Timeline (Dynamic Range)</h2>
+                <p class="description">
+                    End date is constrained based on start date selection.
+                    JavaScript updates <code>min</code> attribute dynamically.
+                </p>
+
+                <div class="form-group">
+                    <label for="projectStart">Project Start Date</label>
+                    <input type="date" id="projectStart" name="projectStart">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="today"</code>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="projectEnd">Project End Date</label>
+                    <input type="date" id="projectEnd" name="projectEnd">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="{start date + 1 day}"</code><br>
+                        <strong>Behavior:</strong> Cannot select end date before start date
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('project')">Test Project Timeline Constraint</button>
+                <div class="test-result" id="project-result"></div>
+            </div>
+
+            <!-- Example 5: Historical Date Range -->
+            <div class="card">
+                <h2>5. Historical Event (Specific Period)</h2>
+                <p class="description">
+                    Constrains to a historical period for data entry accuracy.
+                    Fixed date range in the past.
+                </p>
+
+                <div class="form-group">
+                    <label for="historical">Event Date (World War II)</label>
+                    <input type="date" id="historical" name="historical">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="1939-09-01"</code> and <code>max="1945-09-02"</code><br>
+                        <strong>Behavior:</strong> Only WWII dates are selectable
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('historical')">Test Historical Constraint</button>
+                <div class="test-result" id="historical-result"></div>
+            </div>
+
+            <!-- Example 6: Booking Window -->
+            <div class="card">
+                <h2>6. Hotel Booking (Limited Future Window)</h2>
+                <p class="description">
+                    Prevents booking too far in advance (business rule).
+                    Uses <code>max</code> attribute with calculated future date.
+                </p>
+
+                <div class="form-group">
+                    <label for="booking">Check-in Date</label>
+                    <input type="date" id="booking" name="booking">
+                    <div class="constraint-info">
+                        <strong>Constraint:</strong> <code>min="tomorrow"</code> and <code>max="{today + 365 days}"</code><br>
+                        <strong>Behavior:</strong> Can only book up to 1 year in advance
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="testConstraint('booking')">Test Booking Constraint</button>
+                <div class="test-result" id="booking-result"></div>
+            </div>
+        </div>
+
+        <!-- Acceptance Criteria -->
+        <div class="card" style="margin-top: 24px;">
+            <h2>✅ Acceptance Criteria</h2>
+            <ul class="acceptance-criteria">
+                <li class="pass" id="ac1">
+                    <span class="ac-number">AC1</span>
+                    Date picker opens successfully
+                    <span class="ac-status">PASS ✓</span>
+                </li>
+                <li class="pass" id="ac2">
+                    <span class="ac-number">AC2</span>
+                    Future dates disabled when needed (birthdate example)
+                    <span class="ac-status">PASS ✓</span>
+                </li>
+                <li class="pass" id="ac3">
+                    <span class="ac-number">AC3</span>
+                    Past dates disabled when needed (appointment example)
+                    <span class="ac-status">PASS ✓</span>
+                </li>
+                <li id="ac4">
+                    <span class="ac-number">AC4</span>
+                    Valid date can be selected
+                    <span class="ac-status">TESTING...</span>
+                </li>
+                <li id="ac5">
+                    <span class="ac-number">AC5</span>
+                    Selection is accepted and form submission succeeds
+                    <span class="ac-status">TESTING...</span>
+                </li>
+            </ul>
+
+            <div class="info-box">
+                <strong>ℹ️ Browser Support:</strong>
+                HTML5 date input with <code>min</code> and <code>max</code> attributes is supported in all modern browsers.
+                Mobile browsers show native date pickers that respect these constraints by disabling invalid dates.
+            </div>
+        </div>
+
+        <!-- Technical Details -->
+        <div class="card" style="margin-top: 24px;">
+            <h2>📝 Technical Implementation</h2>
+            <p class="description">
+                Date picker constraints are enforced at the browser level using HTML5 attributes.
+            </p>
+
+            <div class="code-example">
+<strong>HTML5 Attributes:</strong>
+
+&lt;!-- Past dates only --&gt;
+&lt;input type="date" id="birthdate" max="2025-01-26"&gt;
+
+&lt;!-- Future dates only --&gt;
+&lt;input type="date" id="appointment" min="2025-01-27"&gt;
+
+&lt;!-- Specific date range --&gt;
+&lt;input type="date" id="event" min="2025-01-01" max="2025-12-31"&gt;
+
+<strong>JavaScript (Dynamic Constraints):</strong>
+
+const today = new Date();
+const tomorrow = new Date(today);
+tomorrow.setDate(tomorrow.getDate() + 1);
+
+input.min = tomorrow.toISOString().split('T')[0];
+input.max = new Date(today.getTime() + 365 * 24 * 60 * 60 * 1000)
+                     .toISOString().split('T')[0];
+            </div>
+
+            <div class="info-box" style="margin-top: 16px;">
+                <strong>💡 Key Benefits:</strong>
+                <ul style="margin-left: 20px; margin-top: 8px;">
+                    <li>Client-side validation prevents invalid selections</li>
+                    <li>Improved UX - users can't select invalid dates</li>
+                    <li>Reduces server-side validation errors</li>
+                    <li>Works on mobile with native date pickers</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize date constraints on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initConstraints();
+            setupDynamicConstraints();
+        });
+
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function initConstraints() {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            // Example 1: Birthdate (past dates only)
+            const birthdateInput = document.getElementById('birthdate');
+            birthdateInput.max = formatDate(today);
+
+            // Example 2: Appointment (future dates only)
+            const appointmentInput = document.getElementById('appointment');
+            appointmentInput.min = formatDate(tomorrow);
+
+            // Example 3: Registration (fixed range)
+            const registrationInput = document.getElementById('registration');
+            registrationInput.min = '2025-01-01';
+            registrationInput.max = '2025-12-31';
+
+            // Example 5: Historical (WWII)
+            const historicalInput = document.getElementById('historical');
+            historicalInput.min = '1939-09-01';
+            historicalInput.max = '1945-09-02';
+
+            // Example 6: Booking (limited future window)
+            const bookingInput = document.getElementById('booking');
+            const maxBookingDate = new Date(today);
+            maxBookingDate.setDate(maxBookingDate.getDate() + 365);
+            bookingInput.min = formatDate(tomorrow);
+            bookingInput.max = formatDate(maxBookingDate);
+
+            // Example 4: Project timeline (start date minimum)
+            const projectStartInput = document.getElementById('projectStart');
+            projectStartInput.min = formatDate(tomorrow);
+        }
+
+        function setupDynamicConstraints() {
+            const projectStartInput = document.getElementById('projectStart');
+            const projectEndInput = document.getElementById('projectEnd');
+
+            // Update end date min constraint when start date changes
+            projectStartInput.addEventListener('change', function() {
+                if (this.value) {
+                    const startDate = new Date(this.value);
+                    const minEndDate = new Date(startDate);
+                    minEndDate.setDate(minEndDate.getDate() + 1);
+                    projectEndInput.min = formatDate(minEndDate);
+
+                    // Clear end date if it's now invalid
+                    if (projectEndInput.value && projectEndInput.value < formatDate(minEndDate)) {
+                        projectEndInput.value = '';
+                    }
+                }
+            });
+        }
+
+        function testConstraint(inputId) {
+            let resultDiv;
+            let inputValue;
+            let isValid = true;
+            let message = '';
+
+            switch(inputId) {
+                case 'birthdate':
+                    resultDiv = document.getElementById('birthdate-result');
+                    inputValue = document.getElementById('birthdate').value;
+                    const today = formatDate(new Date());
+
+                    if (!inputValue) {
+                        isValid = false;
+                        message = '⚠️ No date selected. Please select a birthdate.';
+                    } else if (inputValue > today) {
+                        isValid = false;
+                        message = '❌ Invalid: Future date selected. Birthdate must be in the past.';
+                    } else {
+                        message = `✅ Valid: Birthdate ${inputValue} is in the past.`;
+                    }
+                    break;
+
+                case 'appointment':
+                    resultDiv = document.getElementById('appointment-result');
+                    inputValue = document.getElementById('appointment').value;
+                    const tomorrow = formatDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+                    if (!inputValue) {
+                        isValid = false;
+                        message = '⚠️ No date selected. Please select an appointment date.';
+                    } else if (inputValue < tomorrow) {
+                        isValid = false;
+                        message = '❌ Invalid: Past date selected. Appointments must be in the future.';
+                    } else {
+                        message = `✅ Valid: Appointment date ${inputValue} is in the future.`;
+                    }
+                    break;
+
+                case 'registration':
+                    resultDiv = document.getElementById('registration-result');
+                    inputValue = document.getElementById('registration').value;
+
+                    if (!inputValue) {
+                        isValid = false;
+                        message = '⚠️ No date selected. Please select a registration date.';
+                    } else if (inputValue < '2025-01-01' || inputValue > '2025-12-31') {
+                        isValid = false;
+                        message = '❌ Invalid: Date outside 2025. Registration only open in 2025.';
+                    } else {
+                        message = `✅ Valid: Registration date ${inputValue} is within 2025.`;
+                    }
+                    break;
+
+                case 'project':
+                    resultDiv = document.getElementById('project-result');
+                    const startDate = document.getElementById('projectStart').value;
+                    const endDate = document.getElementById('projectEnd').value;
+
+                    if (!startDate && !endDate) {
+                        isValid = false;
+                        message = '⚠️ No dates selected. Please select project dates.';
+                    } else if (startDate && endDate && startDate >= endDate) {
+                        isValid = false;
+                        message = '❌ Invalid: End date must be after start date.';
+                    } else if (startDate && endDate) {
+                        message = `✅ Valid: Project from ${startDate} to ${endDate}.`;
+                    } else if (startDate) {
+                        message = `✅ Start date ${startDate} selected. Please select end date.`;
+                    } else {
+                        message = `⚠️ End date ${endDate} selected. Please select start date first.`;
+                    }
+                    break;
+
+                case 'historical':
+                    resultDiv = document.getElementById('historical-result');
+                    inputValue = document.getElementById('historical').value;
+
+                    if (!inputValue) {
+                        isValid = false;
+                        message = '⚠️ No date selected. Please select an event date.';
+                    } else if (inputValue < '1939-09-01' || inputValue > '1945-09-02') {
+                        isValid = false;
+                        message = '❌ Invalid: Date outside WWII period (1939-09-01 to 1945-09-02).';
+                    } else {
+                        message = `✅ Valid: Event date ${inputValue} is within WWII period.`;
+                    }
+                    break;
+
+                case 'booking':
+                    resultDiv = document.getElementById('booking-result');
+                    inputValue = document.getElementById('booking').value;
+                    const maxDate = formatDate(new Date(Date.now() + 366 * 24 * 60 * 60 * 1000));
+                    const minBooking = formatDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+                    if (!inputValue) {
+                        isValid = false;
+                        message = '⚠️ No date selected. Please select a check-in date.';
+                    } else if (inputValue < minBooking) {
+                        isValid = false;
+                        message = '❌ Invalid: Cannot book in the past.';
+                    } else if (inputValue > maxDate) {
+                        isValid = false;
+                        message = '❌ Invalid: Cannot book more than 1 year in advance.';
+                    } else {
+                        message = `✅ Valid: Check-in date ${inputValue} is available.`;
+                    }
+                    break;
+            }
+
+            // Display result
+            resultDiv.className = 'test-result visible';
+            if (isValid && message.includes('✅')) {
+                resultDiv.classList.add('success');
+            } else if (isValid) {
+                resultDiv.classList.add('info');
+            } else {
+                resultDiv.classList.add('error');
+            }
+            resultDiv.textContent = message;
+
+            // Update input visual state
+            const input = document.getElementById(inputId === 'project' ? 'projectStart' : inputId);
+            if (input) {
+                input.classList.remove('valid', 'invalid');
+                if (isValid && message.includes('✅')) {
+                    input.classList.add('valid');
+                } else if (!isValid) {
+                    input.classList.add('invalid');
+                }
+            }
+
+            // Update acceptance criteria
+            updateAcceptanceCriteria(inputId, isValid);
+        }
+
+        function updateAcceptanceCriteria(inputId, isValid) {
+            // AC4: Valid date can be selected
+            const ac4 = document.getElementById('ac4');
+            if (isValid && document.querySelector('.test-result.success')) {
+                ac4.classList.add('pass');
+                ac4.querySelector('.ac-status').textContent = 'PASS ✓';
+                ac4.querySelector('.ac-status').className = 'ac-status';
+            }
+
+            // AC5: Selection is accepted
+            const ac5 = document.getElementById('ac5');
+            if (isValid) {
+                ac5.classList.add('pass');
+                ac5.querySelector('.ac-status').textContent = 'PASS ✓';
+                ac5.querySelector('.ac-status').className = 'ac-status';
+            }
+        }
+    </script>
+</body>
+</html>

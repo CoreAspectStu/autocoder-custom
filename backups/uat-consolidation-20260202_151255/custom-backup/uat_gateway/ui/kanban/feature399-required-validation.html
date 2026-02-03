@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #399: Required Field Validation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #6b7280;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ac-list {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .ac-list h3 {
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ac-list ul {
+            list-style: none;
+        }
+
+        .ac-list li {
+            color: #4b5563;
+            font-size: 14px;
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .ac-list li:before {
+            content: "○";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .ac-list li.passed:before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .ac-list li.passed {
+            color: #065f46;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        label .required-indicator {
+            color: #ef4444;
+            margin-left: 2px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="number"],
+        input[type="tel"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Validation error states */
+        .form-group.error input,
+        .form-group.error select,
+        .form-group.error textarea {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .form-group.error input:focus,
+        .form-group.error select:focus,
+        .form-group.error textarea:focus {
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .error-message {
+            display: none;
+            color: #ef4444;
+            font-size: 13px;
+            margin-top: 6px;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .error-message.visible {
+            display: flex;
+        }
+
+        .error-message::before {
+            content: "⚠";
+            font-size: 14px;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        }
+
+        .toast {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid #10b981;
+        }
+
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+
+        .toast-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .toast.success .toast-icon {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .toast.error .toast-icon {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .toast-message {
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .toast-close:hover {
+            color: #4b5563;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+
+        .toast.hiding {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+
+        /* Test Results */
+        .test-results {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-results h2 {
+            color: #1f2937;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .test-item {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .test-item.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .test-item.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .test-item.pending {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .test-icon {
+            font-size: 20px;
+        }
+
+        /* Help Box */
+        .help-box {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .help-box p {
+            color: #1e40af;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .help-box strong {
+            font-weight: 600;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎯 Feature #399: Required Field Validation</h1>
+            <p class="subtitle">Verify required fields are enforced with proper validation feedback</p>
+
+            <div class="ac-list">
+                <h3>Acceptance Criteria</h3>
+                <ul id="acList">
+                    <li id="ac1">AC1: Submit form with empty required field</li>
+                    <li id="ac2">AC2: Verify validation error occurs</li>
+                    <li id="ac3">Verify field is highlighted (red border)</li>
+                    <li id="ac4">Verify error message is clear</li>
+                    <li id="ac5">Fill field and verify submit works</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <!-- Test Form -->
+        <div class="form-card">
+            <h2>Test Form - Required Field Validation</h2>
+
+            <div class="help-box">
+                <p><strong>How to test:</strong> Click "Submit Form" with empty fields to see validation in action. Required fields are marked with a red asterisk (*).</p>
+            </div>
+
+            <form id="testForm" novalidate>
+                <div class="form-group" id="group-name">
+                    <label for="userName">
+                        Full Name <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="userName"
+                        name="userName"
+                        placeholder="Enter your full name"
+                        required
+                        data-error-message="Please enter your full name"
+                    >
+                    <div class="error-message" id="error-userName"></div>
+                </div>
+
+                <div class="form-group" id="group-email">
+                    <label for="userEmail">
+                        Email Address <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="email"
+                        id="userEmail"
+                        name="userEmail"
+                        placeholder="your.email@example.com"
+                        required
+                        data-error-message="Please enter a valid email address"
+                    >
+                    <div class="error-message" id="error-userEmail"></div>
+                </div>
+
+                <div class="form-group" id="group-phone">
+                    <label for="userPhone">
+                        Phone Number <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="tel"
+                        id="userPhone"
+                        name="userPhone"
+                        placeholder="555-123-4567"
+                        required
+                        data-error-message="Please enter your phone number"
+                    >
+                    <div class="error-message" id="error-userPhone"></div>
+                </div>
+
+                <div class="form-group" id="group-company">
+                    <label for="userCompany">
+                        Company Name
+                    </label>
+                    <input
+                        type="text"
+                        id="userCompany"
+                        name="userCompany"
+                        placeholder="Enter your company (optional)"
+                    >
+                    <div class="error-message" id="error-userCompany"></div>
+                </div>
+
+                <div class="form-group" id="group-role">
+                    <label for="userRole">
+                        Role <span class="required-indicator">*</span>
+                    </label>
+                    <select id="userRole" name="userRole" required data-error-message="Please select your role">
+                        <option value="">Select a role...</option>
+                        <option value="developer">Developer</option>
+                        <option value="tester">Tester</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                    <div class="error-message" id="error-userRole"></div>
+                </div>
+
+                <div class="form-group" id="group-reason">
+                    <label for="userReason">
+                        Reason for Contact <span class="required-indicator">*</span>
+                    </label>
+                    <textarea
+                        id="userReason"
+                        name="userReason"
+                        placeholder="Please explain why you're contacting us..."
+                        required
+                        data-error-message="Please provide a reason for contact"
+                    ></textarea>
+                    <div class="error-message" id="error-userReason"></div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn-primary" id="submitBtn">
+                        Submit Form
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="resetForm()">
+                        Reset Form
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Test Results -->
+        <div class="test-results">
+            <h2>Automated Test Results</h2>
+            <div id="testResults">
+                <div class="test-item pending">
+                    <span class="test-icon">○</span>
+                    <span>Submit the form with empty required fields to run tests</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test tracking
+        const testResults = {
+            ac1: false,
+            ac2: false,
+            ac3: false,
+            ac4: false,
+            ac5: false
+        };
+
+        // Track which fields had errors
+        let fieldsWithErrors = new Set();
+
+        // Toast notification system
+        function showToast(title, message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const icon = type === 'success' ? '✓' : '✗';
+
+            toast.innerHTML = `
+                <div class="toast-icon">${icon}</div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+                <button class="toast-close" onclick="dismissToast(this)">×</button>
+            `;
+
+            container.appendChild(toast);
+
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                dismissToast(toast.querySelector('.toast-close'));
+            }, 5000);
+        }
+
+        function dismissToast(button) {
+            const toast = button.closest('.toast');
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        // Validation function
+        function validateField(field) {
+            const formGroup = field.closest('.form-group');
+            const errorDiv = document.getElementById(`error-${field.id}`);
+            const errorMessage = field.dataset.errorMessage || 'This field is required';
+
+            // Check if field has value
+            const isEmpty = !field.value || field.value.trim() === '';
+
+            // Additional validation for email
+            if (field.type === 'email' && !isEmpty) {
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(field.value)) {
+                    showError(formGroup, errorDiv, 'Please enter a valid email address');
+                    return false;
+                }
+            }
+
+            if (field.hasAttribute('required') && isEmpty) {
+                showError(formGroup, errorDiv, errorMessage);
+                return false;
+            } else {
+                clearError(formGroup, errorDiv);
+                return true;
+            }
+        }
+
+        function showError(formGroup, errorDiv, message) {
+            formGroup.classList.add('error');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('visible');
+            fieldsWithErrors.add(formGroup.id);
+        }
+
+        function clearError(formGroup, errorDiv) {
+            formGroup.classList.remove('error');
+            errorDiv.classList.remove('visible');
+            fieldsWithErrors.delete(formGroup.id);
+        }
+
+        // Real-time validation on input
+        document.querySelectorAll('input, select, textarea').forEach(field => {
+            field.addEventListener('input', function() {
+                if (this.closest('.form-group').classList.contains('error')) {
+                    validateField(this);
+                }
+            });
+
+            field.addEventListener('blur', function() {
+                validateField(this);
+            });
+        });
+
+        // Form submission handler
+        document.getElementById('testForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+
+            // Clear previous errors
+            fieldsWithErrors.clear();
+            document.querySelectorAll('.form-group.error').forEach(group => {
+                group.classList.remove('error');
+            });
+            document.querySelectorAll('.error-message.visible').forEach(msg => {
+                msg.classList.remove('visible');
+            });
+
+            // Validate all required fields
+            let isValid = true;
+            const requiredFields = this.querySelectorAll('[required]');
+            requiredFields.forEach(field => {
+                if (!validateField(field)) {
+                    isValid = false;
+                }
+            });
+
+            // AC1: Submit form with empty required field
+            testResults.ac1 = true;
+            updateACStatus('ac1', true);
+
+            if (!isValid) {
+                // AC2: Verify validation error occurs
+                testResults.ac2 = true;
+                updateACStatus('ac2', true);
+
+                // AC3: Verify field is highlighted
+                const hasHighlightedFields = document.querySelectorAll('.form-group.error').length > 0;
+                if (hasHighlightedFields) {
+                    testResults.ac3 = true;
+                    updateACStatus('ac3', true);
+                }
+
+                // AC4: Verify error message is clear
+                const hasErrorMessages = document.querySelectorAll('.error-message.visible').length > 0;
+                if (hasErrorMessages) {
+                    testResults.ac4 = true;
+                    updateACStatus('ac4', true);
+                }
+
+                // Show error toast
+                const errorCount = fieldsWithErrors.size;
+                showToast(
+                    'Validation Error',
+                    `Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} before submitting.`,
+                    'error'
+                );
+
+                // Focus first error
+                const firstError = document.querySelector('.form-group.error input, .form-group.error select, .form-group.error textarea');
+                if (firstError) {
+                    firstError.focus();
+                }
+
+                submitBtn.disabled = false;
+                displayTestResults();
+                return;
+            }
+
+            // Form is valid - simulate successful submission
+            showToast(
+                'Form Submitted Successfully!',
+                'All required fields have been validated.',
+                'success'
+            );
+
+            // AC5: Fill field and verify submit works
+            testResults.ac5 = true;
+            updateACStatus('ac5', true);
+
+            displayTestResults();
+            submitBtn.disabled = false;
+
+            // Reset form after successful submission
+            setTimeout(() => {
+                resetForm();
+            }, 2000);
+        });
+
+        function updateACStatus(acId, passed) {
+            const acElement = document.getElementById(acId);
+            if (passed) {
+                acElement.classList.add('passed');
+            }
+        }
+
+        function displayTestResults() {
+            const resultsContainer = document.getElementById('testResults');
+            const allPassed = Object.values(testResults).every(v => v === true);
+
+            let html = '';
+
+            for (const [ac, passed] of Object.entries(testResults)) {
+                const acName = document.getElementById(ac)?.textContent || ac;
+                const statusClass = passed ? 'pass' : 'fail';
+                const icon = passed ? '✓' : '✗';
+                const statusText = passed ? 'PASSED' : 'FAILED';
+
+                html += `
+                    <div class="test-item ${statusClass}">
+                        <span class="test-icon">${icon}</span>
+                        <span><strong>${statusText}:</strong> ${acName}</span>
+                    </div>
+                `;
+            }
+
+            if (allPassed) {
+                html = `
+                    <div class="test-item pass">
+                        <span class="test-icon">🎉</span>
+                        <span><strong>All tests passed!</strong> Feature #399 is working correctly.</span>
+                    </div>
+                ` + html;
+            }
+
+            resultsContainer.innerHTML = html;
+        }
+
+        function resetForm() {
+            document.getElementById('testForm').reset();
+
+            // Clear all errors
+            document.querySelectorAll('.form-group.error').forEach(group => {
+                group.classList.remove('error');
+            });
+            document.querySelectorAll('.error-message.visible').forEach(msg => {
+                msg.classList.remove('visible');
+            });
+
+            fieldsWithErrors.clear();
+
+            // Reset AC status
+            Object.keys(testResults).forEach(key => {
+                testResults[key] = false;
+            });
+
+            document.querySelectorAll('[id^="ac"]').forEach(el => {
+                el.classList.remove('passed');
+            });
+
+            document.getElementById('testResults').innerHTML = `
+                <div class="test-item pending">
+                    <span class="test-icon">○</span>
+                    <span>Submit the form with empty required fields to run tests</span>
+                </div>
+            `;
+
+            showToast('Form Reset', 'All fields cleared and validation reset', 'success');
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Feature #399: Required Field Validation loaded');
+            console.log('Required fields:', document.querySelectorAll('[required]').length);
+        });
+    </script>
+</body>
+</html>

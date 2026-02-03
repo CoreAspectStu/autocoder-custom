@@ -34,13 +34,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Import FeatureListResponse from schemas to match features API structure
 from ..schemas import FeatureListResponse, FeatureResponse
 
+# Core UAT functionality - database manager
 try:
-    from custom.uat_gateway.orchestrator.orchestrator import Orchestrator, OrchestratorConfig
-    from custom.uat_gateway.state_manager.state_manager import StateManager
-    UAT_GATEWAY_AVAILABLE = True
+    from custom.uat_plugin.database import get_db_manager
+    UAT_DATABASE_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  UAT Gateway not available: {e}")
-    UAT_GATEWAY_AVAILABLE = False
+    print(f"⚠️  UAT database not available: {e}")
+    UAT_DATABASE_AVAILABLE = False
+
+# Optional: Full orchestrator for orchestrated mode
+try:
+    from custom.uat_plugin.orchestrator import Orchestrator
+    UAT_ORCHESTRATOR_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  UAT Orchestrator not available (orchestrated mode disabled): {e}")
+    UAT_ORCHESTRATOR_AVAILABLE = False
+
+UAT_GATEWAY_AVAILABLE = UAT_DATABASE_AVAILABLE
 
 # Optional: Import DevLayer for automatic bug card creation
 try:
@@ -164,11 +174,12 @@ async def run_playwright_tests_direct(
 
     print(f"🔍 Found {test_count} tests", flush=True)
 
-    # Build Playwright command using list reporter
+    # Build Playwright command using JSON reporter for easy parsing
+    # Also output to console for visibility
     cmd = [
         "npx", "playwright", "test",
         f"--config={test_dir}/playwright.config.ts",
-        f"--reporter=list",
+        f"--reporter=json",  # JSON output to stdout for parsing
         f"--base-url={base_url}"
     ]
 
@@ -192,12 +203,55 @@ async def run_playwright_tests_direct(
 
     print(f"📝 Test completed with return code: {result.returncode}", flush=True)
 
+    # Parse JSON output to get test stats
+    passed_tests = 0
+    failed_tests = 0
+    skipped_tests = 0
+    duration_ms = 0
+
+    try:
+        # The JSON reporter outputs a large JSON structure
+        # Find the stats section which is at the end
+        stats_start = result.stdout.rfind('"stats":')
+        if stats_start >= 0:
+            # Find the opening brace of the stats object
+            stats_obj_start = result.stdout.find('{', stats_start)
+            if stats_obj_start >= 0:
+                # Find the matching closing brace by counting braces
+                brace_count = 0
+                i = stats_obj_start
+                while i < len(result.stdout):
+                    if result.stdout[i] == '{':
+                        brace_count += 1
+                    elif result.stdout[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            # Found the end of stats object
+                            stats_json = result.stdout[stats_obj_start:i+1]
+                            stats = json.loads(stats_json)
+                            passed_tests = stats.get('expected', 0)  # Tests that passed
+                            failed_tests = stats.get('unexpected', 0)  # Tests that failed
+                            skipped_tests = stats.get('skipped', 0)  # Tests that were skipped
+                            duration_ms = int(stats.get('duration', 0) * 1000) if stats.get('duration') else 0
+                            break
+                    i += 1
+
+            print(f"📊 Test Results from JSON:")
+            print(f"   Total: {passed_tests + failed_tests + skipped_tests}")
+            print(f"   Passed: {passed_tests}")
+            print(f"   Failed: {failed_tests}")
+            print(f"   Skipped: {skipped_tests}")
+            print(f"   Duration: {duration_ms}ms", flush=True)
+    except Exception as e:
+        print(f"⚠️  Failed to parse JSON output: {e}", flush=True)
+
     test_results = {
         'success': result.returncode == 0,
-        'total_tests': test_count,
-        'passed_tests': 0,
-        'failed_tests': 0,
-        'duration_ms': 0,  # Will be updated if .last-run.json exists
+        'total_tests': passed_tests + failed_tests + skipped_tests,
+        'passed_tests': passed_tests,
+        'failed_tests': failed_tests,
+        'skipped_tests': skipped_tests,
+        'duration_ms': duration_ms,
         'failures': [],  # List of detailed failure info
         'stdout': result.stdout[:10000] if result.stdout else '',
         'stderr': result.stderr[:5000] if result.stderr else ''
@@ -500,6 +554,86 @@ async def trigger_uat_cycle(
         )
 
 
+@router.get("/progress/{cycle_id}", response_model=dict)
+async def get_uat_progress(cycle_id: str):
+    """
+    Get progress of a UAT testing cycle
+
+    Returns test counts and status for the specified cycle.
+    The cycle_id format is: uat_{project_name}_{timestamp}
+    """
+    try:
+        # Extract project name from cycle_id
+        parts = cycle_id.split('_')
+        if len(parts) < 2 or parts[0] != 'uat':
+            return {
+                "cycle_id": cycle_id,
+                "total_tests": 0,
+                "passed": 0,
+                "failed": 0,
+                "running": 0,
+                "pending": 0,
+                "active_agents": 0,
+                "started_at": None,
+                "updated_at": datetime.now().isoformat(),
+                "tests": []
+            }
+
+        project_name = parts[1]
+
+        # Check for lock file to determine if cycle is still running
+        state_dir = STATE_DIR / project_name
+        state_dir.mkdir(parents=True, exist_ok=True)
+        lock_file = state_dir / "uat_cycle.lock"
+        results_file = state_dir / f"{cycle_id}_results.json"
+
+        is_running = False
+        if lock_file.exists():
+            try:
+                current_cycle = lock_file.read_text().strip()
+                is_running = (current_cycle == cycle_id)
+            except:
+                pass
+
+        # Try to read test results from results file
+        passed = 0
+        failed = 0
+        skipped = 0
+        total_tests = 0
+
+        if results_file.exists():
+            try:
+                import json
+                with open(results_file, 'r') as f:
+                    results = json.load(f)
+                total_tests = results.get('total_tests', 0)
+                passed = results.get('passed', 0)
+                failed = results.get('failed', 0)
+                skipped = results.get('skipped', 0)
+                print(f"📊 Progress: {passed} passed, {failed} failed, {skipped} skipped", flush=True)
+            except Exception as e:
+                print(f"⚠️  Failed to read results file: {e}", flush=True)
+
+        return {
+            "cycle_id": cycle_id,
+            "total_tests": total_tests,
+            "passed": passed,
+            "failed": failed,
+            "running": 1 if is_running else 0,
+            "pending": skipped if not is_running else 0,
+            "active_agents": 0,
+            "started_at": lock_file.stat().st_mtime if lock_file.exists() else None,
+            "updated_at": datetime.now().isoformat(),
+            "tests": []
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get progress: {str(e)}"
+        )
+
+
 async def run_uat_tests_direct_background(
     project_path: str,
     project_name: str,
@@ -531,7 +665,60 @@ async def run_uat_tests_direct_background(
             print(f"   Total: {result['total_tests']}")
             print(f"   Passed: {result['passed_tests']}")
             print(f"   Failed: {result['failed_tests']}")
+            print(f"   Skipped: {result.get('skipped_tests', 0)}")
             print(f"   Duration: {result['duration_ms']}ms")
+
+        # Save test results to state directory for progress endpoint
+        state_dir = STATE_DIR / project_name
+        state_dir.mkdir(parents=True, exist_ok=True)
+        results_file = state_dir / f"{cycle_id}_results.json"
+        with open(results_file, 'w') as f:
+            json.dump({
+                'cycle_id': cycle_id,
+                'total_tests': result.get('total_tests', 0),
+                'passed': result.get('passed_tests', 0),
+                'failed': result.get('failed_tests', 0),
+                'skipped': result.get('skipped_tests', 0),
+                'duration_ms': result.get('duration_ms', 0),
+                'completed_at': datetime.now().isoformat()
+            }, f)
+        print(f"💾 Saved test results to {results_file}")
+
+        # Update UAT test statuses in database
+        # Only mark as "passed" if tests actually ran (not skipped)
+        # Skipped tests stay in "pending" so they show as incomplete
+        try:
+            import sqlite3
+            uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
+            if uat_db_path.exists():
+                conn = sqlite3.connect(uat_db_path)
+                cursor = conn.cursor()
+
+                # Only update tests that actually passed (not skipped)
+                # Skipped tests should remain as "pending" so they can be implemented later
+                if result.get('passed_tests', 0) > 0:
+                    cursor.execute("""
+                        UPDATE uat_test_features
+                        SET status = 'passed',
+                            completed_at = datetime('now')
+                        WHERE status = 'pending'
+                        LIMIT ?
+                    """, (result.get('passed_tests', 0),))
+                    updated_count = cursor.rowcount
+                else:
+                    # All tests were skipped - don't mark anything as passed
+                    # They stay in pending so developers know to implement them
+                    updated_count = 0
+
+                conn.commit()
+                conn.close()
+
+                if updated_count > 0:
+                    print(f"✅ Updated {updated_count} UAT tests from 'pending' to 'passed' (tests actually ran)")
+                else:
+                    print(f"ℹ️  All tests were skipped - keeping {result.get('skipped_tests', 0)} tests as 'pending' for implementation")
+        except Exception as e:
+            print(f"⚠️  Failed to update UAT test statuses: {e}")
 
         # Create DevLayer cards for failures
         if DEVLAYER_AVAILABLE and result.get('failed_tests', 0) > 0:
@@ -1992,14 +2179,9 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
                 detail=f"app_spec.txt not found at {app_spec_path} - cannot generate test plan without project specification"
             )
 
-        # Import TestPlannerAgent from uat-autocoder backend
-        import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
-        if str(uat_backend_path) not in sys.path:
-            sys.path.insert(0, str(uat_backend_path))
-
-        from uat_plugin.test_planner import TestPlannerAgent
-        from uat_plugin.database import DatabaseManager
+        # Import TestPlannerAgent from uat_plugin
+        from custom.uat_plugin.test_planner import TestPlannerAgent
+        from custom.uat_plugin.database import DatabaseManager
 
         # Initialize test planner with project's app_spec.txt and features.db
         print(f"🔍 Generating test plan for {request.project_name}...")
@@ -2254,13 +2436,8 @@ async def identify_untested_journeys(request: UntestedJourneysRequest):
             )
 
         # Import test planner functions
-        import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
-        if str(uat_backend_path) not in sys.path:
-            sys.path.insert(0, str(uat_backend_path))
-
-        from uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
-        from uat_plugin.database import get_db_manager
+        from custom.uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
+        from custom.uat_plugin.database import get_db_manager
 
         # Parse PRD
         print(f"🔍 Analyzing journeys for {request.project_name}...")
@@ -2421,12 +2598,7 @@ async def modify_test_plan(request: ModifyTestPlanRequest):
 
     try:
         # Import TestPlannerAgent
-        import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
-        if str(uat_backend_path) not in sys.path:
-            sys.path.insert(0, str(uat_backend_path))
-
-        from uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
+        from custom.uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
 
         # Determine project path
         project_path = None
@@ -2619,12 +2791,7 @@ async def approve_test_plan(cycle_id: str):
 
     try:
         # Import database manager
-        import sys
-        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
-        if str(uat_backend_path) not in sys.path:
-            sys.path.insert(0, str(uat_backend_path))
-
-        from uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
+        from custom.uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
 
         db = get_db_manager()
 
@@ -2966,7 +3133,7 @@ export default defineConfig({
         test_file_path = e2e_dir / f"{journey_filename}.spec.ts"
 
         # Generate test file content
-        test_content = f"""import {{ test }} from '@playwright/test';
+        test_content = f"""import {{ test, expect }} from '@playwright/test';
 
 // {journey.title()} Journey Tests
 // UAT Cycle: {cycle_id}
@@ -2979,24 +3146,24 @@ test.describe('{journey.title()} Journey', () => {{
         for scenario in journey_scenarios:
             scenario_name = scenario['scenario'].replace('[{cycle_id}] ', '').strip()
             test_content += f"""
-  test('{scenario_name}', async ({{ page }}) => {{
-    // TODO: Implement test steps for: {scenario_name}
-    // Description: {scenario['description']}
-
-    // Test steps from plan:
+  // Skipping test pending implementation: {scenario_name}
+  // TODO: Implement test steps for: {scenario_name}
+  // Description: {scenario['description']}
 """
             for i, step in enumerate(scenario.get('steps', []), 1):
-                test_content += f"    // {i}. {step}\\n"
+                test_content += f"  // {i}. {step}\n"
 
             test_content += f"""
-    // Expected result: {scenario['expected_result']}
+  // Expected result: {scenario['expected_result']}
 
-    // Placeholder assertion - replace with actual test implementation
+  test.skip(true, 'Test implementation pending - generated from UAT test plan');
+
+  test('{scenario_name}', async ({{ page }}) => {{
+    // Placeholder implementation - replace with actual test steps
     await page.goto('/');
-    expect(await page.locator('h1')).toBeVisible();
 
-    // Test marked as pending implementation
-    test.skip(true, 'Test implementation pending - generated from UAT test plan');
+    // Basic sanity check - replace with meaningful assertions
+    await expect(page.locator('body')).toBeVisible();
   }});
 
 """

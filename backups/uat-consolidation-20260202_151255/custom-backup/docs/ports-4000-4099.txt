@@ -1,0 +1,113 @@
+# AutoCoder Dev Server Ports (4000-4099)
+# Copy these lines into your SSH config under the Host entry
+# 
+# Example:
+#   Host core-control
+#     HostName 138.201.197.54
+#     User stu
+#     IdentityFile ~/.ssh/stu-key
+#     LocalForward 8889 127.0.0.1:8888
+#     # Paste the lines below here:
+
+  LocalForward 4000 127.0.0.1:4000
+  LocalForward 4001 127.0.0.1:4001
+  LocalForward 4002 127.0.0.1:4002
+  LocalForward 4003 127.0.0.1:4003
+  LocalForward 4004 127.0.0.1:4004
+  LocalForward 4005 127.0.0.1:4005
+  LocalForward 4006 127.0.0.1:4006
+  LocalForward 4007 127.0.0.1:4007
+  LocalForward 4008 127.0.0.1:4008
+  LocalForward 4009 127.0.0.1:4009
+  LocalForward 4010 127.0.0.1:4010
+  LocalForward 4011 127.0.0.1:4011
+  LocalForward 4012 127.0.0.1:4012
+  LocalForward 4013 127.0.0.1:4013
+  LocalForward 4014 127.0.0.1:4014
+  LocalForward 4015 127.0.0.1:4015
+  LocalForward 4016 127.0.0.1:4016
+  LocalForward 4017 127.0.0.1:4017
+  LocalForward 4018 127.0.0.1:4018
+  LocalForward 4019 127.0.0.1:4019
+  LocalForward 4020 127.0.0.1:4020
+  LocalForward 4021 127.0.0.1:4021
+  LocalForward 4022 127.0.0.1:4022
+  LocalForward 4023 127.0.0.1:4023
+  LocalForward 4024 127.0.0.1:4024
+  LocalForward 4025 127.0.0.1:4025
+  LocalForward 4026 127.0.0.1:4026
+  LocalForward 4027 127.0.0.1:4027
+  LocalForward 4028 127.0.0.1:4028
+  LocalForward 4029 127.0.0.1:4029
+  LocalForward 4030 127.0.0.1:4030
+  LocalForward 4031 127.0.0.1:4031
+  LocalForward 4032 127.0.0.1:4032
+  LocalForward 4033 127.0.0.1:4033
+  LocalForward 4034 127.0.0.1:4034
+  LocalForward 4035 127.0.0.1:4035
+  LocalForward 4036 127.0.0.1:4036
+  LocalForward 4037 127.0.0.1:4037
+  LocalForward 4038 127.0.0.1:4038
+  LocalForward 4039 127.0.0.1:4039
+  LocalForward 4040 127.0.0.1:4040
+  LocalForward 4041 127.0.0.1:4041
+  LocalForward 4042 127.0.0.1:4042
+  LocalForward 4043 127.0.0.1:4043
+  LocalForward 4044 127.0.0.1:4044
+  LocalForward 4045 127.0.0.1:4045
+  LocalForward 4046 127.0.0.1:4046
+  LocalForward 4047 127.0.0.1:4047
+  LocalForward 4048 127.0.0.1:4048
+  LocalForward 4049 127.0.0.1:4049
+  LocalForward 4050 127.0.0.1:4050
+  LocalForward 4051 127.0.0.1:4051
+  LocalForward 4052 127.0.0.1:4052
+  LocalForward 4053 127.0.0.1:4053
+  LocalForward 4054 127.0.0.1:4054
+  LocalForward 4055 127.0.0.1:4055
+  LocalForward 4056 127.0.0.1:4056
+  LocalForward 4057 127.0.0.1:4057
+  LocalForward 4058 127.0.0.1:4058
+  LocalForward 4059 127.0.0.1:4059
+  LocalForward 4060 127.0.0.1:4060
+  LocalForward 4061 127.0.0.1:4061
+  LocalForward 4062 127.0.0.1:4062
+  LocalForward 4063 127.0.0.1:4063
+  LocalForward 4064 127.0.0.1:4064
+  LocalForward 4065 127.0.0.1:4065
+  LocalForward 4066 127.0.0.1:4066
+  LocalForward 4067 127.0.0.1:4067
+  LocalForward 4068 127.0.0.1:4068
+  LocalForward 4069 127.0.0.1:4069
+  LocalForward 4070 127.0.0.1:4070
+  LocalForward 4071 127.0.0.1:4071
+  LocalForward 4072 127.0.0.1:4072
+  LocalForward 4073 127.0.0.1:4073
+  LocalForward 4074 127.0.0.1:4074
+  LocalForward 4075 127.0.0.1:4075
+  LocalForward 4076 127.0.0.1:4076
+  LocalForward 4077 127.0.0.1:4077
+  LocalForward 4078 127.0.0.1:4078
+  LocalForward 4079 127.0.0.1:4079
+  LocalForward 4080 127.0.0.1:4080
+  LocalForward 4081 127.0.0.1:4081
+  LocalForward 4082 127.0.0.1:4082
+  LocalForward 4083 127.0.0.1:4083
+  LocalForward 4084 127.0.0.1:4084
+  LocalForward 4085 127.0.0.1:4085
+  LocalForward 4086 127.0.0.1:4086
+  LocalForward 4087 127.0.0.1:4087
+  LocalForward 4088 127.0.0.1:4088
+  LocalForward 4089 127.0.0.1:4089
+  LocalForward 4090 127.0.0.1:4090
+  LocalForward 4091 127.0.0.1:4091
+  LocalForward 4092 127.0.0.1:4092
+  LocalForward 4093 127.0.0.1:4093
+  LocalForward 4094 127.0.0.1:4094
+  LocalForward 4095 127.0.0.1:4095
+  LocalForward 4096 127.0.0.1:4096
+  LocalForward 4097 127.0.0.1:4097
+  LocalForward 4098 127.0.0.1:4098
+  LocalForward 4099 127.0.0.1:4099
+
+# End of port forwards

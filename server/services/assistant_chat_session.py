@@ -269,6 +269,8 @@ class AssistantChatSession:
                     # (subprocess inherits parent environment automatically)
                     "PROJECT_DIR": str(self.project_dir.resolve()),
                     "PYTHONPATH": str(ROOT_DIR.resolve()),
+                    # Pass mode to MCP server so it queries the correct database
+                    "AUTOCODER_MODE": self.mode,
                 },
             },
         }

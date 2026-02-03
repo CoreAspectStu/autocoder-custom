@@ -164,7 +164,7 @@ async def list_features(project_name: str):
             )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         logger.exception("Database error in list_features")
         raise HTTPException(status_code=500, detail="Database error occurred")
 

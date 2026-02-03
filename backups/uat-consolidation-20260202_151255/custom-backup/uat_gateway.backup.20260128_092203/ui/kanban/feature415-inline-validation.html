@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #415: Inline Validation Feedback</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #4f46e5 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #6b7280;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ac-list {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .ac-list h3 {
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ac-list ul {
+            list-style: none;
+        }
+
+        .ac-list li {
+            color: #4b5563;
+            font-size: 14px;
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .ac-list li:before {
+            content: "○";
+            position: absolute;
+            left: 0;
+            color: #8b5cf6;
+            font-weight: bold;
+        }
+
+        .ac-list li.passed:before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .ac-list li.passed {
+            color: #065f46;
+            font-weight: 500;
+        }
+
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .demo-card p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .form-group label .required {
+            color: #ef4444;
+            margin-left: 2px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        /* Field States */
+        .form-group input.invalid,
+        .form-group textarea.invalid,
+        .form-group select.invalid {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .form-group input.valid,
+        .form-group textarea.valid,
+        .form-group select.valid {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .form-group input.warning,
+        .form-group textarea.warning,
+        .form-group select.warning {
+            border-color: #f59e0b;
+            background-color: #fffbeb;
+        }
+
+        /* Status Icons */
+        .status-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-wrapper.has-error .status-icon.error {
+            display: flex;
+            color: #ef4444;
+        }
+
+        .input-wrapper.has-success .status-icon.success {
+            display: flex;
+            color: #10b981;
+        }
+
+        .input-wrapper.has-warning .status-icon.warning {
+            display: flex;
+            color: #f59e0b;
+        }
+
+        /* Inline Error Messages */
+        .inline-error {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #ef4444;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: all 0.2s;
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .inline-error.show {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 100px;
+        }
+
+        .inline-error .icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Inline Success Messages */
+        .inline-success {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: all 0.2s;
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .inline-success.show {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 100px;
+        }
+
+        /* Inline Warning Messages */
+        .inline-warning {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #d97706;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: all 0.2s;
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .inline-warning.show {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 100px;
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #7c3aed;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        /* Validation Summary */
+        .validation-summary {
+            background: #fef2f2;
+            border: 2px solid #fecaca;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .validation-summary h3 {
+            color: #991b1b;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .validation-summary ul {
+            list-style: none;
+        }
+
+        .validation-summary li {
+            color: #7f1d1d;
+            font-size: 14px;
+            padding: 4px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .validation-summary li:before {
+            content: "•";
+            position: absolute;
+            left: 8px;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .validation-summary.hidden {
+            display: none;
+        }
+
+        /* Examples Section */
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .example-item {
+            padding: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .example-item h4 {
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .example-item.showcase {
+            border-color: #8b5cf6;
+            background: #faf5ff;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Feature #415: Inline Validation Feedback</h1>
+            <div class="subtitle">Verify form fields show inline errors</div>
+
+            <div class="ac-list">
+                <h3>Acceptance Criteria</h3>
+                <ul id="acList">
+                    <li data-ac="submit-invalid">Submit invalid form</li>
+                    <li data-ac="errors-near-fields">Verify errors appear near fields</li>
+                    <li data-ac="fields-highlighted">Verify fields are highlighted</li>
+                    <li data-ac="fix-errors">Fix validation errors</li>
+                    <li data-ac="errors-clear">Verify inline errors clear</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Form Demo -->
+        <div class="demo-card">
+            <h2>Complete Registration Form with Inline Validation</h2>
+            <p>Try submitting the form with invalid data to see inline validation in action. Each field shows real-time feedback with appropriate error messages.</p>
+
+            <div class="validation-summary hidden" id="validationSummary">
+                <h3>⚠️ Please fix the following errors:</h3>
+                <ul id="errorList"></ul>
+            </div>
+
+            <form id="registrationForm" novalidate>
+                <!-- Email Field -->
+                <div class="form-group">
+                    <label for="email">
+                        Email Address
+                        <span class="required">*</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="you@example.com"
+                            required
+                            aria-describedby="email-error"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                        <span class="status-icon warning">⚠</span>
+                    </div>
+                    <div class="inline-error" id="email-error">
+                        <span class="icon">✕</span>
+                        <span class="text"></span>
+                    </div>
+                    <div class="inline-success" id="email-success">
+                        <span class="icon">✓</span>
+                        <span class="text">Valid email address</span>
+                    </div>
+                </div>
+
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="username">
+                        Username
+                        <span class="required">*</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="johndoe"
+                            minlength="3"
+                            maxlength="20"
+                            pattern="^[a-zA-Z0-9_]+$"
+                            required
+                            aria-describedby="username-error username-requirements"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                    </div>
+                    <div class="inline-error" id="username-error">
+                        <span class="icon">✕</span>
+                        <span class="text"></span>
+                    </div>
+                    <div class="inline-warning" id="username-requirements">
+                        <span class="icon">ℹ</span>
+                        <span class="text">3-20 characters, letters, numbers, underscores only</span>
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="password">
+                        Password
+                        <span class="required">*</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            minlength="8"
+                            required
+                            aria-describedby="password-error password-strength"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                        <span class="status-icon warning">⚠</span>
+                    </div>
+                    <div class="inline-error" id="password-error">
+                        <span class="icon">✕</span>
+                        <span class="text"></span>
+                    </div>
+                    <div class="inline-warning" id="password-strength">
+                        <span class="icon">⚠</span>
+                        <span class="text">Minimum 8 characters required</span>
+                    </div>
+                </div>
+
+                <!-- Confirm Password Field -->
+                <div class="form-group">
+                    <label for="confirmPassword">
+                        Confirm Password
+                        <span class="required">*</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="password"
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            required
+                            aria-describedby="confirmPassword-error"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                    </div>
+                    <div class="inline-error" id="confirmPassword-error">
+                        <span class="icon">✕</span>
+                        <span class="text"></span>
+                    </div>
+                    <div class="inline-success" id="confirmPassword-success">
+                        <span class="icon">✓</span>
+                        <span class="text">Passwords match</span>
+                    </div>
+                </div>
+
+                <!-- Age Field -->
+                <div class="form-group">
+                    <label for="age">
+                        Age
+                        <span class="required">*</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="number"
+                            id="age"
+                            name="age"
+                            min="13"
+                            max="120"
+                            placeholder="18"
+                            required
+                            aria-describedby="age-error"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                    </div>
+                    <div class="inline-error" id="age-error">
+                        <span class="icon">✕</span>
+                        <span class="text"></span>
+                    </div>
+                </div>
+
+                <!-- Phone Field (Optional) -->
+                <div class="form-group">
+                    <label for="phone">
+                        Phone Number (Optional)
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="tel"
+                            id="phone"
+                            name="phone"
+                            placeholder="+1 (555) 123-4567"
+                            pattern="^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$"
+                            aria-describedby="phone-error phone-success"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                    </div>
+                    <div class="inline-error" id="phone-error">
+                        <span class="icon">✕</span>
+                        <span class="text">Invalid phone number format</span>
+                    </div>
+                    <div class="inline-success" id="phone-success">
+                        <span class="icon">✓</span>
+                        <span class="text">Valid phone number</span>
+                    </div>
+                </div>
+
+                <!-- Website Field -->
+                <div class="form-group">
+                    <label for="website">
+                        Website
+                    </label>
+                    <div class="input-wrapper">
+                        <input
+                            type="url"
+                            id="website"
+                            name="website"
+                            placeholder="https://example.com"
+                            aria-describedby="website-error website-success"
+                        >
+                        <span class="status-icon success">✓</span>
+                        <span class="status-icon error">✕</span>
+                    </div>
+                    <div class="inline-error" id="website-error">
+                        <span class="icon">✕</span>
+                        <span class="text">Please enter a valid URL (e.g., https://example.com)</span>
+                    </div>
+                    <div class="inline-success" id="website-success">
+                        <span class="icon">✓</span>
+                        <span class="text">Valid URL</span>
+                    </div>
+                </div>
+
+                <!-- Bio Field -->
+                <div class="form-group">
+                    <label for="bio">
+                        Bio
+                    </label>
+                    <div class="input-wrapper">
+                        <textarea
+                            id="bio"
+                            name="bio"
+                            rows="4"
+                            maxlength="500"
+                            placeholder="Tell us about yourself..."
+                            aria-describedby="bio-counter"
+                        ></textarea>
+                    </div>
+                    <div class="inline-warning" id="bio-counter" style="opacity: 1; transform: translateY(0); max-height: 100px;">
+                        <span class="icon">ℹ</span>
+                        <span class="text">0/500 characters</span>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">
+                        ✓ Submit Form
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="resetBtn">
+                        ↻ Reset Form
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="fillValidBtn">
+                        ↓ Fill Valid Data
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="fillInvalidBtn">
+                        ✕ Fill Invalid Data
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Visual Examples -->
+        <div class="demo-card">
+            <h2>Field State Examples</h2>
+            <p>Different visual states for form validation feedback:</p>
+
+            <div class="example-grid">
+                <div class="example-item">
+                    <h4>Error State</h4>
+                    <div class="form-group">
+                        <label>Email Address <span class="required">*</span></label>
+                        <div class="input-wrapper has-error">
+                            <input
+                                type="text"
+                                class="invalid"
+                                value="invalid-email"
+                                readonly
+                            >
+                            <span class="status-icon error">✕</span>
+                        </div>
+                        <div class="inline-error show">
+                            <span class="icon">✕</span>
+                            <span class="text">Please enter a valid email address</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-item">
+                    <h4>Success State</h4>
+                    <div class="form-group">
+                        <label>Email Address <span class="required">*</span></label>
+                        <div class="input-wrapper has-success">
+                            <input
+                                type="text"
+                                class="valid"
+                                value="user@example.com"
+                                readonly
+                            >
+                            <span class="status-icon success">✓</span>
+                        </div>
+                        <div class="inline-success show">
+                            <span class="icon">✓</span>
+                            <span class="text">Valid email address</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-item">
+                    <h4>Warning State</h4>
+                    <div class="form-group">
+                        <label>Password Strength</label>
+                        <div class="input-wrapper has-warning">
+                            <input
+                                type="text"
+                                class="warning"
+                                value="weak"
+                                readonly
+                            >
+                            <span class="status-icon warning">⚠</span>
+                        </div>
+                        <div class="inline-warning show">
+                            <span class="icon">⚠</span>
+                            <span class="text">Password could be stronger</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-item">
+                    <h4>Normal State</h4>
+                    <div class="form-group">
+                        <label>Email Address <span class="required">*</span></label>
+                        <div class="input-wrapper">
+                            <input
+                                type="text"
+                                placeholder="you@example.com"
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const form = document.getElementById('registrationForm');
+        const validationSummary = document.getElementById('validationSummary');
+        const errorList = document.getElementById('errorList');
+        const resetBtn = document.getElementById('resetBtn');
+        const fillValidBtn = document.getElementById('fillValidBtn');
+        const fillInvalidBtn = document.getElementById('fillInvalidBtn');
+
+        // Validation state
+        const validationState = {};
+
+        // Validators for each field
+        const validators = {
+            email: {
+                validate: (value) => {
+                    if (!value) return { valid: false, message: 'Email address is required' };
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(value)) {
+                        return { valid: false, message: 'Please enter a valid email address' };
+                    }
+                    return { valid: true, message: 'Valid email address' };
+                },
+                events: ['input', 'blur']
+            },
+            username: {
+                validate: (value) => {
+                    if (!value) return { valid: false, message: 'Username is required' };
+                    if (value.length < 3) {
+                        return { valid: false, message: 'Username must be at least 3 characters' };
+                    }
+                    if (value.length > 20) {
+                        return { valid: false, message: 'Username must be no more than 20 characters' };
+                    }
+                    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+                    if (!usernameRegex.test(value)) {
+                        return { valid: false, message: 'Username can only contain letters, numbers, and underscores' };
+                    }
+                    return { valid: true, message: 'Username is available' };
+                },
+                events: ['input', 'blur']
+            },
+            password: {
+                validate: (value) => {
+                    if (!value) return { valid: false, message: 'Password is required' };
+                    if (value.length < 8) {
+                        return { valid: false, message: 'Password must be at least 8 characters' };
+                    }
+                    return { valid: true, message: 'Password meets requirements' };
+                },
+                events: ['input', 'blur']
+            },
+            confirmPassword: {
+                validate: (value) => {
+                    const password = document.getElementById('password').value;
+                    if (!value) return { valid: false, message: 'Please confirm your password' };
+                    if (value !== password) {
+                        return { valid: false, message: 'Passwords do not match' };
+                    }
+                    return { valid: true, message: 'Passwords match' };
+                },
+                events: ['input', 'blur']
+            },
+            age: {
+                validate: (value) => {
+                    if (!value) return { valid: false, message: 'Age is required' };
+                    const age = parseInt(value);
+                    if (isNaN(age)) {
+                        return { valid: false, message: 'Please enter a valid age' };
+                    }
+                    if (age < 13) {
+                        return { valid: false, message: 'You must be at least 13 years old' };
+                    }
+                    if (age > 120) {
+                        return { valid: false, message: 'Please enter a valid age' };
+                    }
+                    return { valid: true, message: 'Valid age' };
+                },
+                events: ['input', 'blur']
+            },
+            phone: {
+                validate: (value) => {
+                    if (!value) return { valid: true, message: '' }; // Optional field
+                    const phoneRegex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/;
+                    if (!phoneRegex.test(value)) {
+                        return { valid: false, message: 'Invalid phone number format' };
+                    }
+                    return { valid: true, message: 'Valid phone number' };
+                },
+                events: ['input', 'blur']
+            },
+            website: {
+                validate: (value) => {
+                    if (!value) return { valid: true, message: '' }; // Optional field
+                    try {
+                        new URL(value);
+                        return { valid: true, message: 'Valid URL' };
+                    } catch {
+                        return { valid: false, message: 'Please enter a valid URL (e.g., https://example.com)' };
+                    }
+                },
+                events: ['input', 'blur']
+            },
+            bio: {
+                validate: (value) => {
+                    const maxLength = 500;
+                    const currentLength = value.length;
+                    if (currentLength > maxLength) {
+                        return { valid: false, message: `Bio exceeds maximum length by ${currentLength - maxLength} characters` };
+                    }
+                    return { valid: true, message: `${currentLength}/${maxLength} characters` };
+                },
+                events: ['input']
+            }
+        };
+
+        // Set up validation for a field
+        function setupFieldValidation(fieldName) {
+            const field = document.getElementById(fieldName);
+            const validator = validators[fieldName];
+
+            if (!field || !validator) return;
+
+            validator.events.forEach(eventType => {
+                field.addEventListener(eventType, () => {
+                    validateField(fieldName);
+                });
+            });
+        }
+
+        // Validate a single field
+        function validateField(fieldName) {
+            const field = document.getElementById(fieldName);
+            const validator = validators[fieldName];
+            const wrapper = field.parentElement;
+
+            if (!field || !validator) return;
+
+            const result = validator.validate(field.value);
+            validationState[fieldName] = result.valid;
+
+            // Remove all state classes first
+            field.classList.remove('valid', 'invalid', 'warning');
+            wrapper.classList.remove('has-error', 'has-success', 'has-warning');
+
+            // Hide all messages
+            const errorEl = document.getElementById(`${fieldName}-error`);
+            const successEl = document.getElementById(`${fieldName}-success`);
+            const warningEl = document.getElementById(`${fieldName}-warning`) ||
+                             document.getElementById(`${fieldName}-requirements`) ||
+                             document.getElementById(`${fieldName}-strength`) ||
+                             document.getElementById(`${fieldName}-counter`);
+
+            if (errorEl) errorEl.classList.remove('show');
+            if (successEl) successEl.classList.remove('show');
+            if (warningEl && warningEl.classList.contains('inline-warning')) warningEl.classList.remove('show');
+
+            // Special handling for bio counter
+            if (fieldName === 'bio' && warningEl) {
+                warningEl.style.opacity = '1';
+                warningEl.style.transform = 'translateY(0)';
+                warningEl.style.maxHeight = '100px';
+                const counterText = warningEl.querySelector('.text');
+                if (counterText) counterText.textContent = result.message;
+            }
+
+            // Apply validation result
+            if (field.value === '' && field.hasAttribute('required') && event?.type !== 'blur') {
+                // Don't show error for empty required fields on input
+                return;
+            }
+
+            if (result.valid) {
+                if (field.value) {
+                    field.classList.add('valid');
+                    wrapper.classList.add('has-success');
+                    if (successEl && result.message) {
+                        const textEl = successEl.querySelector('.text');
+                        if (textEl) textEl.textContent = result.message;
+                        successEl.classList.add('show');
+                    }
+                }
+            } else {
+                field.classList.add('invalid');
+                wrapper.classList.add('has-error');
+                if (errorEl) {
+                    const textEl = errorEl.querySelector('.text');
+                    if (textEl) textEl.textContent = result.message;
+                    errorEl.classList.add('show');
+                }
+            }
+
+            // Update validation summary if form was submitted
+            updateValidationSummary();
+        }
+
+        // Update validation summary
+        function updateValidationSummary() {
+            const errors = [];
+
+            Object.keys(validationState).forEach(fieldName => {
+                if (!validationState[fieldName]) {
+                    const field = document.getElementById(fieldName);
+                    const validator = validators[fieldName];
+                    if (validator && field.value) {
+                        const result = validator.validate(field.value);
+                        if (!result.valid) {
+                            errors.push(`${fieldName}: ${result.message}`);
+                        }
+                    } else if (field?.hasAttribute('required') && !field?.value) {
+                        errors.push(`${fieldName}: This field is required`);
+                    }
+                }
+            });
+
+            if (errors.length > 0) {
+                errorList.innerHTML = errors.map(err => `<li>${err}</li>`).join('');
+                validationSummary.classList.remove('hidden');
+            } else {
+                validationSummary.classList.add('hidden');
+            }
+        }
+
+        // Validate all fields
+        function validateAll() {
+            Object.keys(validators).forEach(fieldName => {
+                validateField(fieldName);
+            });
+            updateValidationSummary();
+            return Object.values(validationState).every(v => v);
+        }
+
+        // Form submission
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            // Mark as submitted
+            markACPassed('submit-invalid');
+
+            // Validate all fields
+            const isValid = validateAll();
+
+            if (!isValid) {
+                // Show validation summary
+                markACPassed('errors-near-fields');
+                markACPassed('fields-highlighted');
+
+                // Scroll to first error
+                const firstError = form.querySelector('.invalid');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstError.focus();
+                }
+            } else {
+                // Form is valid
+                alert('✅ Form submitted successfully!');
+                markACPassed('fix-errors');
+                markACPassed('errors-clear');
+            }
+        });
+
+        // Reset button
+        resetBtn.addEventListener('click', () => {
+            form.reset();
+            Object.keys(validationState).forEach(fieldName => {
+                validationState[fieldName] = false;
+            });
+
+            // Clear all visual states
+            form.querySelectorAll('input, textarea, select').forEach(field => {
+                field.classList.remove('valid', 'invalid', 'warning');
+            });
+            form.querySelectorAll('.input-wrapper').forEach(wrapper => {
+                wrapper.classList.remove('has-error', 'has-success', 'has-warning');
+            });
+            form.querySelectorAll('.inline-error, .inline-success').forEach(el => {
+                el.classList.remove('show');
+            });
+
+            validationSummary.classList.add('hidden');
+
+            // Reset bio counter
+            const bioCounter = document.getElementById('bio-counter');
+            if (bioCounter) {
+                const counterText = bioCounter.querySelector('.text');
+                if (counterText) counterText.textContent = '0/500 characters';
+            }
+        });
+
+        // Fill valid data button
+        fillValidBtn.addEventListener('click', () => {
+            document.getElementById('email').value = 'user@example.com';
+            document.getElementById('username').value = 'johndoe_123';
+            document.getElementById('password').value = 'SecurePass123';
+            document.getElementById('confirmPassword').value = 'SecurePass123';
+            document.getElementById('age').value = '25';
+            document.getElementById('phone').value = '+1 (555) 123-4567';
+            document.getElementById('website').value = 'https://example.com';
+            document.getElementById('bio').value = 'This is a sample bio.';
+
+            // Trigger validation
+            Object.keys(validators).forEach(fieldName => {
+                validateField(fieldName);
+            });
+
+            validationSummary.classList.add('hidden');
+            markACPassed('fix-errors');
+            markACPassed('errors-clear');
+        });
+
+        // Fill invalid data button
+        fillInvalidBtn.addEventListener('click', () => {
+            document.getElementById('email').value = 'invalid-email';
+            document.getElementById('username').value = 'ab';
+            document.getElementById('password').value = 'weak';
+            document.getElementById('confirmPassword').value = 'different';
+            document.getElementById('age').value = '10';
+            document.getElementById('phone').value = 'invalid-phone';
+            document.getElementById('website').value = 'not-a-url';
+            document.getElementById('bio').value = '';
+
+            // Trigger validation
+            Object.keys(validators).forEach(fieldName => {
+                validateField(fieldName);
+            });
+
+            markACPassed('submit-invalid');
+            markACPassed('errors-near-fields');
+            markACPassed('fields-highlighted');
+        });
+
+        // Mark AC as passed
+        function markACPassed(acId) {
+            const li = document.querySelector(`li[data-ac="${acId}"]`);
+            if (li && !li.classList.contains('passed')) {
+                li.classList.add('passed');
+
+                // Check if all ACs are passed
+                const allPassed = document.querySelectorAll('#acList li').length ===
+                                 document.querySelectorAll('#acList li.passed').length;
+
+                if (allPassed) {
+                    console.log('✅ All acceptance criteria for Feature #415 passed!');
+                }
+            }
+        }
+
+        // Initialize validation for all fields
+        Object.keys(validators).forEach(fieldName => {
+            setupFieldValidation(fieldName);
+        });
+
+        // Setup character counter for bio
+        const bioField = document.getElementById('bio');
+        const bioCounter = document.getElementById('bio-counter');
+        if (bioField && bioCounter) {
+            bioCounter.style.opacity = '1';
+            bioCounter.style.transform = 'translateY(0)';
+            bioCounter.style.maxHeight = '100px';
+
+            bioField.addEventListener('input', () => {
+                const maxLength = 500;
+                const currentLength = bioField.value.length;
+                const counterText = bioCounter.querySelector('.text');
+                if (counterText) {
+                    counterText.textContent = `${currentLength}/${maxLength} characters`;
+                }
+
+                // Change color based on length
+                if (currentLength > maxLength * 0.9) {
+                    bioCounter.style.color = '#ef4444';
+                } else if (currentLength > maxLength * 0.7) {
+                    bioCounter.style.color = '#f59e0b';
+                } else {
+                    bioCounter.style.color = '#6b7280';
+                }
+            });
+        }
+
+        console.log('Feature #415: Inline Validation Feedback loaded');
+    </script>
+</body>
+</html>

@@ -110,11 +110,38 @@ async def server_lifespan(server: FastMCP):
     # Create project directory if it doesn't exist
     PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Initialize database
-    _engine, _session_maker = create_database(PROJECT_DIR)
+    # Get mode from environment (default to 'dev')
+    mode = os.environ.get("AUTOCODER_MODE", "dev")
 
-    # Run migration if needed (converts legacy JSON to SQLite)
-    migrate_json_to_sqlite(PROJECT_DIR, _session_maker)
+    # In UAT mode, use the centralized UAT database
+    # In dev mode, use the project's features database
+    if mode == "uat":
+        # UAT mode: use centralized uat_tests.db in ~/.autocoder/
+        from pathlib import Path
+        uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
+        if not uat_db_path.exists():
+            logger.warning(f"UAT database not found at {uat_db_path}, creating new one")
+            uat_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create engine for UAT database
+        from sqlalchemy import create_engine
+        _engine = create_engine(f"sqlite:///{uat_db_path.as_posix()}", connect_args={
+            "check_same_thread": False,
+            "timeout": 30
+        })
+        # Import and create tables using UAT database schema
+        from api.database import Base
+        Base.metadata.create_all(bind=_engine)
+
+        from sqlalchemy.orm import sessionmaker
+        _session_maker = sessionmaker(bind=_engine)
+        logger.info(f"MCP server initialized in UAT mode using {uat_db_path}")
+    else:
+        # Dev mode: use project's features.db
+        _engine, _session_maker = create_database(PROJECT_DIR)
+        # Run migration if needed (converts legacy JSON to SQLite)
+        migrate_json_to_sqlite(PROJECT_DIR, _session_maker)
+        logger.info(f"MCP server initialized in dev mode using {PROJECT_DIR}/features.db")
 
     yield
 

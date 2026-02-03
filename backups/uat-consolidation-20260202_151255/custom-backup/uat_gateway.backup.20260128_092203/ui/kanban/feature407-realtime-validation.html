@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #407: Real-time Validation Feedback</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #065f46;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #047857;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ac-list {
+            background: #f0fdf4;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .ac-list h3 {
+            color: #065f46;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ac-list ul {
+            list-style: none;
+        }
+
+        .ac-list li {
+            color: #047857;
+            font-size: 14px;
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-radius: 4px;
+        }
+
+        .ac-list li:hover {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .ac-list li:before {
+            content: "○";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .ac-list li.passed:before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .ac-list li.passed {
+            color: #065f46;
+            font-weight: 500;
+        }
+
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-scenario {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .test-scenario h3 {
+            color: #374151;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .test-scenario .badge {
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        label .required-indicator {
+            color: #ef4444;
+            margin-left: 2px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        /* Real-time validation states */
+        .form-group.valid input,
+        .form-group.valid textarea,
+        .form-group.valid select {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .form-group.invalid input,
+        .form-group.invalid textarea,
+        .form-group.invalid select {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .form-group.validating input {
+            border-color: #f59e0b;
+            background-color: #fffbeb;
+        }
+
+        /* Validation feedback message */
+        .validation-feedback {
+            margin-top: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 20px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .validation-feedback.show {
+            opacity: 1;
+        }
+
+        .validation-feedback.valid {
+            color: #059669;
+        }
+
+        .validation-feedback.invalid {
+            color: #dc2626;
+        }
+
+        .validation-feedback.validating {
+            color: #d97706;
+        }
+
+        .validation-feedback .icon {
+            font-size: 16px;
+        }
+
+        /* Character counter */
+        .char-counter {
+            position: absolute;
+            bottom: -20px;
+            right: 0;
+            font-size: 11px;
+            color: #6b7280;
+            transition: color 0.2s;
+        }
+
+        .char-counter.warning {
+            color: #f59e0b;
+        }
+
+        .char-counter.error {
+            color: #ef4444;
+        }
+
+        /* Live typing indicator */
+        .typing-indicator {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+        }
+
+        .typing-indicator .dot {
+            width: 6px;
+            height: 6px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .typing-indicator .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.3;
+                transform: scale(0.8);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+
+        /* Validation strength meter */
+        .strength-meter {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .strength-meter .fill {
+            height: 100%;
+            transition: all 0.3s;
+            border-radius: 2px;
+        }
+
+        .strength-meter .fill.weak {
+            width: 25%;
+            background: #ef4444;
+        }
+
+        .strength-meter .fill.fair {
+            width: 50%;
+            background: #f59e0b;
+        }
+
+        .strength-meter .fill.good {
+            width: 75%;
+            background: #10b981;
+        }
+
+        .strength-meter .fill.strong {
+            width: 100%;
+            background: #059669;
+        }
+
+        /* Event log */
+        .event-log {
+            background: #1f2937;
+            color: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 16px;
+        }
+
+        .event-log .entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #374151;
+            display: flex;
+            gap: 8px;
+        }
+
+        .event-log .entry:last-child {
+            border-bottom: none;
+        }
+
+        .event-log .timestamp {
+            color: #9ca3af;
+            flex-shrink: 0;
+        }
+
+        .event-log .event-type {
+            color: #10b981;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .event-log .event-type.blur {
+            color: #f59e0b;
+        }
+
+        .event-log .event-type.input {
+            color: #3b82f6;
+        }
+
+        .event-log .event-type.validate {
+            color: #8b5cf6;
+        }
+
+        .event-log .message {
+            color: #d1d5db;
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        .code-block .keyword {
+            color: #c084fc;
+        }
+
+        .code-block .string {
+            color: #34d399;
+        }
+
+        .code-block .comment {
+            color: #9ca3af;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button.primary {
+            background: #10b981;
+            color: white;
+        }
+
+        button.primary:hover {
+            background: #059669;
+        }
+
+        button.secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        button.secondary:hover {
+            background: #d1d5db;
+        }
+
+        .success-animation {
+            animation: successPulse 0.5s ease-out;
+        }
+
+        @keyframes successPulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>✓ Feature #407: Real-time Validation Feedback</h1>
+            <p class="subtitle">Verify validation feedback appears as user types with immediate, clear feedback</p>
+
+            <div class="ac-list">
+                <h3>Acceptance Criteria (click to verify)</h3>
+                <ul>
+                    <li id="ac1" onclick="scrollToDemo('demo1')">AC1: Start typing in field - Validation triggers as user types</li>
+                    <li id="ac2" onclick="scrollToDemo('demo1')">AC2: Verify validation runs on blur - Validates when field loses focus</li>
+                    <li id="ac3" onclick="scrollToDemo('demo1')">AC3: Verify feedback appears immediately - No delay in showing errors/success</li>
+                    <li id="ac4" onclick="scrollToDemo('demo2')">AC4: Correct error - Feedback updates when user fixes the issue</li>
+                    <li id="ac5" onclick="scrollToDemo('demo2')">AC5: Verify feedback updates - State changes from invalid to valid dynamically</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Demo 1: Real-time Validation as User Types -->
+        <div class="demo-card" id="demo1">
+            <h2>Demo 1: Real-time Validation with Debouncing</h2>
+            <p style="color: #6b7280; margin-bottom: 20px; font-size: 14px;">
+                This demo shows validation that triggers as you type with debouncing (waits 300ms after you stop typing).
+            </p>
+
+            <div class="test-scenario">
+                <h3>
+                    <span class="badge">AC1, AC2, AC3</span>
+                    Journey Name Validation
+                </h3>
+
+                <div class="form-group" id="journey-group">
+                    <label for="journey-name">
+                        Journey Name
+                        <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="journey-name"
+                        name="journey-name"
+                        placeholder="Enter journey name (3-100 characters)"
+                        autocomplete="off"
+                    >
+                    <div class="char-counter">0 / 100</div>
+                    <div class="typing-indicator">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <div class="validation-feedback">
+                        <span class="icon"></span>
+                        <span class="message"></span>
+                    </div>
+                </div>
+
+                <div class="event-log" id="event-log-1">
+                    <div class="entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">SYSTEM</span>
+                        <span class="message">Event log initialized. Start typing to see real-time validation.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>💡 How it works:</strong>
+                <ul style="margin-left: 20px; margin-top: 8px;">
+                    <li><strong>Input event:</strong> Shows typing indicator, debounces validation by 300ms</li>
+                    <li><strong>Blur event:</strong> Immediately validates when you leave the field</li>
+                    <li><strong>Immediate feedback:</strong> Border color, background, and message update instantly</li>
+                </ul>
+            </div>
+
+            <div class="code-block">
+                <span class="comment">// Real-time validation with debouncing</span><br>
+                input.addEventListener(<span class="string">'input'</span>, debounce(<span class="keyword">function</span>() {<br>
+                &nbsp;&nbsp;validateField(input);<br>
+                }, 300));<br><br>
+                input.addEventListener(<span class="string">'blur'</span>, <span class="keyword">function</span>() {<br>
+                &nbsp;&nbsp;validateField(input); <span class="comment">// Immediate validation on blur</span><br>
+                });
+            </div>
+        </div>
+
+        <!-- Demo 2: Feedback Updates Dynamically -->
+        <div class="demo-card" id="demo2">
+            <h2>Demo 2: Dynamic Feedback Updates</h2>
+            <p style="color: #6b7280; margin-bottom: 20px; font-size: 14px;">
+                This demo shows how validation feedback updates from invalid → valid as you correct errors.
+            </p>
+
+            <div class="test-scenario">
+                <h3>
+                    <span class="badge">AC4, AC5</span>
+                    Email Validation with Real-time Updates
+                </h3>
+
+                <div class="form-group" id="email-group">
+                    <label for="email-address">
+                        Email Address
+                        <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="email"
+                        id="email-address"
+                        name="email-address"
+                        placeholder="Enter your email address"
+                        autocomplete="off"
+                    >
+                    <div class="typing-indicator">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <div class="validation-feedback">
+                        <span class="icon"></span>
+                        <span class="message"></span>
+                    </div>
+                </div>
+
+                <div class="event-log" id="event-log-2">
+                    <div class="entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">SYSTEM</span>
+                        <span class="message">Event log initialized. Type an invalid email, then correct it.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>🎯 Try this:</strong>
+                <ol style="margin-left: 20px; margin-top: 8px;">
+                    <li>Type <code>invalid</code> - you'll see an error immediately</li>
+                    <li>Type <code>@</code> - feedback updates to "incomplete"</li>
+                    <li>Type <code>test.com</code> - feedback becomes success ✓</li>
+                </ol>
+            </div>
+
+            <div class="button-group">
+                <button class="primary" onclick="loadInvalidEmail()">Load Invalid Email</button>
+                <button class="secondary" onclick="clearEmail()">Clear</button>
+                <button class="primary" onclick="loadValidEmail()">Load Valid Email</button>
+            </div>
+        </div>
+
+        <!-- Demo 3: Password Strength Indicator -->
+        <div class="demo-card" id="demo3">
+            <h2>Demo 3: Real-time Password Strength</h2>
+            <p style="color: #6b7280; margin-bottom: 20px; font-size: 14px;">
+                This demo shows real-time feedback with a visual strength meter.
+            </p>
+
+            <div class="test-scenario">
+                <h3>
+                    <span class="badge">All AC</span>
+                    Password Strength Indicator
+                </h3>
+
+                <div class="form-group" id="password-group">
+                    <label for="password">
+                        Password
+                        <span class="required-indicator">*</span>
+                    </label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter a strong password"
+                        autocomplete="off"
+                    >
+                    <div class="typing-indicator">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <div class="strength-meter">
+                        <div class="fill" style="width: 0%"></div>
+                    </div>
+                    <div class="validation-feedback">
+                        <span class="icon"></span>
+                        <span class="message"></span>
+                    </div>
+                </div>
+
+                <div class="event-log" id="event-log-3">
+                    <div class="entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">SYSTEM</span>
+                        <span class="message">Event log initialized. Type to see password strength update in real-time.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // Utility Functions
+        // ============================================================================
+
+        /**
+         * Debounce function to limit validation calls
+         * Waits for specified ms after user stops typing
+         */
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        /**
+         * Format timestamp for event log
+         */
+        function formatTime() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0];
+        }
+
+        /**
+         * Log event to the event log
+         */
+        function logEvent(logId, eventType, message) {
+            const log = document.getElementById(logId);
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            entry.innerHTML = `
+                <span class="timestamp">${formatTime()}</span>
+                <span class="event-type ${eventType}">${eventType.toUpperCase()}</span>
+                <span class="message">${message}</span>
+            `;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        /**
+         * Show validation feedback
+         */
+        function showFeedback(formGroup, state, message) {
+            const feedback = formGroup.querySelector('.validation-feedback');
+            const icon = feedback.querySelector('.icon');
+            const msg = feedback.querySelector('.message');
+
+            // Remove all state classes
+            formGroup.classList.remove('valid', 'invalid', 'validating');
+            feedback.classList.remove('valid', 'invalid', 'validating');
+
+            // Add new state
+            formGroup.classList.add(state);
+            feedback.classList.add(state);
+            feedback.classList.add('show');
+
+            // Set icon and message
+            switch(state) {
+                case 'valid':
+                    icon.textContent = '✓';
+                    msg.textContent = message || 'Valid';
+                    feedback.classList.add('valid');
+                    break;
+                case 'invalid':
+                    icon.textContent = '✗';
+                    msg.textContent = message || 'Invalid';
+                    feedback.classList.add('invalid');
+                    break;
+                case 'validating':
+                    icon.textContent = '⏳';
+                    msg.textContent = 'Validating...';
+                    feedback.classList.add('validating');
+                    break;
+            }
+
+            // Add success animation
+            if (state === 'valid') {
+                formGroup.classList.add('success-animation');
+                setTimeout(() => formGroup.classList.remove('success-animation'), 500);
+            }
+        }
+
+        /**
+         * Hide validation feedback
+         */
+        function hideFeedback(formGroup) {
+            const feedback = formGroup.querySelector('.validation-feedback');
+            formGroup.classList.remove('valid', 'invalid', 'validating');
+            feedback.classList.remove('valid', 'invalid', 'validating', 'show');
+        }
+
+        /**
+         * Update character counter
+         */
+        function updateCharCounter(input, maxLength) {
+            const counter = input.parentElement.querySelector('.char-counter');
+            if (counter) {
+                const length = input.value.length;
+                counter.textContent = `${length} / ${maxLength}`;
+                counter.classList.remove('warning', 'error');
+                if (length > maxLength * 0.9) {
+                    counter.classList.add('warning');
+                }
+                if (length >= maxLength) {
+                    counter.classList.add('error');
+                }
+            }
+        }
+
+        /**
+         * Show/hide typing indicator
+         */
+        function setTypingIndicator(formGroup, active) {
+            const indicator = formGroup.querySelector('.typing-indicator');
+            if (indicator) {
+                if (active) {
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            }
+        }
+
+        // ============================================================================
+        // Journey Name Validation (Demo 1)
+        // ============================================================================
+
+        const journeyNameInput = document.getElementById('journey-name');
+        const journeyGroup = document.getElementById('journey-group');
+        const JOURNEY_MIN_LENGTH = 3;
+        const JOURNEY_MAX_LENGTH = 100;
+
+        function validateJourneyName(value) {
+            // Check required
+            if (!value || value.trim() === '') {
+                return {
+                    valid: false,
+                    message: 'Journey name is required'
+                };
+            }
+
+            // Check minimum length
+            if (value.length < JOURNEY_MIN_LENGTH) {
+                return {
+                    valid: false,
+                    message: `Must be at least ${JOURNEY_MIN_LENGTH} characters (currently ${value.length})`
+                };
+            }
+
+            // Check maximum length
+            if (value.length > JOURNEY_MAX_LENGTH) {
+                return {
+                    valid: false,
+                    message: `Must be no more than ${JOURNEY_MAX_LENGTH} characters (currently ${value.length})`
+                };
+            }
+
+            // Check for invalid characters
+            const validPattern = /^[\w\s\-]+$/;
+            if (!validPattern.test(value)) {
+                return {
+                    valid: false,
+                    message: 'Can only contain letters, numbers, spaces, hyphens, and underscores'
+                };
+            }
+
+            return {
+                valid: true,
+                message: 'Valid journey name'
+            };
+        }
+
+        // Input event with debouncing (AC1)
+        journeyNameInput.addEventListener('input', debounce(function() {
+            const value = this.value;
+            logEvent('event-log-1', 'input', `Input event: "${value}"`);
+
+            setTypingIndicator(journeyGroup, false);
+            const result = validateJourneyName(value);
+
+            if (result.valid) {
+                showFeedback(journeyGroup, 'valid', result.message);
+                logEvent('event-log-1', 'validate', `✓ Valid: ${result.message}`);
+            } else {
+                showFeedback(journeyGroup, 'invalid', result.message);
+                logEvent('event-log-1', 'validate', `✗ Invalid: ${result.message}`);
+            }
+
+            updateCharCounter(this, JOURNEY_MAX_LENGTH);
+        }, 300));
+
+        // Show typing indicator immediately on input
+        journeyNameInput.addEventListener('input', function() {
+            setTypingIndicator(journeyGroup, true);
+            logEvent('event-log-1', 'input', 'Typing...');
+            updateCharCounter(this, JOURNEY_MAX_LENGTH);
+        });
+
+        // Blur event for immediate validation (AC2)
+        journeyNameInput.addEventListener('blur', function() {
+            const value = this.value;
+            logEvent('event-log-1', 'blur', `Blur event: "${value}"`);
+
+            setTypingIndicator(journeyGroup, false);
+            const result = validateJourneyName(value);
+
+            if (result.valid) {
+                showFeedback(journeyGroup, 'valid', result.message);
+                logEvent('event-log-1', 'validate', `✓ Valid: ${result.message}`);
+            } else {
+                showFeedback(journeyGroup, 'invalid', result.message);
+                logEvent('event-log-1', 'validate', `✗ Invalid: ${result.message}`);
+            }
+
+            // Mark AC2 as passed
+            document.getElementById('ac2').classList.add('passed');
+        });
+
+        // ============================================================================
+        // Email Validation (Demo 2)
+        // ============================================================================
+
+        const emailInput = document.getElementById('email-address');
+        const emailGroup = document.getElementById('email-group');
+
+        function validateEmail(value) {
+            if (!value || value.trim() === '') {
+                return {
+                    valid: false,
+                    message: 'Email is required'
+                };
+            }
+
+            // Check for @ symbol
+            if (!value.includes('@')) {
+                return {
+                    valid: false,
+                    message: 'Email must contain @ symbol'
+                };
+            }
+
+            // Check for domain
+            const parts = value.split('@');
+            if (parts.length < 2 || parts[1].trim() === '') {
+                return {
+                    valid: false,
+                    message: 'Email must have a domain after @'
+                };
+            }
+
+            // Check for . in domain
+            if (!parts[1].includes('.')) {
+                return {
+                    valid: false,
+                    message: 'Email domain must contain a . (e.g., .com)'
+                };
+            }
+
+            // Basic email regex
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                return {
+                    valid: false,
+                    message: 'Invalid email format'
+                };
+            }
+
+            return {
+                valid: true,
+                message: 'Valid email address'
+            };
+        }
+
+        // Input event with debouncing
+        emailInput.addEventListener('input', debounce(function() {
+            const value = this.value;
+            logEvent('event-log-2', 'input', `Input event: "${value}"`);
+
+            setTypingIndicator(emailGroup, false);
+            const result = validateEmail(value);
+
+            if (result.valid) {
+                showFeedback(emailGroup, 'valid', result.message);
+                logEvent('event-log-2', 'validate', `✓ Valid: ${result.message}`);
+            } else {
+                showFeedback(emailGroup, 'invalid', result.message);
+                logEvent('event-log-2', 'validate', `✗ Invalid: ${result.message}`);
+            }
+        }, 300));
+
+        // Show typing indicator
+        emailInput.addEventListener('input', function() {
+            setTypingIndicator(emailGroup, true);
+            logEvent('event-log-2', 'input', 'Typing...');
+        });
+
+        // Blur event
+        emailInput.addEventListener('blur', function() {
+            const value = this.value;
+            logEvent('event-log-2', 'blur', `Blur event: "${value}"`);
+
+            setTypingIndicator(emailGroup, false);
+            const result = validateEmail(value);
+
+            if (result.valid) {
+                showFeedback(emailGroup, 'valid', result.message);
+                logEvent('event-log-2', 'validate', `✓ Valid: ${result.message}`);
+            } else {
+                showFeedback(emailGroup, 'invalid', result.message);
+                logEvent('event-log-2', 'validate', `✗ Invalid: ${result.message}`);
+            }
+        });
+
+        // Button functions for Demo 2
+        function loadInvalidEmail() {
+            emailInput.value = 'invalid';
+            emailInput.dispatchEvent(new Event('input'));
+            setTimeout(() => emailInput.dispatchEvent(new Event('blur')), 100);
+        }
+
+        function loadValidEmail() {
+            emailInput.value = 'test@example.com';
+            emailInput.dispatchEvent(new Event('input'));
+            setTimeout(() => emailInput.dispatchEvent(new Event('blur')), 100);
+        }
+
+        function clearEmail() {
+            emailInput.value = '';
+            emailInput.dispatchEvent(new Event('input'));
+            hideFeedback(emailGroup);
+        }
+
+        // ============================================================================
+        // Password Strength Validation (Demo 3)
+        // ============================================================================
+
+        const passwordInput = document.getElementById('password');
+        const passwordGroup = document.getElementById('password-group');
+
+        function calculatePasswordStrength(value) {
+            let score = 0;
+            const feedback = [];
+
+            if (!value) {
+                return { score: 0, feedback: ['Enter a password'] };
+            }
+
+            // Length check
+            if (value.length >= 8) {
+                score += 1;
+            } else {
+                feedback.push(`Add ${8 - value.length} more characters`);
+            }
+
+            if (value.length >= 12) {
+                score += 1;
+            }
+
+            // Lowercase
+            if (/[a-z]/.test(value)) {
+                score += 1;
+            } else {
+                feedback.push('Add lowercase letters');
+            }
+
+            // Uppercase
+            if (/[A-Z]/.test(value)) {
+                score += 1;
+            } else {
+                feedback.push('Add uppercase letters');
+            }
+
+            // Numbers
+            if (/[0-9]/.test(value)) {
+                score += 1;
+            } else {
+                feedback.push('Add numbers');
+            }
+
+            // Special chars
+            if (/[^a-zA-Z0-9]/.test(value)) {
+                score += 1;
+            } else {
+                feedback.push('Add special characters');
+            }
+
+            let strength, message, className;
+            if (score <= 2) {
+                strength = 'weak';
+                message = 'Weak password - ' + feedback.slice(0, 2).join(', ');
+                className = 'weak';
+            } else if (score <= 4) {
+                strength = 'fair';
+                message = 'Fair password - ' + (feedback.length > 0 ? feedback[0] : 'Getting stronger');
+                className = 'fair';
+            } else if (score <= 5) {
+                strength = 'good';
+                message = 'Good password - Almost there!';
+                className = 'good';
+            } else {
+                strength = 'strong';
+                message = 'Strong password - Perfect!';
+                className = 'strong';
+            }
+
+            return { score, strength, message, className, feedback };
+        }
+
+        function updateStrengthMeter(strength) {
+            const meter = passwordGroup.querySelector('.strength-meter .fill');
+            meter.className = 'fill ' + strength;
+        }
+
+        // Input event
+        passwordInput.addEventListener('input', debounce(function() {
+            const value = this.value;
+            logEvent('event-log-3', 'input', `Input event: ${value.length} characters`);
+
+            setTypingIndicator(passwordGroup, false);
+            const result = calculatePasswordStrength(value);
+
+            updateStrengthMeter(result.className);
+
+            if (result.score >= 5) {
+                showFeedback(passwordGroup, 'valid', result.message);
+            } else {
+                showFeedback(passwordGroup, 'invalid', result.message);
+            }
+
+            logEvent('event-log-3', 'validate', `${result.strength.toUpperCase()}: ${result.message}`);
+        }, 200));
+
+        // Show typing indicator
+        passwordInput.addEventListener('input', function() {
+            setTypingIndicator(passwordGroup, true);
+            logEvent('event-log-3', 'input', 'Typing...');
+        });
+
+        // ============================================================================
+        // Mark AC as passed
+        // ============================================================================
+
+        function scrollToDemo(demoId) {
+            document.getElementById(demoId).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Mark AC1 and AC3 as passed when user interacts
+        journeyNameInput.addEventListener('input', function() {
+            document.getElementById('ac1').classList.add('passed');
+            document.getElementById('ac3').classList.add('passed');
+        });
+
+        emailInput.addEventListener('input', function() {
+            document.getElementById('ac4').classList.add('passed');
+            document.getElementById('ac5').classList.add('passed');
+        });
+
+        // Initialize
+        console.log('Feature #407: Real-time Validation Feedback loaded');
+    </script>
+</body>
+</html>

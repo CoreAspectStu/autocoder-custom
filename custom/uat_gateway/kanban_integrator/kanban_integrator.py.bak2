@@ -1,0 +1,581 @@
+"""
+Kanban Integrator - Create and manage Kanban cards for testing
+
+This module integrates with Kanban systems (Trello, GitHub Projects, etc.)
+to create cards for journeys, scenarios, and bugs.
+"""
+
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.utils.logger import get_logger
+from src.utils.errors import KanbanIntegrationError, handle_errors
+from src.kanban_integrator.rate_limiter import (
+    RateLimiter,
+    RateLimitError,
+    get_rate_limiter,
+    retry_on_rate_limit
+)
+
+
+# ============================================================================
+# Data Models
+# ============================================================================
+
+class CardStatus(Enum):
+    """Status of a Kanban card"""
+    BACKLOG = "backlog"
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    IN_REVIEW = "in_review"
+    DONE = "done"
+    BLOCKED = "blocked"
+    ARCHIVED = "archived"
+
+
+@dataclass
+class JourneyCard:
+    """Kanban card representing a user journey"""
+    card_id: str  # Unique identifier (e.g., "JOURNEY-20250126-001")
+    journey_id: str  # ID from JourneyExtractor
+    journey_name: str  # Human-readable name
+    description: str  # Journey description
+    emoji: str  # Journey emoji (🆔)
+    status: CardStatus = CardStatus.BACKLOG
+    scenario_count: int = 0  # Number of scenarios in this journey
+    labels: List[str] = field(default_factory=list)  # Labels for categorization
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    # Feature #87: Links to feature cards
+    linked_feature_ids: List[str] = field(default_factory=list)  # Feature cards this tests
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "card_id": self.card_id,
+            "journey_id": self.journey_id,
+            "journey_name": self.journey_name,
+            "description": self.description,
+            "emoji": self.emoji,
+            "status": self.status.value,
+            "scenario_count": self.scenario_count,
+            "labels": self.labels,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "linked_feature_ids": self.linked_feature_ids
+        }
+
+    def __str__(self) -> str:
+        feature_suffix = f" → Features: {len(self.linked_feature_ids)}" if self.linked_feature_ids else ""
+        return f"{self.emoji} {self.journey_name} ({self.card_id}){feature_suffix}"
+
+
+@dataclass
+class BugKanbanCard:
+    """Kanban card representing a bug from test failure (Feature #88)"""
+    card_id: str  # Unique identifier (e.g., "BUG-KANBAN-20250126-001")
+    title: str  # Card title (derived from test name)
+    test_name: str  # Test that found this bug (links to test)
+    failure_type: str  # e.g., 'selector_not_found', 'timeout', 'assertion_failed', 'network_error'
+    severity: str  # 'critical', 'high', 'medium', 'low'
+    priority: int  # 1-10, 1 is highest priority
+    error_message: Optional[str] = None  # Error message from test failure
+    suggestion: Optional[str] = None  # Suggested fix
+    assignee: Optional[str] = None  # Assigned developer/team
+    labels: List[str] = field(default_factory=list)  # Labels for categorization
+    status: CardStatus = CardStatus.TODO  # Bug cards start in TODO
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "card_id": self.card_id,
+            "title": self.title,
+            "test_name": self.test_name,
+            "failure_type": self.failure_type,
+            "severity": self.severity,
+            "priority": self.priority,
+            "error_message": self.error_message,
+            "suggestion": self.suggestion,
+            "assignee": self.assignee,
+            "labels": self.labels,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
+        }
+
+    def __str__(self) -> str:
+        return f"🐛 {self.title} ({self.card_id})"
+
+
+@dataclass
+class ScenarioCard:
+    """Kanban card representing a test scenario"""
+    card_id: str  # Unique identifier (e.g., "SCENARIO-20250126-001")
+    scenario_id: str  # ID from JourneyExtractor
+    scenario_name: str  # Human-readable name
+    description: str  # Scenario description
+    emoji: str  # Test emoji (🧪)
+    status: CardStatus = CardStatus.BACKLOG
+    journey_id: str = ""  # Parent journey ID for linking
+    journey_name: str = ""  # Parent journey name for context
+    scenario_type: str = ""  # happy_path or error_path
+    step_count: int = 0  # Number of steps in this scenario
+    labels: List[str] = field(default_factory=list)  # Labels for categorization
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    # Feature #87: Links to feature cards
+    linked_feature_ids: List[str] = field(default_factory=list)  # Feature cards this tests
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "card_id": self.card_id,
+            "scenario_id": self.scenario_id,
+            "scenario_name": self.scenario_name,
+            "description": self.description,
+            "emoji": self.emoji,
+            "status": self.status.value,
+            "journey_id": self.journey_id,
+            "journey_name": self.journey_name,
+            "scenario_type": self.scenario_type,
+            "step_count": self.step_count,
+            "labels": self.labels,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "linked_feature_ids": self.linked_feature_ids
+        }
+
+    def __str__(self) -> str:
+        feature_suffix = f" → Features: {len(self.linked_feature_ids)}" if self.linked_feature_ids else ""
+        return f"{self.emoji} {self.scenario_name} ({self.card_id}){feature_suffix}"
+
+
+# ============================================================================
+# Main Integrator Class
+# ============================================================================
+
+class KanbanIntegrator:
+    """
+    Integrates with Kanban systems to create and manage cards
+
+    This class handles:
+    - Creating journey cards with journey emoji (🆔) - Feature #83
+    - Creating scenario cards with test emoji (🧪) - Feature #84
+    - Updating card status based on test results (pending Feature #85)
+    - Adding test results as comments (pending Feature #86)
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize the Kanban integrator
+
+        Args:
+            config: Configuration dictionary with API keys, board IDs, etc.
+                   Example: {
+                       "provider": "trello" | "github" | "linear",
+                       "api_key": "...",
+                       "board_id": "...",
+                       ...
+                   }
+        """
+        self.logger = get_logger(__name__)
+        self.config = config or {}
+        self._card_counter = 0  # Track number of cards created
+
+        # Kanban provider (trello, github, linear, etc.)
+        self.provider = self.config.get("provider", "mock")
+
+        # In-memory card storage for mock provider (Feature #85)
+        # Stores cards by card_id for status tracking
+        self._cards: Dict[str, Any] = {}  # card_id -> JourneyCard/ScenarioCard/BugKanbanCard
+
+        self.logger.info(f"KanbanIntegrator initialized with provider: {self.provider}")
+
+    @handle_errors(component="kanban_integrator", reraise=True)
+    def create_journey_cards(self, journeys: List[Any]) -> List[JourneyCard]:
+        """
+        Create Kanban cards for each journey (Feature #83)
+
+        Args:
+            journeys: List of Journey objects from JourneyExtractor
+
+        Returns:
+            List of JourneyCard objects
+
+        Raises:
+            KanbanIntegrationError: If card creation fails
+        """
+        self.logger.info(f"Creating journey cards for {len(journeys)} journeys")
+
+        cards = []
+
+        for journey in journeys:
+            try:
+                # Extract journey information
+                journey_id = getattr(journey, 'journey_id', 'unknown')
+                journey_name = getattr(journey, 'name', 'Unnamed Journey')
+                description = getattr(journey, 'description', '')
+                scenarios = getattr(journey, 'scenarios', [])
+
+                # Generate unique card ID
+                self._card_counter += 1
+                date_str = datetime.now().strftime("%Y%m%d")
+                card_id = f"JOURNEY-{date_str}-{self._card_counter:03d}"
+
+                # Create journey card with journey emoji
+                card = JourneyCard(
+                    card_id=card_id,
+                    journey_id=journey_id,
+                    journey_name=journey_name,
+                    description=description,
+                    emoji="🆔",  # Journey emoji (Feature #83 requirement)
+                    scenario_count=len(scenarios),
+                    labels=self._generate_journey_labels(journey)
+                )
+
+                cards.append(card)
+
+                # Store card in memory for mock provider (Feature #85)
+                self._cards[card_id] = card
+
+                self.logger.debug(f"Created journey card: {card}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to create card for journey: {e}")
+                raise KanbanIntegrationError(f"Failed to create journey card: {e}")
+
+        self.logger.info(f"Created {len(cards)} journey cards")
+        return cards
+
+    @handle_errors(component="kanban_integrator", reraise=True)
+    def create_scenario_cards(self, journeys: List[Any]) -> List[ScenarioCard]:
+        """
+        Create Kanban cards for each scenario (Feature #84)
+
+        Args:
+            journeys: List of Journey objects from JourneyExtractor
+
+        Returns:
+            List of ScenarioCard objects
+
+        Raises:
+            KanbanIntegrationError: If card creation fails
+        """
+        self.logger.info(f"Creating scenario cards for {len(journeys)} journeys")
+
+        cards = []
+
+        for journey in journeys:
+            try:
+                # Extract journey information
+                journey_id = getattr(journey, 'journey_id', 'unknown')
+                journey_name = getattr(journey, 'name', 'Unnamed Journey')
+                scenarios = getattr(journey, 'scenarios', [])
+
+                # Create a scenario card for each scenario
+                for scenario in scenarios:
+                    # Extract scenario information
+                    scenario_id = getattr(scenario, 'scenario_id', 'unknown')
+                    scenario_name = getattr(scenario, 'name', 'Unnamed Scenario')
+                    description = getattr(scenario, 'description', '')
+                    scenario_type = getattr(scenario, 'scenario_type', None)
+                    steps = getattr(scenario, 'steps', [])
+
+                    # Generate unique card ID
+                    self._card_counter += 1
+                    date_str = datetime.now().strftime("%Y%m%d")
+                    card_id = f"SCENARIO-{date_str}-{self._card_counter:03d}"
+
+                    # Create scenario card with test emoji
+                    card = ScenarioCard(
+                        card_id=card_id,
+                        scenario_id=scenario_id,
+                        scenario_name=scenario_name,
+                        description=description,
+                        emoji="🧪",  # Test emoji (Feature #84 requirement)
+                        journey_id=journey_id,
+                        journey_name=journey_name,
+                        scenario_type=scenario_type.value if scenario_type else "unknown",
+                        step_count=len(steps),
+                        labels=self._generate_scenario_labels(scenario, journey)
+                    )
+
+                    cards.append(card)
+
+                    # Store card in memory for mock provider (Feature #85)
+                    self._cards[card_id] = card
+
+                    self.logger.debug(f"Created scenario card: {card}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to create card for scenario: {e}")
+                raise KanbanIntegrationError(f"Failed to create scenario card: {e}")
+
+        self.logger.info(f"Created {len(cards)} scenario cards")
+        return cards
+
+    def _generate_scenario_labels(self, scenario: Any, journey: Any) -> List[str]:
+        """
+        Generate labels for a scenario card
+
+        Args:
+            scenario: Scenario object
+            journey: Parent Journey object
+
+        Returns:
+            List of label strings
+        """
+        labels = ["scenario", "automated-test"]
+
+        # Add scenario type label
+        scenario_type = getattr(scenario, 'scenario_type', None)
+        if scenario_type:
+            labels.append(scenario_type.value)
+
+        # Add journey type label for context
+        journey_type = getattr(journey, 'journey_type', None)
+        if journey_type:
+            labels.append(journey_type.value)
+
+        # Add priority label from parent journey
+        priority = getattr(journey, 'priority', 5)
+        if priority <= 3:
+            labels.append("high-priority")
+        elif priority >= 8:
+            labels.append("low-priority")
+
+        return labels
+
+    def _generate_journey_labels(self, journey: Any) -> List[str]:
+        """
+        Generate labels for a journey card
+
+        Args:
+            journey: Journey object
+
+        Returns:
+            List of label strings
+        """
+        labels = ["journey", "automated-test"]
+
+        # Add journey type label
+        journey_type = getattr(journey, 'journey_type', None)
+        if journey_type:
+            labels.append(journey_type.value)
+
+        # Add priority label
+        priority = getattr(journey, 'priority', 5)
+        if priority <= 3:
+            labels.append("high-priority")
+        elif priority >= 8:
+            labels.append("low-priority")
+
+        return labels
+
+    @handle_errors(component="kanban_integrator", reraise=False)
+    def get_card_by_id(self, card_id: str) -> Optional[JourneyCard]:
+        """
+        Retrieve a card by its ID
+
+        Args:
+            card_id: Card ID to search for
+
+        Returns:
+            JourneyCard if found, None otherwise
+        """
+        # This would query the Kanban API in production
+        # For now, return None as cards are not persisted
+        self.logger.warning(f"get_card_by_id not fully implemented - returning None")
+        return None
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=False)
+    def update_card_status(self, card_id: str, status: CardStatus) -> bool:
+        """
+        Update the status of a card (Feature #85 - placeholder)
+
+        Args:
+            card_id: Card ID to update
+            status: New status
+
+        Returns:
+            True if successful, False otherwise
+        """
+        self.logger.info(f"Updating card {card_id} to status {status.value}")
+        # Implementation pending Feature #85
+        return True
+
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=False)
+    def link_to_feature(self, card_id: str, feature_id: str) -> bool:
+        """
+        Link a test card to a feature card (Feature #87)
+
+        Creates a bidirectional link between a test card (journey or scenario)
+        and the feature card it tests.
+
+        Args:
+            card_id: The test card ID (journey or scenario card)
+            feature_id: The feature card ID to link to
+
+        Returns:
+            True if link was created successfully, False otherwise
+        """
+        self.logger.info(f"Linking test card {card_id} to feature {feature_id}")
+
+        # In production, this would:
+        # 1. Add feature_id to card.linked_feature_ids
+        # 2. Update the card in the Kanban system
+        # 3. Add a back-link from feature card to test card
+        # 4. Make the link visible on both cards
+
+        # For mock implementation, just log the action
+        self.logger.debug(f"Created bidirectional link: {card_id} ↔ {feature_id}")
+        return True
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=True)
+    def get_linked_features(self, card_id: str) -> List[str]:
+        """
+        Get all feature IDs linked to a test card (Feature #87)
+
+        Args:
+            card_id: The test card ID
+
+        Returns:
+            List of feature card IDs linked to this test card
+        """
+        self.logger.debug(f"Getting linked features for card {card_id}")
+
+        # In production, this would query the Kanban API
+        # For now, return empty list as mock
+        return []
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=True)
+    def get_linked_test_cards(self, feature_id: str) -> List[str]:
+        """
+        Get all test card IDs linked to a feature card (Feature #87)
+
+        This provides the reverse lookup - finding all tests that verify
+        a particular feature.
+
+        Args:
+            feature_id: The feature card ID
+
+        Returns:
+            List of test card IDs (journey/scenario cards) linked to this feature
+        """
+        self.logger.debug(f"Getting linked test cards for feature {feature_id}")
+
+        # In production, this would query the Kanban API
+        # For now, return empty list as mock
+        return []
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=False)
+    def add_comment(self, card_id: str, comment: str) -> bool:
+        """
+        Add a comment to a card (Feature #86)
+
+        Args:
+            card_id: Card ID to comment on
+            comment: Comment text
+
+        Returns:
+            True if successful, False otherwise
+        """
+        self.logger.info(f"Adding comment to card {card_id}")
+
+        # In production, this would call the Kanban API (Trello, GitHub, etc.)
+        # For now, we log the comment and simulate success
+        self.logger.debug(f"Comment content:
+{comment}")
+
+        # Store comment in memory for testing (in production, this goes to the API)
+        if not hasattr(self, '_comments'):
+            self._comments = {}
+
+        if card_id not in self._comments:
+            self._comments[card_id] = []
+
+        self._comments[card_id].append({
+            'comment': comment,
+            'timestamp': datetime.now().isoformat()
+        })
+
+        return True
+
+    @handle_errors(component="kanban_integrator", reraise=False, default_return=False)
+    def add_test_results_comment(self, card_id: str, test_results: List[Any]) -> bool:
+        """
+        Add test results as a formatted comment to a card (Feature #86)
+
+        Args:
+            card_id: Card ID to comment on
+            test_results: List of TestResult objects
+
+        Returns:
+            True if successful, False otherwise
+        """
+        self.logger.info(f"Adding test results comment to card {card_id}")
+
+        if not test_results:
+            self.logger.warning("No test results to add as comment")
+            return False
+
+        # Calculate summary statistics
+        total_tests = len(test_results)
+        passed_tests = sum(1 for t in test_results if getattr(t, 'passed', False))
+        failed_tests = total_tests - passed_tests
+        pass_percentage = (passed_tests * 100 // total_tests) if total_tests > 0 else 0
+        total_duration_ms = sum(getattr(t, 'duration_ms', 0) for t in test_results)
+
+        # Build comment with test results
+        comment = f"""## Test Results - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+**Summary:** {passed_tests}/{total_tests} tests passed ({pass_percentage}%)
+
+**Duration:** {total_duration_ms / 1000:.2f}s ({total_duration_ms}ms)
+
+**Tests:**
+"""
+
+        # Add each test result
+        for result in test_results:
+            test_name = getattr(result, 'test_name', 'unknown')
+            passed = getattr(result, 'passed', False)
+            duration_ms = getattr(result, 'duration_ms', 0)
+            error_message = getattr(result, 'error_message', None)
+
+            # Status indicator
+            status = "✅ PASS" if passed else "❌ FAIL"
+            comment += f"- {status}: {test_name} ({duration_ms}ms)\n"
+
+            # Add error details for failed tests
+            if not passed and error_message:
+                comment += f"  💥 Error: {error_message}\n"
+
+        # Add the comment using the base add_comment method
+        return self.add_comment(card_id, comment)
+
+    def get_comments(self, card_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all comments for a card (for testing)
+
+        Args:
+            card_id: Card ID to get comments for
+
+        Returns:
+            List of comment dictionaries
+        """
+        if not hasattr(self, '_comments'):
+            return []
+
+        return self._comments.get(card_id, [])

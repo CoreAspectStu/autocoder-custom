@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #438: Screen Reader Compatibility</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0891b2 0%, #0284c7 50%, #0369a1 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #6b7280;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .feature-info {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+
+        .feature-info h2 {
+            color: #0c4a6e;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .acceptance-criteria {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .criteria {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #0ea5e9;
+        }
+
+        .criteria h3 {
+            color: #0284c7;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .criteria p {
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .criteria.passed {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .criteria.passed h3 {
+            color: #059669;
+        }
+
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-card h2 {
+            color: #1f2937;
+            font-size: 24px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .demo-card h2 .icon {
+            font-size: 28px;
+        }
+
+        .demo-card p {
+            color: #6b7280;
+            font-size: 15px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            margin-bottom: 32px;
+        }
+
+        .test-section h3 {
+            color: #1f2937;
+            font-size: 18px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        /* Skip Link */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #0369a1;
+            color: white;
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 0 0 4px 0;
+            z-index: 100;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Sample App Styles */
+        .sample-app {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 16px;
+        }
+
+        .app-header {
+            background: #1f2937;
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-header h1 {
+            font-size: 20px;
+            margin: 0;
+        }
+
+        .app-nav {
+            background: #374151;
+            padding: 12px 24px;
+        }
+
+        .app-nav ul {
+            list-style: none;
+            display: flex;
+            gap: 24px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .app-nav a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .app-nav a:hover, .app-nav a:focus {
+            background: #4b5563;
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+        }
+
+        .app-main {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #374151;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        .form-group .error {
+            color: #dc2626;
+            font-size: 13px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .form-group.error .error {
+            display: block;
+        }
+
+        .form-group.error input {
+            border-color: #dc2626;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #0ea5e9;
+            color: white;
+        }
+
+        .btn-primary:hover, .btn-primary:focus {
+            background: #0284c7;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+            margin-right: 12px;
+        }
+
+        .btn-secondary:hover, .btn-secondary:focus {
+            background: #4b5563;
+        }
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .status-message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+
+        .status-message[role="alert"] {
+            display: block;
+        }
+
+        /* Test Results */
+        .test-results {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .test-results h3 {
+            color: #1f2937;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .test-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid #d1d5db;
+        }
+
+        .test-item.pass {
+            border-left-color: #10b981;
+        }
+
+        .test-item.fail {
+            border-left-color: #ef4444;
+        }
+
+        .test-item .status {
+            margin-right: 12px;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .test-item .content {
+            flex: 1;
+        }
+
+        .test-item .content h4 {
+            font-size: 14px;
+            margin-bottom: 4px;
+            color: #1f2937;
+        }
+
+        .test-item .content p {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #0284c7;
+        }
+
+        .control-btn.secondary {
+            background: #6b7280;
+        }
+
+        .control-btn.secondary:hover {
+            background: #4b5563;
+        }
+
+        .info-box {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .info-box h4 {
+            color: #92400e;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            color: #78350f;
+            font-size: 13px;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .checklist {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .checklist h4 {
+            color: #166534;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .checklist ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .checklist li {
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+            font-size: 13px;
+            color: #15803d;
+        }
+
+        .checklist li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .acceptance-criteria {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header" role="banner">
+            <h1>Feature #438: Screen Reader Compatibility</h1>
+            <p class="subtitle">Accessibility Testing & Demo - Verify screen readers can navigate the application</p>
+
+            <div class="feature-info" role="region" aria-labelledby="feature-info-heading">
+                <h2 id="feature-info-heading">📋 Acceptance Criteria</h2>
+                <div class="acceptance-criteria">
+                    <div class="criteria" id="ac1">
+                        <h3>AC1: Navigate with screen reader</h3>
+                        <p>Users can navigate all interactive elements using screen reader keyboard shortcuts</p>
+                    </div>
+                    <div class="criteria" id="ac2">
+                        <h3>AC2: Elements announced</h3>
+                        <p>All interactive elements are properly announced with role and state</p>
+                    </div>
+                    <div class="criteria" id="ac3">
+                        <h3>AC3: Descriptive labels</h3>
+                        <p>All form inputs, buttons, and links have descriptive labels</p>
+                    </div>
+                    <div class="criteria" id="ac4">
+                        <h3>AC4: Landmarks used</h3>
+                        <p>Page uses proper ARIA landmarks (banner, nav, main, etc.)</p>
+                    </div>
+                    <div class="criteria" id="ac5">
+                        <h3>AC5: Logical reading order</h3>
+                        <p>Content flows in logical order when read by screen reader</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="demo-card">
+            <h2><span class="icon">🎛️</span> Test Controls</h2>
+            <p>Run automated tests to verify screen reader compatibility features</p>
+
+            <div class="controls">
+                <button class="control-btn" onclick="runAllTests()" aria-describedby="run-all-desc">
+                    Run All Tests
+                </button>
+                <span id="run-all-desc" class="sr-only">Execute all screen reader compatibility tests</span>
+                <button class="control-btn secondary" onclick="resetTests()" aria-describedby="reset-desc">
+                    Reset Tests
+                </button>
+                <span id="reset-desc" class="sr-only">Clear all test results</span>
+                <button class="control-btn secondary" onclick="toggleHighlighting()" aria-describedby="toggle-desc">
+                    Toggle Landmark Highlighting
+                </button>
+                <span id="toggle-desc" class="sr-only">Highlight ARIA landmarks on the page</span>
+            </div>
+
+            <div class="test-results" role="region" aria-labelledby="test-results-heading" aria-live="polite">
+                <h3 id="test-results-heading">Test Results</h3>
+                <div id="results-container">
+                    <div class="test-item">
+                        <span class="status">⏳</span>
+                        <div class="content">
+                            <h4>Tests not started</h4>
+                            <p>Click "Run All Tests" to begin screen reader compatibility verification</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo: Sample Application -->
+        <div class="demo-card">
+            <h2><span class="icon">🖥️</span> Sample Application with Accessibility</h2>
+            <p>This demo application implements proper screen reader compatibility features including ARIA labels, landmarks, semantic HTML, and screen reader-only content.</p>
+
+            <div class="sample-app" role="region" aria-labelledby="sample-app-heading">
+                <h3 id="sample-app-heading" class="sr-only">Sample Contact Form Application</h3>
+
+                <!-- App Header with Landmark -->
+                <header class="app-header" role="banner">
+                    <h1>Contact Us</h1>
+                    <nav class="app-nav" role="navigation" aria-label="Main navigation">
+                        <ul>
+                            <li><a href="#home" aria-current="page">Home</a></li>
+                            <li><a href="#about">About</a></li>
+                            <li><a href="#contact">Contact</a></li>
+                        </ul>
+                    </nav>
+                </header>
+
+                <!-- Main Content Area -->
+                <main class="app-main" role="main" id="main-content" aria-labelledby="form-heading">
+                    <h2 id="form-heading">Send us a message</h2>
+                    <p id="form-description">Fill out the form below and we'll get back to you within 24 hours.</p>
+
+                    <form id="contact-form" aria-labelledby="form-heading" aria-describedby="form-description" novalidate>
+                        <div class="form-group">
+                            <label for="name">
+                                Full Name
+                                <span class="required" aria-label="required">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="name"
+                                name="name"
+                                required
+                                aria-required="true"
+                                autocomplete="name"
+                                placeholder="Enter your full name"
+                                aria-describedby="name-error"
+                            >
+                            <div class="error" id="name-error" role="alert" aria-live="assertive">
+                                Please enter your name
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email">
+                                Email Address
+                                <span class="required" aria-label="required">*</span>
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                required
+                                aria-required="true"
+                                autocomplete="email"
+                                placeholder="you@example.com"
+                                aria-describedby="email-error email-hint"
+                            >
+                            <span id="email-hint" class="sr-only">Enter a valid email address where we can contact you</span>
+                            <div class="error" id="email-error" role="alert" aria-live="assertive">
+                                Please enter a valid email address
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="subject">Subject</label>
+                            <select id="subject" name="subject" aria-describedby="subject-hint">
+                                <option value="">Select a subject</option>
+                                <option value="general">General Inquiry</option>
+                                <option value="support">Technical Support</option>
+                                <option value="sales">Sales Question</option>
+                                <option value="feedback">Feedback</option>
+                            </select>
+                            <span id="subject-hint" class="sr-only">Choose the topic that best describes your message</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="message">
+                                Message
+                                <span class="required" aria-label="required">*</span>
+                            </label>
+                            <textarea
+                                id="message"
+                                name="message"
+                                rows="5"
+                                required
+                                aria-required="true"
+                                placeholder="Type your message here..."
+                                aria-describedby="message-error message-hint"
+                            ></textarea>
+                            <span id="message-hint" class="sr-only">Provide details about your inquiry or feedback</span>
+                            <div class="error" id="message-error" role="alert" aria-live="assertive">
+                                Please enter your message
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" aria-describedby="submit-hint">
+                                Send Message
+                            </button>
+                            <span id="submit-hint" class="sr-only">Submit the contact form and send your message</span>
+                            <button type="reset" class="btn btn-secondary" aria-describedby="cancel-hint">
+                                Clear Form
+                            </button>
+                            <span id="cancel-hint" class="sr-only">Reset all form fields to their default values</span>
+                        </div>
+
+                        <div id="form-status" class="status-message" role="status" aria-live="polite" aria-atomic="true">
+                            <span id="status-text"></span>
+                        </div>
+                    </form>
+                </main>
+
+                <!-- Footer with Landmark -->
+                <footer style="background: #1f2937; color: white; padding: 16px 24px; text-align: center;" role="contentinfo">
+                    <p>&copy; 2024 Sample App. All rights reserved.</p>
+                </footer>
+            </div>
+        </div>
+
+        <!-- Test Checklist -->
+        <div class="demo-card">
+            <h2><span class="icon">✅</span> Screen Reader Testing Checklist</h2>
+            <p>Manual testing steps to verify screen reader compatibility</p>
+
+            <div class="checklist" role="region" aria-labelledby="checklist-heading">
+                <h3 id="checklist-heading">Testing Steps</h3>
+                <ul>
+                    <li>Enable screen reader (NVDA, JAWS, VoiceOver, or TalkBack)</li>
+                    <li>Press Tab key to navigate through interactive elements</li>
+                    <li>Verify each element announces its role and label clearly</li>
+                    <li>Use screen reader shortcut to jump between landmarks</li>
+                    <li>Verify form field errors are announced immediately</li>
+                    <li>Check that focus indicators are visible</li>
+                    <li>Verify reading order matches visual layout</li>
+                    <li>Test "Skip to main content" link works correctly</li>
+                    <li>Navigate using heading shortcuts (H, Shift+H)</li>
+                    <li>Verify buttons and links have descriptive names</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="demo-card">
+            <h2><span class="icon">💡</span> Screen Reader Best Practices</h2>
+            <p>Key accessibility features implemented in this demo</p>
+
+            <div class="info-box" role="region" aria-labelledby="practices-heading">
+                <h3 id="practices-heading">Implemented Features</h3>
+                <ul style="list-style: none; padding: 0; margin: 0; margin-top: 12px;">
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Skip Links:</strong> Allow keyboard users to skip navigation
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>ARIA Landmarks:</strong> banner, navigation, main, contentinfo roles
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Proper Labels:</strong> All inputs have associated label elements
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Error Announcements:</strong> role="alert" for live error messages
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Required Fields:</strong> aria-required="true" attribute
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Live Regions:</strong> aria-live for dynamic content updates
+                    </li>
+                    <li style="padding: 8px 0; border-bottom: 1px solid #fbbf24;">
+                        <strong>Descriptive Text:</strong> aria-describedby for additional context
+                    </li>
+                    <li style="padding: 8px 0;">
+                        <strong>Semantic HTML:</strong> Proper heading hierarchy and structure
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test state
+        let highlightingEnabled = false;
+
+        // Run all tests
+        function runAllTests() {
+            const results = [];
+
+            // Test 1: Skip link present
+            results.push({
+                name: 'Skip to main content link',
+                description: 'Skip link allows keyboard users to bypass navigation',
+                pass: document.querySelector('.skip-link') !== null
+            });
+
+            // Test 2: ARIA landmarks
+            const landmarks = document.querySelectorAll('[role="banner"], [role="navigation"], [role="main"], [role="contentinfo"]');
+            results.push({
+                name: 'ARIA landmarks used',
+                description: `Found ${landmarks.length} landmarks (banner, nav, main, contentinfo)`,
+                pass: landmarks.length >= 4
+            });
+
+            // Test 3: Form labels
+            const inputs = document.querySelectorAll('input, select, textarea');
+            let allLabeled = true;
+            inputs.forEach(input => {
+                const label = document.querySelector(`label[for="${input.id}"]`);
+                if (!label && !input.getAttribute('aria-label')) {
+                    allLabeled = false;
+                }
+            });
+            results.push({
+                name: 'Form inputs have labels',
+                description: `${inputs.length} form inputs checked for proper labels`,
+                pass: allLabeled
+            });
+
+            // Test 4: Required fields marked
+            const requiredInputs = document.querySelectorAll('[aria-required="true"]');
+            results.push({
+                name: 'Required fields marked',
+                description: `${requiredInputs.length} required fields have aria-required attribute`,
+                pass: requiredInputs.length > 0
+            });
+
+            // Test 5: Error announcements
+            const alerts = document.querySelectorAll('[role="alert"]');
+            results.push({
+                name: 'Error announcements configured',
+                description: `${alerts.length} elements with role="alert" for live error announcements`,
+                pass: alerts.length > 0
+            });
+
+            // Test 6: Live regions
+            const liveRegions = document.querySelectorAll('[aria-live]');
+            results.push({
+                name: 'Live regions for dynamic content',
+                description: `${liveRegions.length} live regions (aria-live) configured`,
+                pass: liveRegions.length > 0
+            });
+
+            // Test 7: Heading hierarchy
+            const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            let properHierarchy = true;
+            let lastLevel = 0;
+            headings.forEach(h => {
+                const level = parseInt(h.tagName.charAt(1));
+                if (level - lastLevel > 1 && lastLevel !== 0) {
+                    properHierarchy = false;
+                }
+                lastLevel = level;
+            });
+            results.push({
+                name: 'Proper heading hierarchy',
+                description: `${headings.length} headings checked for logical order`,
+                pass: properHierarchy
+            });
+
+            // Test 8: Descriptive link text
+            const links = document.querySelectorAll('a[href]');
+            let descriptiveLinks = true;
+            links.forEach(link => {
+                const text = link.textContent.trim().toLowerCase();
+                if (text === '' || text === 'click here' || text === 'read more') {
+                    if (!link.getAttribute('aria-label')) {
+                        descriptiveLinks = false;
+                    }
+                }
+            });
+            results.push({
+                name: 'Descriptive link text',
+                description: `${links.length} links checked for descriptive text or aria-label`,
+                pass: descriptiveLinks
+            });
+
+            // Test 9: Button accessibility
+            const buttons = document.querySelectorAll('button');
+            let accessibleButtons = true;
+            buttons.forEach(btn => {
+                if (!btn.textContent.trim() && !btn.getAttribute('aria-label')) {
+                    accessibleButtons = false;
+                }
+            });
+            results.push({
+                name: 'Accessible buttons',
+                description: `${buttons.length} buttons have text or aria-label`,
+                pass: accessibleButtons
+            });
+
+            // Test 10: ARIA descriptions
+            const describedBy = document.querySelectorAll('[aria-describedby]');
+            results.push({
+                name: 'Additional context with aria-describedby',
+                description: `${describedBy.length} elements provide extra context via aria-describedby`,
+                pass: describedBy.length > 0
+            });
+
+            displayResults(results);
+            updateAcceptanceCriteria(results);
+        }
+
+        // Display test results
+        function displayResults(results) {
+            const container = document.getElementById('results-container');
+            const passed = results.filter(r => r.pass).length;
+            const total = results.length;
+
+            container.innerHTML = `
+                <div style="margin-bottom: 16px; padding: 12px; background: ${passed === total ? '#d1fae5' : '#fef3c7'}; border-radius: 6px; border-left: 4px solid ${passed === total ? '#10b981' : '#f59e0b'};">
+                    <strong>Test Summary:</strong> ${passed}/${total} tests passed (${Math.round(passed/total*100)}%)
+                </div>
+            `;
+
+            results.forEach(result => {
+                const item = document.createElement('div');
+                item.className = `test-item ${result.pass ? 'pass' : 'fail'}`;
+                item.innerHTML = `
+                    <span class="status">${result.pass ? '✓' : '✗'}</span>
+                    <div class="content">
+                        <h4>${result.name}</h4>
+                        <p>${result.description}</p>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Update acceptance criteria display
+        function updateAcceptanceCriteria(results) {
+            const ac1 = document.getElementById('ac1');
+            const ac2 = document.getElementById('ac2');
+            const ac3 = document.getElementById('ac3');
+            const ac4 = document.getElementById('ac4');
+            const ac5 = document.getElementById('ac5');
+
+            // AC1: Navigate with screen reader (passes if landmarks, labels, and buttons are accessible)
+            const ac1Pass = results[1].pass && results[2].pass && results[8].pass;
+            ac1.classList.toggle('passed', ac1Pass);
+
+            // AC2: Elements announced (passes if landmarks, required fields, and live regions exist)
+            const ac2Pass = results[1].pass && results[3].pass && results[5].pass;
+            ac2.classList.toggle('passed', ac2Pass);
+
+            // AC3: Descriptive labels (passes if form inputs and links are labeled)
+            const ac3Pass = results[2].pass && results[7].pass && results[8].pass;
+            ac3.classList.toggle('passed', ac3Pass);
+
+            // AC4: Landmarks used
+            ac4.classList.toggle('passed', results[1].pass);
+
+            // AC5: Logical reading order (passes if heading hierarchy is correct)
+            ac5.classList.toggle('passed', results[6].pass);
+        }
+
+        // Reset tests
+        function resetTests() {
+            document.getElementById('results-container').innerHTML = `
+                <div class="test-item">
+                    <span class="status">⏳</span>
+                    <div class="content">
+                        <h4>Tests not started</h4>
+                        <p>Click "Run All Tests" to begin screen reader compatibility verification</p>
+                    </div>
+                </div>
+            `;
+
+            document.querySelectorAll('.criteria').forEach(el => {
+                el.classList.remove('passed');
+            });
+        }
+
+        // Toggle landmark highlighting
+        function toggleHighlighting() {
+            highlightingEnabled = !highlightingEnabled;
+
+            const landmarks = document.querySelectorAll('[role="banner"], [role="navigation"], [role="main"], [role="contentinfo"], [role="region"]');
+
+            landmarks.forEach(landmark => {
+                if (highlightingEnabled) {
+                    const role = landmark.getAttribute('role');
+                    let color = '#e5e7eb';
+                    if (role === 'banner') color = '#dbeafe';
+                    if (role === 'navigation') color = '#fce7f3';
+                    if (role === 'main') color = '#d1fae5';
+                    if (role === 'contentinfo') color = '#fef3c7';
+                    if (role === 'region') color = '#e0e7ff';
+
+                    landmark.style.outline = `3px dashed ${color === '#e5e7eb' ? '#9ca3af' : '#4b5563'}`;
+                    landmark.style.outlineOffset = '2px';
+                } else {
+                    landmark.style.outline = '';
+                    landmark.style.outlineOffset = '';
+                }
+            });
+
+            const btn = event.target;
+            btn.textContent = highlightingEnabled ? 'Hide Landmark Highlighting' : 'Toggle Landmark Highlighting';
+        }
+
+        // Form validation with screen reader announcements
+        document.getElementById('contact-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            let isValid = true;
+            const formGroups = this.querySelectorAll('.form-group');
+
+            // Reset errors
+            formGroups.forEach(group => {
+                group.classList.remove('error');
+                // Reset aria-invalid on all inputs
+                const input = group.querySelector('input, textarea');
+                if (input) {
+                    input.removeAttribute('aria-invalid');
+                }
+            });
+
+            // Validate name
+            const name = document.getElementById('name');
+            if (!name.value.trim()) {
+                name.closest('.form-group').classList.add('error');
+                name.setAttribute('aria-invalid', 'true');
+                isValid = false;
+            }
+
+            // Validate email
+            const email = document.getElementById('email');
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email.value.trim() || !emailRegex.test(email.value)) {
+                email.closest('.form-group').classList.add('error');
+                email.setAttribute('aria-invalid', 'true');
+                isValid = false;
+            }
+
+            // Validate message
+            const message = document.getElementById('message');
+            if (!message.value.trim()) {
+                message.closest('.form-group').classList.add('error');
+                message.setAttribute('aria-invalid', 'true');
+                isValid = false;
+            }
+
+            if (isValid) {
+                const status = document.getElementById('form-status');
+                const statusText = document.getElementById('status-text');
+                status.className = 'status-message success';
+                status.style.display = 'block';
+                statusText.textContent = 'Message sent successfully! We\'ll get back to you soon.';
+
+                // Reset form after delay
+                setTimeout(() => {
+                    this.reset();
+                    status.style.display = 'none';
+                }, 3000);
+            } else {
+                // Focus first error for screen reader users
+                const firstError = this.querySelector('.form-group.error input, .form-group.error textarea');
+                if (firstError) {
+                    firstError.focus();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

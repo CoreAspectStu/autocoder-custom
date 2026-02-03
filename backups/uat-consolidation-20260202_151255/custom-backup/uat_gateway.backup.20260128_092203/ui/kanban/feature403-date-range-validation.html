@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #403: Date Range Validation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="date"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group input.error {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .form-group input.success {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 14px;
+            margin-top: 8px;
+            display: none;
+            padding: 12px;
+            background: #fef2f2;
+            border-left: 3px solid #ef4444;
+            border-radius: 4px;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        .success-message {
+            color: #10b981;
+            font-size: 14px;
+            margin-top: 8px;
+            display: none;
+            padding: 12px;
+            background: #f0fdf4;
+            border-left: 3px solid #10b981;
+            border-radius: 4px;
+        }
+
+        .success-message.visible {
+            display: block;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+            margin-top: 12px;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .status-box {
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        .status-box.invalid {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .status-box.valid {
+            background: #f0fdf4;
+            border: 2px solid #10b981;
+            color: #065f46;
+        }
+
+        .test-scenarios {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .test-btn {
+            padding: 12px 16px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .test-btn:hover {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+        }
+
+        .test-btn.invalid {
+            background: #fef2f2;
+            border-color: #fca5a5;
+        }
+
+        .test-btn.valid {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+
+        .test-btn .description {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+            padding: 16px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 14px;
+            color: #1e40af;
+        }
+
+        .acceptance-criteria {
+            list-style: none;
+            padding: 0;
+        }
+
+        .acceptance-criteria li {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border-left: 3px solid #d1d5db;
+        }
+
+        .acceptance-criteria li.pass {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .acceptance-criteria li .ac-number {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .acceptance-criteria li .ac-status {
+            float: right;
+            font-weight: 600;
+        }
+
+        .acceptance-criteria li.pass .ac-status {
+            color: #10b981;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Feature #403: Date Range Validation</h1>
+            <p>
+                <strong>Category:</strong> Form Validation &nbsp;|&nbsp;
+                <strong>Complexity:</strong> Medium &nbsp;|&nbsp;
+                <strong>Status:</strong> ✅ Implemented
+            </p>
+            <p style="margin-top: 12px;">
+                Demonstrates validation that ensures date ranges are logical (start date ≤ end date).
+                When an invalid range is selected, a clear error message is shown and filtering is prevented.
+            </p>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Column: Interactive Demo -->
+            <div class="card">
+                <h2>🎯 Interactive Demo</h2>
+
+                <div class="form-group">
+                    <label for="startDate">Start Date</label>
+                    <input type="date" id="startDate" class="date-input">
+                </div>
+
+                <div class="form-group">
+                    <label for="endDate">End Date</label>
+                    <input type="date" id="endDate" class="date-input">
+                </div>
+
+                <div class="error-message" id="errorMessage"></div>
+                <div class="success-message" id="successMessage"></div>
+
+                <div class="status-box" id="statusBox" style="display: none;"></div>
+
+                <button class="btn btn-primary" id="validateBtn">Validate Date Range</button>
+                <button class="btn btn-secondary" id="clearBtn">Clear Dates</button>
+
+                <div class="info-box">
+                    <strong>💡 Try this:</strong>
+                    <ul style="margin-left: 20px; margin-top: 8px;">
+                        <li>Select an end date BEFORE the start date</li>
+                        <li>Select the same date for both fields</li>
+                        <li>Select only a start or end date</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right Column: Test Scenarios -->
+            <div class="card">
+                <h2>🧪 Test Scenarios</h2>
+                <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px;">
+                    Click any scenario to auto-fill the form and see validation in action.
+                </p>
+
+                <div class="test-scenarios">
+                    <button class="test-btn invalid" data-scenario="reversed">
+                        <div>❌ Invalid: Reversed Dates</div>
+                        <div class="description">End date is before start date</div>
+                    </button>
+
+                    <button class="test-btn invalid" data-scenario="far-reversed">
+                        <div>❌ Invalid: Far Reversed</div>
+                        <div class="description">End date is weeks before start</div>
+                    </button>
+
+                    <button class="test-btn valid" data-scenario="valid-range">
+                        <div>✅ Valid: Normal Range</div>
+                        <div class="description">Start date is before end date</div>
+                    </button>
+
+                    <button class="test-btn valid" data-scenario="same-day">
+                        <div>✅ Valid: Same Day</div>
+                        <div class="description">Start and end are the same</div>
+                    </button>
+
+                    <button class="test-btn valid" data-scenario="only-start">
+                        <div>✅ Valid: Only Start Date</div>
+                        <div class="description">No end date specified</div>
+                    </button>
+
+                    <button class="test-btn valid" data-scenario="only-end">
+                        <div>✅ Valid: Only End Date</div>
+                        <div class="description">No start date specified</div>
+                    </button>
+                </div>
+
+                <div style="margin-top: 24px;">
+                    <h3 style="font-size: 16px; color: #1f2937; margin-bottom: 12px;">✅ Acceptance Criteria</h3>
+                    <ul class="acceptance-criteria">
+                        <li class="pass">
+                            <span class="ac-number">AC1</span>
+                            Select end date before start date → Validation error occurs
+                            <span class="ac-status">PASS</span>
+                        </li>
+                        <li class="pass">
+                            <span class="ac-number">AC2</span>
+                            Validation error message is clear and helpful
+                            <span class="ac-status">PASS</span>
+                        </li>
+                        <li class="pass">
+                            <span class="ac-number">AC3</span>
+                            Valid date range works correctly
+                            <span class="ac-status">PASS</span>
+                        </li>
+                        <li class="pass">
+                            <span class="ac-number">AC4</span>
+                            Edge cases (None, same day) work correctly
+                            <span class="ac-status">PASS</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const statusBox = document.getElementById('statusBox');
+        const validateBtn = document.getElementById('validateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+
+        // Format date as YYYY-MM-DD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Parse date from YYYY-MM-DD
+        function parseDate(dateStr) {
+            if (!dateStr) return null;
+            const [year, month, day] = dateStr.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+
+        // Validate date range
+        function validateDateRange() {
+            const startDate = parseDate(startDateInput.value);
+            const endDate = parseDate(endDateInput.value);
+
+            // Clear previous messages
+            errorMessage.classList.remove('visible');
+            successMessage.classList.remove('visible');
+            statusBox.style.display = 'none';
+            startDateInput.classList.remove('error', 'success');
+            endDateInput.classList.remove('error', 'success');
+
+            // Case 1: Both dates are empty
+            if (!startDate && !endDate) {
+                showSuccess('No date range selected');
+                return;
+            }
+
+            // Case 2: Only start date
+            if (startDate && !endDate) {
+                showSuccess(`Valid: Showing results from ${formatDate(startDate)} onwards`);
+                return;
+            }
+
+            // Case 3: Only end date
+            if (!startDate && endDate) {
+                showSuccess(`Valid: Showing results up to ${formatDate(endDate)}`);
+                return;
+            }
+
+            // Case 4: Both dates provided - validate ordering
+            if (startDate && endDate) {
+                if (startDate > endDate) {
+                    showError(
+                        `Invalid date range: Start date (${formatDate(startDate)}) must be before or equal to end date (${formatDate(endDate)})`
+                    );
+                    startDateInput.classList.add('error');
+                    endDateInput.classList.add('error');
+                } else if (startDate.getTime() === endDate.getTime()) {
+                    showSuccess(`Valid: Showing results for ${formatDate(startDate)} (single day)`);
+                    startDateInput.classList.add('success');
+                    endDateInput.classList.add('success');
+                } else {
+                    showSuccess(
+                        `Valid: Showing results from ${formatDate(startDate)} to ${formatDate(endDate)}`
+                    );
+                    startDateInput.classList.add('success');
+                    endDateInput.classList.add('success');
+                }
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = `❌ ${message}`;
+            errorMessage.classList.add('visible');
+            statusBox.innerHTML = `<strong>Status:</strong> ❌ Invalid`;
+            statusBox.className = 'status-box invalid';
+            statusBox.style.display = 'block';
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = `✅ ${message}`;
+            successMessage.classList.add('visible');
+            statusBox.innerHTML = `<strong>Status:</strong> ✅ Valid`;
+            statusBox.className = 'status-box valid';
+            statusBox.style.display = 'block';
+        }
+
+        // Event listeners
+        validateBtn.addEventListener('click', validateDateRange);
+
+        clearBtn.addEventListener('click', () => {
+            startDateInput.value = '';
+            endDateInput.value = '';
+            errorMessage.classList.remove('visible');
+            successMessage.classList.remove('visible');
+            statusBox.style.display = 'none';
+            startDateInput.classList.remove('error', 'success');
+            endDateInput.classList.remove('error', 'success');
+        });
+
+        // Auto-validate on date change
+        startDateInput.addEventListener('change', () => {
+            if (endDateInput.value) validateDateRange();
+        });
+
+        endDateInput.addEventListener('change', () => {
+            if (startDateInput.value) validateDateRange();
+        });
+
+        // Test scenario buttons
+        document.querySelectorAll('.test-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const scenario = btn.dataset.scenario;
+                const today = new Date();
+
+                switch (scenario) {
+                    case 'reversed':
+                        startDateInput.value = formatDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
+                        endDateInput.value = formatDate(today);
+                        break;
+                    case 'far-reversed':
+                        startDateInput.value = formatDate(new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000));
+                        endDateInput.value = formatDate(today);
+                        break;
+                    case 'valid-range':
+                        startDateInput.value = formatDate(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
+                        endDateInput.value = formatDate(today);
+                        break;
+                    case 'same-day':
+                        const sameDay = formatDate(new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000));
+                        startDateInput.value = sameDay;
+                        endDateInput.value = sameDay;
+                        break;
+                    case 'only-start':
+                        startDateInput.value = formatDate(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
+                        endDateInput.value = '';
+                        break;
+                    case 'only-end':
+                        startDateInput.value = '';
+                        endDateInput.value = formatDate(today);
+                        break;
+                }
+
+                validateDateRange();
+            });
+        });
+    </script>
+</body>
+</html>

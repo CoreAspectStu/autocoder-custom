@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAT Gateway - Test Results Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        /* Accessibility: Visually hidden labels for screen readers */
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-btn {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-btn:hover {
+            background: #5568d3;
+        }
+
+        .clear-btn {
+            padding: 12px 24px;
+            background: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: #4b5563;
+        }
+
+        .scope-selector {
+            display: flex;
+            gap: 8px;
+        }
+
+        .scope-btn {
+            padding: 8px 16px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scope-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .scope-btn.active {
+            background: #dbeafe;
+            color: #1e40af;
+            border-color: #3b82f6;
+        }
+
+        .results-info {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .results-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
+        }
+
+        /* Feature #280: Empty Search State Styles */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .empty-state-emoji {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-title {
+            font-size: 24px;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-message {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        .empty-state-hint {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        .clear-search-btn {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .clear-search-btn:hover {
+            background: #5568d3;
+        }
+
+        /* Test Result Cards */
+        .test-result {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .test-result:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .test-result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .test-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .test-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .test-status.passed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .test-status.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .test-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .test-error {
+            margin-top: 12px;
+            padding: 12px;
+            background: #fef2f2;
+            border-left: 3px solid #ef4444;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #991b1b;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-size: 16px;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 16px;
+            color: #991b1b;
+            font-size: 14px;
+        }
+
+        /* ARIA Live Regions for screen readers */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Live region for status updates */
+        [aria-live="polite"],
+        [aria-live="assertive"] {
+            /* Ensure live regions are perceivable by screen readers */
+        }
+
+        /* Error announcement region */
+        #errorAnnouncement {
+            /* For screen reader announcements */
+        }
+
+        /* Status announcement region */
+        #statusAnnouncement {
+            /* For screen reader announcements */
+        }
+
+        .export-btn {
+            padding: 10px 20px;
+            background: #059669;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .export-btn:hover {
+            background: #047857;
+        }
+
+        .export-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .export-btn.loading {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        /* Feature #389: Bulk Operations Styles */
+        .bulk-actions-bar {
+            background: #3b82f6;
+            border-radius: 12px;
+            padding: 16px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .bulk-actions-bar.visible {
+            display: flex;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bulk-actions-info {
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .bulk-actions-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .bulk-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bulk-btn.delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .bulk-btn.delete:hover {
+            background: #dc2626;
+        }
+
+        .bulk-btn.archive {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .bulk-btn.archive:hover {
+            background: #d97706;
+        }
+
+        .bulk-btn.cancel {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .bulk-btn.cancel:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .bulk-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .select-all-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .select-all-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .select-all-container label {
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+        }
+
+        .test-result {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .test-result-checkbox {
+            margin-top: 2px;
+        }
+
+        .test-result-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .test-result-wrapper {
+            flex: 1;
+        }
+
+        .test-result.selected {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+
+        /* Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .modal p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.confirm {
+            background: #ef4444;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #dc2626;
+        }
+
+        .modal-btn.cancel {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #d1d5db;
+        }
+    </style>
+</head>
+<body>
+    <!-- ARIA Live Regions for screen reader announcements (Feature #336) -->
+    <div id="errorAnnouncement" role="alert" aria-live="assertive" class="sr-only"></div>
+    <div id="statusAnnouncement" role="status" aria-live="polite" class="sr-only"></div>
+
+    <div class="container" role="main">
+        <header class="header" role="banner">
+            <h1 id="pageHeading">🔍 Test Results Search</h1>
+            <p>Search and filter test results by name. Feature #280: Empty search results show helpful message.</p>
+        </header>
+
+        <section class="search-container" data-persist="true" data-form-id="results_search" aria-labelledby="pageHeading">
+            <form role="search" onsubmit="event.preventDefault(); performSearch();">
+                <label for="searchInput" class="visually-hidden">Search test results by name</label>
+                <div class="search-box">
+                    <input
+                        type="text"
+                        id="searchInput"
+                        name="search"
+                        class="search-input"
+                        placeholder="Enter test name to search..."
+                        autocomplete="off"
+                        data-persist="true"
+                        aria-label="Search test results"
+                    >
+                    <button class="search-btn" onclick="performSearch()" aria-label="Submit search">Search</button>
+                    <button class="clear-btn" onclick="clearSearch()" aria-label="Clear search">Clear</button>
+                </div>
+
+                <fieldset class="scope-selector">
+                    <legend class="visually-hidden">Filter results by scope</legend>
+                    <button class="scope-btn active" data-scope="active" onclick="setScope('active')" aria-pressed="true">Active</button>
+                    <button class="scope-btn" data-scope="archived" onclick="setScope('archived')" aria-pressed="false">Archived</button>
+                    <button class="scope-btn" data-scope="all" onclick="setScope('all')" aria-pressed="false">All</button>
+                    <button class="export-btn" id="exportPdfBtn" onclick="exportToPDF()" aria-label="Export results to PDF">
+                        📄 Export PDF
+                    </button>
+                </fieldset>
+            </form>
+        </section>
+
+        <div class="results-info" id="resultsInfo" role="status" aria-live="polite">
+            Enter a search term to find test results
+        </div>
+
+        <!-- Feature #389: Bulk Actions Bar -->
+        <div class="bulk-actions-bar" id="bulkActionsBar" role="region" aria-label="Bulk actions">
+            <div class="bulk-actions-info">
+                <span id="selectedCount">0</span> items selected
+            </div>
+            <div class="bulk-actions-buttons">
+                <button class="bulk-btn archive" onclick="confirmBulkArchive()" aria-label="Archive selected items">
+                    📦 Archive
+                </button>
+                <button class="bulk-btn delete" onclick="confirmBulkDelete()" aria-label="Delete selected items">
+                    🗑️ Delete
+                </button>
+                <button class="bulk-btn cancel" onclick="clearSelection()" aria-label="Clear selection">
+                    ✖️ Cancel
+                </button>
+            </div>
+        </div>
+
+        <section class="results-container" id="resultsContainer" aria-labelledby="resultsHeading" aria-live="polite">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" aria-label="Select all results">
+                <label for="selectAll">Select All</label>
+            </div>
+            <h2 id="resultsHeading" class="sr-only">Search Results</h2>
+            <div class="loading">Loading results...</div>
+        </section>
+    </div>
+
+    <!-- Feature #389: Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal">
+            <h2 id="modalTitle">Confirm Bulk Action</h2>
+            <p id="modalMessage">Are you sure you want to proceed?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-btn confirm" id="modalConfirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="form_persistence.js"></script>
+    <script>
+        let currentScope = 'active';
+        let currentSearch = '';
+        let selectedIds = new Set();  // Feature #389: Track selected test IDs
+        let currentAction = null;     // Feature #389: Track current bulk action
+        const API_BASE = 'http://localhost:4001';
+
+        // Feature #313: Form data survives refresh
+        // Form persistence is automatically initialized by form_persistence.js
+
+        // Load initial results on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Initialize form persistence
+            formPersistence.init();
+
+            // Restore scope and search from persisted state
+            const savedScope = formPersistence.loadState('results_search_scope');
+            const savedSearch = formPersistence.loadState('results_search_input');
+
+        // Feature #336: Helper functions for screen reader announcements
+        function announceToScreenReader(message, isAssertive = false) {
+            /**
+             * Announce a message to screen readers using ARIA live regions
+             * @param {string} message - The message to announce
+             * @param {boolean} isAssertive - True for critical errors (interrupts), false for status updates
+             */
+            const regionId = isAssertive ? 'errorAnnouncement' : 'statusAnnouncement';
+            const region = document.getElementById(regionId);
+
+            if (region) {
+                // Clear the region first to ensure the same message is announced again if needed
+                region.textContent = '';
+
+                // Use setTimeout to ensure screen readers pick up the change
+                setTimeout(() => {
+                    region.textContent = message;
+                }, 100);
+            }
+        }
+
+        function announceError(message) {
+            /**
+             * Announce an error message to screen readers (assertive - interrupts immediately)
+             */
+            console.error('[Screen Reader]', message);
+            announceToScreenReader(message, true);
+        }
+
+        function announceStatus(message) {
+            /**
+             * Announce a status update to screen readers (polite - waits for pause)
+             */
+            console.log('[Screen Reader]', message);
+            announceToScreenReader(message, false);
+        }
+
+            if (savedScope !== null) {
+                currentScope = savedScope;
+                setScope(currentScope, false); // Don't trigger search yet
+            }
+
+            if (savedSearch !== null && savedSearch !== '') {
+                currentSearch = savedSearch;
+                document.getElementById('searchInput').value = savedSearch;
+            }
+
+            // Load results with restored state
+            loadResults();
+
+            // Allow Enter key to trigger search
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+        });
+
+        function setScope(scope, shouldSearch = true) {
+            currentScope = scope;
+
+            // Feature #313: Save scope to localStorage
+            formPersistence.saveState('results_search_scope', scope);
+
+            // Update active button and ARIA state
+            document.querySelectorAll('.scope-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+                if (btn.dataset.scope === scope) {
+                    btn.classList.add('active');
+                    btn.setAttribute('aria-pressed', 'true');
+                }
+            });
+
+            // Reload results with current search
+            if (shouldSearch) {
+                loadResults();
+            }
+        }
+
+        function performSearch() {
+            currentSearch = document.getElementById('searchInput').value.trim();
+
+            // Feature #313: Save search term to localStorage
+            formPersistence.saveState('results_search_input', currentSearch);
+
+            loadResults();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            currentSearch = '';
+
+            // Feature #313: Clear saved search term
+            formPersistence.saveState('results_search_input', '');
+
+            loadResults();
+        }
+
+        async function loadResults() {
+            const container = document.getElementById('resultsContainer');
+            const info = document.getElementById('resultsInfo');
+
+            // Show loading state
+            container.innerHTML = '<div class="loading">Searching results...</div>';
+
+            try {
+                // Build URL with query parameters
+                let url = `${API_BASE}/api/results?scope=${currentScope}`;
+                if (currentSearch) {
+                    url += `&search=${encodeURIComponent(currentSearch)}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Update info text
+                if (currentSearch) {
+                    info.innerHTML = `Found <strong>${data.count}</strong> results for "<strong>${escapeHtml(currentSearch)}</strong>" in ${currentScope} tests`;
+                    // Feature #336: Announce search results to screen readers
+                    announceStatus(`Found ${data.count} results for ${currentSearch} in ${currentScope} tests`);
+                } else {
+                    info.innerHTML = `Showing <strong>${data.count}</strong> ${currentScope} tests`;
+                    // Feature #336: Announce results to screen readers
+                    announceStatus(`Showing ${data.count} ${currentScope} tests`);
+                }
+
+                // Display results
+                if (data.count === 0) {
+                    displayEmptyState();
+                } else {
+                    displayResults(data.results);
+                }
+
+            } catch (error) {
+                console.error('Error loading results:', error);
+
+                // Feature #336: Announce error to screen readers
+                announceError(`Error loading results: ${error.message}. Please check if the API server is running on port 4001.`);
+
+                container.innerHTML = `
+                    <div class="error" role="alert">
+                        <strong>Error loading results:</strong><br>
+                        ${escapeHtml(error.message)}<br><br>
+                        <small>Make sure the API server is running on port 4001</small>
+                    </div>
+                `;
+                info.innerHTML = 'Failed to load results';
+            }
+        }
+
+        function displayResults(results) {
+            const container = document.getElementById('resultsContainer');
+
+            const html = results.map(result => `
+                <div class="test-result ${selectedIds.has(result.test_id) ? 'selected' : ''}" data-test-id="${result.test_id}">
+                    <div class="test-result-checkbox">
+                        <input
+                            type="checkbox"
+                            class="result-checkbox"
+                            data-test-id="${result.test_id}"
+                            ${selectedIds.has(result.test_id) ? 'checked' : ''}
+                            onchange="toggleSelection('${result.test_id}')"
+                            aria-label="Select ${result.test_name}"
+                        >
+                    </div>
+                    <div class="test-result-wrapper">
+                        <div class="test-result-header">
+                            <div class="test-name">${escapeHtml(result.test_name)}</div>
+                            <div class="test-status ${result.passed ? 'passed' : 'failed'}">
+                                ${result.passed ? '✅ PASSED' : '❌ FAILED'}
+                            </div>
+                        </div>
+                        <div class="test-meta">
+                            <span>⏱️ ${result.duration_ms}ms</span>
+                            <span>🆔 ${result.test_id.substring(0, 8)}...</span>
+                        </div>
+                        ${result.error_message ? `<div class="test-error">${escapeHtml(result.error_message)}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            // Include the select-all container
+            const selectAllHtml = `
+                <div class="select-all-container">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" aria-label="Select all results">
+                    <label for="selectAll">Select All</label>
+                </div>
+                ${html}
+            `;
+
+            container.innerHTML = selectAllHtml;
+
+            // Update select all checkbox state
+            const selectAllCheckbox = document.getElementById('selectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = selectedIds.size === results.length && results.length > 0;
+            }
+        }
+
+        // Feature #280: Display empty search state with helpful message
+        function displayEmptyState() {
+            const container = document.getElementById('resultsContainer');
+
+            if (currentSearch) {
+                // Search returned no results
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-emoji">🔍</div>
+                        <div class="empty-state-title">No tests found</div>
+                        <div class="empty-state-message">
+                            No tests matching "<strong>${escapeHtml(currentSearch)}</strong>" were found
+                        </div>
+                        <div class="empty-state-hint">
+                            Try different keywords or check your spelling
+                        </div>
+                        <button class="clear-search-btn" onclick="clearSearch()">
+                            Clear Search
+                        </button>
+                    </div>
+                `;
+            } else {
+                // No results at all in this scope
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-emoji">📭</div>
+                        <div class="empty-state-title">No results found</div>
+                        <div class="empty-state-message">
+                            There are no ${currentScope} test results
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function getAuthToken() {
+            // For demo purposes, use admin token
+            // In production, this would come from login
+            return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc1MTAwMDAwMH0.demo';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Feature #389: Toggle selection of a single result
+        function toggleSelection(testId) {
+            if (selectedIds.has(testId)) {
+                selectedIds.delete(testId);
+            } else {
+                selectedIds.add(testId);
+            }
+
+            // Update UI
+            const resultRow = document.querySelector(`.test-result[data-test-id="${testId}"]`);
+            if (resultRow) {
+                resultRow.classList.toggle('selected', selectedIds.has(testId));
+            }
+
+            // Update select all checkbox
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const allCheckboxes = document.querySelectorAll('.result-checkbox');
+            selectAllCheckbox.checked = selectedIds.size === allCheckboxes.length && allCheckboxes.length > 0;
+
+            updateBulkActionsBar();
+        }
+
+        // Feature #389: Toggle select all
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.result-checkbox');
+
+            if (selectAllCheckbox.checked) {
+                // Select all
+                checkboxes.forEach(cb => {
+                    const testId = cb.dataset.testId;
+                    selectedIds.add(testId);
+                    cb.checked = true;
+
+                    const resultRow = document.querySelector(`.test-result[data-test-id="${testId}"]`);
+                    if (resultRow) resultRow.classList.add('selected');
+                });
+            } else {
+                // Deselect all
+                checkboxes.forEach(cb => {
+                    const testId = cb.dataset.testId;
+                    selectedIds.delete(testId);
+                    cb.checked = false;
+
+                    const resultRow = document.querySelector(`.test-result[data-test-id="${testId}"]`);
+                    if (resultRow) resultRow.classList.remove('selected');
+                });
+            }
+
+            updateBulkActionsBar();
+        }
+
+        // Feature #389: Update bulk actions bar visibility and count
+        function updateBulkActionsBar() {
+            const bulkBar = document.getElementById('bulkActionsBar');
+            const selectedCount = document.getElementById('selectedCount');
+
+            if (selectedIds.size > 0) {
+                bulkBar.classList.add('visible');
+                selectedCount.textContent = selectedIds.size;
+            } else {
+                bulkBar.classList.remove('visible');
+            }
+        }
+
+        // Feature #389: Clear selection
+        function clearSelection() {
+            selectedIds.clear();
+
+            const checkboxes = document.querySelectorAll('.result-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                const testId = cb.dataset.testId;
+                const resultRow = document.querySelector(`.test-result[data-test-id="${testId}"]`);
+                if (resultRow) resultRow.classList.remove('selected');
+            });
+
+            document.getElementById('selectAll').checked = false;
+            updateBulkActionsBar();
+        }
+
+        // Feature #389: Confirm bulk delete
+        function confirmBulkDelete() {
+            currentAction = 'delete';
+            showModal(
+                'Confirm Bulk Delete',
+                `Are you sure you want to delete ${selectedIds.size} test result(s)? This action cannot be undone.`,
+                'Delete',
+                executeBulkDelete
+            );
+        }
+
+        // Feature #389: Confirm bulk archive
+        function confirmBulkArchive() {
+            currentAction = 'archive';
+            showModal(
+                'Confirm Bulk Archive',
+                `Are you sure you want to archive ${selectedIds.size} test result(s)?`,
+                'Archive',
+                executeBulkArchive
+            );
+        }
+
+        // Feature #389: Execute bulk delete
+        async function executeBulkDelete() {
+            const testIds = Array.from(selectedIds);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/results/bulk/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ test_ids: testIds })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                // Show success message
+                const info = document.getElementById('resultsInfo');
+                const originalInfo = info.innerHTML;
+                info.innerHTML = `✅ ${result.message}`;
+
+                // Feature #336: Announce success to screen readers
+                announceStatus(`Bulk delete completed: ${result.summary.deleted_count} deleted, ${result.summary.failed_count} failed`);
+
+                setTimeout(() => {
+                    info.innerHTML = originalInfo;
+                }, 3000);
+
+                // Reload results to reflect changes
+                loadResults();
+
+                // Clear selection
+                clearSelection();
+
+            } catch (error) {
+                console.error('Error executing bulk delete:', error);
+
+                // Feature #336: Announce error to screen readers
+                announceError(`Failed to delete test results: ${error.message}`);
+
+                alert(`Failed to delete: ${error.message}`);
+            }
+        }
+
+        // Feature #389: Execute bulk archive
+        async function executeBulkArchive() {
+            const testIds = Array.from(selectedIds);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/results/bulk/archive`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ test_ids: testIds })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                // Show success message
+                const info = document.getElementById('resultsInfo');
+                const originalInfo = info.innerHTML;
+                info.innerHTML = `✅ ${result.message}`;
+
+                // Feature #336: Announce success to screen readers
+                announceStatus(`Bulk archive completed: ${result.summary.archived_count} archived, ${result.summary.failed_count} failed`);
+
+                setTimeout(() => {
+                    info.innerHTML = originalInfo;
+                }, 3000);
+
+                // Reload results to reflect changes
+                loadResults();
+
+                // Clear selection
+                clearSelection();
+
+            } catch (error) {
+                console.error('Error executing bulk archive:', error);
+
+                // Feature #336: Announce error to screen readers
+                announceError(`Failed to archive test results: ${error.message}`);
+
+                alert(`Failed to archive: ${error.message}`);
+            }
+        }
+
+        // Feature #389: Show modal
+        function showModal(title, message, confirmText, onConfirm) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('modalConfirmBtn').textContent = confirmText;
+
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            confirmBtn.onclick = () => {
+                onConfirm();
+                closeModal();
+            };
+
+            document.getElementById('confirmModal').classList.add('visible');
+
+            // Focus on cancel button for accessibility
+            document.querySelector('.modal-btn.cancel').focus();
+        }
+
+        // Feature #389: Close modal
+        function closeModal() {
+            document.getElementById('confirmModal').classList.remove('visible');
+        }
+
+        // Feature #389: Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Feature #296: Export test results as PDF report
+        async function exportToPDF() {
+            const exportBtn = document.getElementById('exportPdfBtn');
+
+            // Disable button and show loading state
+            exportBtn.disabled = true;
+            exportBtn.classList.add('loading');
+            const originalText = exportBtn.innerHTML;
+            exportBtn.innerHTML = '📄 Generating PDF...';
+
+            try {
+                // Build URL with query parameters
+                let url = `${API_BASE}/api/results/export/pdf?scope=${currentScope}`;
+                if (currentSearch) {
+                    url += `&search=${encodeURIComponent(currentSearch)}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Get filename from Content-Disposition header
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'uat_test_results.pdf';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+
+                // Download PDF
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(downloadUrl);
+
+                // Show success message
+                const info = document.getElementById('resultsInfo');
+                const originalInfo = info.innerHTML;
+                info.innerHTML = `✅ PDF exported successfully: ${filename}`;
+
+                // Feature #336: Announce success to screen readers
+                announceStatus(`PDF exported successfully: ${filename}`);
+
+                setTimeout(() => {
+                    info.innerHTML = originalInfo;
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error exporting PDF:', error);
+
+                // Feature #336: Announce error to screen readers
+                announceError(`Failed to export PDF: ${error.message}. Please try again.`);
+
+                alert(`Failed to export PDF: ${error.message}`);
+            } finally {
+                // Re-enable button and restore original text
+                exportBtn.disabled = false;
+                exportBtn.classList.remove('loading');
+                exportBtn.innerHTML = originalText;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+diff --git a/server/main.py b/server/main.py
+--- a/server/main.py
++++ b/server/main.py
+@@ -31,6 +31,7 @@ from .routers import (
+     projects_router,
+     settings_router,
+     spec_creation_router,
++    status_router,
+     terminal_router,
+ )
+@@ -117,6 +118,7 @@ app.include_router(filesystem_router)
+ app.include_router(assistant_chat_router)
+ app.include_router(settings_router)
+ app.include_router(terminal_router)
++app.include_router(status_router)
+
+diff --git a/server/routers/__init__.py b/server/routers/__init__.py
+--- a/server/routers/__init__.py
++++ b/server/routers/__init__.py
+@@ -14,6 +14,7 @@ from .filesystem import router as filesystem_router
+ from .projects import router as projects_router
+ from .settings import router as settings_router
+ from .spec_creation import router as spec_creation_router
++from .status import router as status_router
+ from .terminal import router as terminal_router
+
+ __all__ = [
+@@ -26,5 +27,6 @@ __all__ = [
+     "filesystem_router",
+     "assistant_chat_router",
+     "settings_router",
++    "status_router",
+     "terminal_router",
+ ]

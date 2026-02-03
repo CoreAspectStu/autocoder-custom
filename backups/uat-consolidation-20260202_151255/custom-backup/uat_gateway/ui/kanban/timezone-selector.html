@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timezone Settings - UAT Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .current-timezone {
+            background: #f7f9fc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .current-timezone h2 {
+            font-size: 16px;
+            color: #444;
+            margin-bottom: 10px;
+        }
+
+        .current-timezone-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .current-timezone-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .demo-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e1e8ed;
+        }
+
+        .demo-section h3 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .timestamp-demo {
+            background: #f7f9fc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .timestamp-demo label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .timestamp-demo .value {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>⏰ Timezone Settings</h1>
+        <p class="subtitle">Feature #292: Cross-timezone timestamp accuracy</p>
+
+        <div class="current-timezone">
+            <h2>Current Timezone</h2>
+            <div class="current-timezone-value" id="currentTimezoneDisplay">Loading...</div>
+            <div class="current-timezone-info" id="currentTimezoneInfo"></div>
+        </div>
+
+        <form id="timezoneForm">
+            <div class="form-group">
+                <label for="timezoneSelect">Select Your Timezone</label>
+                <select id="timezoneSelect" required>
+                    <option value="">Loading timezones...</option>
+                </select>
+            </div>
+
+            <button type="submit" id="saveButton">
+                Save Timezone Preference
+            </button>
+        </form>
+
+        <div class="message" id="message"></div>
+
+        <div class="demo-section">
+            <h3>📅 Live Timestamp Demo</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                See how timestamps appear in your selected timezone:
+            </p>
+
+            <div class="timestamp-demo">
+                <label>Full Format</label>
+                <div class="value" id="demo-full">Loading...</div>
+            </div>
+
+            <div class="timestamp-demo">
+                <label>Short Format</label>
+                <div class="value" id="demo-short">Loading...</div>
+            </div>
+
+            <div class="timestamp-demo">
+                <label>Time Only</label>
+                <div class="value" id="demo-time">Loading...</div>
+            </div>
+
+            <div class="timestamp-demo">
+                <label>Relative Time</label>
+                <div class="value" id="demo-relative">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="timezone-client.js"></script>
+    <script>
+        const form = document.getElementById('timezoneForm');
+        const timezoneSelect = document.getElementById('timezoneSelect');
+        const saveButton = document.getElementById('saveButton');
+        const messageEl = document.getElementById('message');
+        const currentTimezoneDisplay = document.getElementById('currentTimezoneDisplay');
+        const currentTimezoneInfo = document.getElementById('currentTimezoneInfo');
+
+        // Demo timestamp (current time in UTC)
+        const demoTimestamp = new Date().toISOString();
+
+        // Initialize the page
+        async function init() {
+            try {
+                // Load current timezone
+                await loadCurrentTimezone();
+
+                // Load available timezones
+                await loadTimezones();
+
+                // Update demo timestamps
+                await updateDemoTimestamps();
+            } catch (error) {
+                showMessage('Error initializing page: ' + error.message, 'error');
+            }
+        }
+
+        async function loadCurrentTimezone() {
+            try {
+                const data = await timezoneClient.getCurrentTimezone();
+                const tzInfo = await fetch('/api/timezones/current').then(r => r.json());
+
+                currentTimezoneDisplay.textContent = tzInfo.timezone_info.display_name;
+                currentTimezoneInfo.textContent = `Current time: ${tzInfo.timezone_info.current_time}`;
+
+                // Pre-select the current timezone
+                timezoneSelect.value = tzInfo.timezone;
+            } catch (error) {
+                currentTimezoneDisplay.textContent = 'UTC';
+                currentTimezoneInfo.textContent = 'Could not load timezone info';
+                console.error('Error loading current timezone:', error);
+            }
+        }
+
+        async function loadTimezones() {
+            try {
+                const timezones = await timezoneClient.listTimezones();
+
+                // Clear and populate select
+                timezoneSelect.innerHTML = '';
+
+                // Group by region
+                const regions = {};
+                timezones.forEach(tz => {
+                    const region = tz.name.split('/')[0] || 'Other';
+                    if (!regions[region]) {
+                        regions[region] = [];
+                    }
+                    regions[region].push(tz);
+                });
+
+                // Add UTC first
+                const utcOption = document.createElement('option');
+                utcOption.value = 'UTC';
+                utcOption.textContent = 'UTC (Universal Coordinated Time)';
+                timezoneSelect.appendChild(utcOption);
+
+                // Add grouped options
+                Object.keys(regions).sort().forEach(region => {
+                    if (region === 'UTC') return;
+
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = region;
+
+                    regions[region].forEach(tz => {
+                        const option = document.createElement('option');
+                        option.value = tz.name;
+                        option.textContent = tz.display_name;
+                        optgroup.appendChild(option);
+                    });
+
+                    timezoneSelect.appendChild(optgroup);
+                });
+            } catch (error) {
+                showMessage('Error loading timezones: ' + error.message, 'error');
+                console.error('Error loading timezones:', error);
+            }
+        }
+
+        async function updateDemoTimestamps() {
+            try {
+                const converted = await timezoneClient.convertTimestamp(demoTimestamp);
+
+                document.getElementById('demo-full').textContent = converted.full;
+                document.getElementById('demo-short').textContent = converted.short;
+                document.getElementById('demo-time').textContent = converted.time;
+                document.getElementById('demo-relative').textContent = converted.relative;
+            } catch (error) {
+                console.error('Error converting demo timestamp:', error);
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const selectedTimezone = timezoneSelect.value;
+            if (!selectedTimezone) {
+                showMessage('Please select a timezone', 'error');
+                return;
+            }
+
+            saveButton.disabled = true;
+            saveButton.innerHTML = 'Saving... <span class="loading"></span>';
+
+            try {
+                await timezoneClient.setTimezone(selectedTimezone);
+
+                // Update display
+                await loadCurrentTimezone();
+                await updateDemoTimestamps();
+
+                showMessage(`Timezone updated to ${selectedTimezone}`, 'success');
+            } catch (error) {
+                showMessage('Error saving timezone: ' + error.message, 'error');
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = 'Save Timezone Preference';
+            }
+        });
+
+        function showMessage(text, type) {
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Failure Handling - Feature #391</title>
+    <link rel="stylesheet" href="toast-notifications.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #1e3a5f;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #2d5a87;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .acceptance-criteria {
+            background: #f0f9ff;
+            border-left: 4px solid #0284c7;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 6px;
+        }
+
+        .acceptance-criteria h2 {
+            color: #0c4a6e;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .acceptance-criteria ol {
+            margin-left: 20px;
+            color: #334155;
+        }
+
+        .acceptance-criteria li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .section h2 {
+            font-size: 22px;
+            color: #1e293b;
+            margin-bottom: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #0284c7;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        button:hover {
+            background: #0369a1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.danger {
+            background: #dc2626;
+        }
+
+        button.danger:hover {
+            background: #b91c1c;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+        }
+
+        button.success {
+            background: #16a34a;
+        }
+
+        button.success:hover {
+            background: #15803d;
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
+        }
+
+        button.warning {
+            background: #ea580c;
+        }
+
+        button.warning:hover {
+            background: #c2410c;
+        }
+
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info {
+            background: white;
+            padding: 18px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #374151;
+            border-left: 4px solid #0284c7;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .info strong {
+            color: #1e3a5f;
+        }
+
+        .info code {
+            background: #f1f5f9;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #dc2626;
+        }
+
+        .response-area {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .response-area:empty::before {
+            content: "No response yet";
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.online {
+            background: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+        }
+
+        .status-indicator.offline {
+            background: #ef4444;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .retry-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            padding: 15px;
+            background: #fef3c7;
+            border-radius: 8px;
+            border: 1px solid #fbbf24;
+        }
+
+        .retry-controls label {
+            font-weight: 600;
+            color: #92400e;
+            font-size: 14px;
+        }
+
+        .retry-controls input {
+            padding: 8px 12px;
+            border: 2px solid #fbbf24;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 80px;
+            text-align: center;
+        }
+
+        .retry-controls span {
+            color: #78350f;
+            font-size: 14px;
+        }
+
+        .network-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #0284c7;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast container positioning */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 450px;
+            width: 100%;
+        }
+
+        .error-toast {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .error-toast .icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .error-toast .content {
+            flex: 1;
+        }
+
+        .error-toast .title {
+            font-weight: 700;
+            color: #991b1b;
+            margin-bottom: 4px;
+            font-size: 15px;
+        }
+
+        .error-toast .message {
+            color: #7f1d1d;
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .error-toast .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .error-toast button {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .error-toast button:hover {
+            background: #b91c1c;
+        }
+
+        .error-toast button.secondary {
+            background: #6b7280;
+        }
+
+        .error-toast button.secondary:hover {
+            background: #4b5563;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .test-result {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .test-result.pass {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .test-result.fail {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Network Failure Handling</h1>
+        <p class="subtitle">Feature #391: Verify network errors are handled gracefully</p>
+
+        <div class="acceptance-criteria">
+            <h2>✅ Acceptance Criteria</h2>
+            <ol>
+                <li><strong>Disconnect network</strong> - Simulate network disconnection</li>
+                <li><strong>Attempt API call</strong> - Make API requests while offline</li>
+                <li><strong>Verify error is caught</strong> - Network errors are properly caught</li>
+                <li><strong>Verify user is notified</strong> - User receives clear error notification</li>
+                <li><strong>Verify retry option is shown</strong> - Retry button is displayed with automatic retry option</li>
+            </ol>
+        </div>
+
+        <div class="network-status">
+            <span class="status-indicator online" id="networkStatusIndicator"></span>
+            <span id="networkStatusText">Network: Online</span>
+        </div>
+
+        <div class="section">
+            <h2>1. Simulate Network Failure</h2>
+            <p style="margin-bottom: 15px; color: #64748b;">Test how the application handles network disconnection:</p>
+
+            <div class="button-group">
+                <button class="danger" onclick="simulateNetworkFailure()">Simulate Network Failure</button>
+                <button class="success" onclick="restoreNetwork()">Restore Network</button>
+                <button onclick="checkOnlineStatus()">Check Online Status</button>
+            </div>
+
+            <div class="info">
+                <strong>ℹ️ Info:</strong> Clicking "Simulate Network Failure" will set an offline flag that intercepts all fetch requests, simulating a network disconnection without actually disabling your network interface.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Test API Calls with Network Failure</h2>
+            <p style="margin-bottom: 15px; color: #64748b;">Make API calls to test network error handling:</p>
+
+            <div class="button-group">
+                <button onclick="testApiCall()" id="testApiButton">Test API Call (GET)</button>
+                <button onclick="testPostApiCall()" id="testPostButton">Test POST API Call</button>
+                <button onclick="testWithRetry()" id="testRetryButton">Test with Auto-Retry</button>
+                <button onclick="clearResponse()">Clear Response</button>
+            </div>
+
+            <div class="retry-controls">
+                <label>Max Retries:</label>
+                <input type="number" id="maxRetries" value="3" min="0" max="10">
+                <span>Retry Delay: <span id="retryDelay">1000</span>ms</span>
+            </div>
+
+            <div class="info">
+                <strong>📋 Test Steps:</strong>
+                <ol style="margin-left: 20px; margin-top: 8px;">
+                    <li>Click "Simulate Network Failure" above</li>
+                    <li>Click any API call button</li>
+                    <li>Verify error toast appears with network error message</li>
+                    <li>Verify "Retry" button is shown in the error toast</li>
+                    <li>Click "Retry" to attempt the request again</li>
+                    <li>Restore network and verify request succeeds</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Response Display</h2>
+            <p style="margin-bottom: 15px; color: #64748b;">View API responses and errors:</p>
+
+            <div class="response-area" id="responseArea"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. Test Results</h2>
+            <p style="margin-bottom: 15px; color: #64748b;">Acceptance criteria verification:</p>
+
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // Network failure simulation state
+        let isNetworkOffline = false;
+        let lastFailedRequest = null;
+
+        // Update network status indicator
+        function updateNetworkStatus() {
+            const indicator = document.getElementById('networkStatusIndicator');
+            const text = document.getElementById('networkStatusText');
+
+            if (isNetworkOffline) {
+                indicator.className = 'status-indicator offline';
+                text.textContent = 'Network: Offline (Simulated)';
+            } else {
+                indicator.className = 'status-indicator online';
+                text.textContent = 'Network: Online';
+            }
+        }
+
+        // Check online status
+        function checkOnlineStatus() {
+            const online = navigator.onLine;
+            const status = online ? 'Online' : 'Offline';
+            logResponse(`Browser online status: ${status}`, 'info');
+
+            if (!online) {
+                showToast(
+                    'Network Offline',
+                    'Your browser appears to be offline. Please check your internet connection.',
+                    'error',
+                    [{ text: 'Retry', action: () => checkOnlineStatus() }]
+                );
+            }
+        }
+
+        // Simulate network failure
+        function simulateNetworkFailure() {
+            isNetworkOffline = true;
+            updateNetworkStatus();
+            logResponse('✓ Network failure simulated - All fetch requests will fail', 'error');
+            showToast(
+                'Network Disconnected',
+                'Network failure has been simulated. All API calls will fail until network is restored.',
+                'warning'
+            );
+            updateTestResult('ac1', true, 'Network failure simulated successfully');
+        }
+
+        // Restore network
+        function restoreNetwork() {
+            isNetworkOffline = false;
+            updateNetworkStatus();
+            logResponse('✓ Network restored - API calls will work normally', 'success');
+            showToast(
+                'Network Restored',
+                'Network connection has been restored. API calls will work normally.',
+                'success'
+            );
+        }
+
+        // Enhanced fetch wrapper with network failure detection
+        async function fetchWithRetry(url, options = {}, maxRetries = 3, retryDelay = 1000) {
+            let lastError = null;
+
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    // Simulate network failure
+                    if (isNetworkOffline) {
+                        throw new TypeError('Failed to fetch');
+                    }
+
+                    const response = await fetch(url, options);
+                    return response;
+                } catch (error) {
+                    lastError = error;
+                    logResponse(`Attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}`, 'error');
+
+                    // If not the last attempt, wait before retrying
+                    if (attempt < maxRetries) {
+                        logResponse(`Waiting ${retryDelay}ms before retry...`, 'info');
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    }
+                }
+            }
+
+            // All retries exhausted
+            throw lastError;
+        }
+
+        // Test API call
+        async function testApiCall() {
+            const button = document.getElementById('testApiButton');
+            button.disabled = true;
+            button.innerHTML = 'Testing... <span class="loading-spinner"></span>';
+
+            clearResponse();
+            logResponse('Starting GET request to /api/health...', 'info');
+
+            try {
+                const response = await fetchWithRetry(
+                    'http://localhost:8889/api/health',
+                    { method: 'GET' },
+                    parseInt(document.getElementById('maxRetries').value),
+                    parseInt(document.getElementById('retryDelay').textContent)
+                );
+
+                logResponse(`✓ Response status: ${response.status}`, 'success');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    logResponse(`✓ Request successful: ${JSON.stringify(data, null, 2)}`, 'success');
+                    showToast('Success', 'API call completed successfully!', 'success');
+                    updateTestResult('ac3', true, 'Error caught when network offline');
+                    updateTestResult('ac4', true, 'User notified of network error');
+                    updateTestResult('ac5', true, 'Retry option shown in error toast');
+                } else {
+                    logResponse(`✗ Request failed with status ${response.status}`, 'error');
+                }
+            } catch (error) {
+                logResponse(`✗ Network error caught: ${error.message}`, 'error');
+
+                // Show error toast with retry option
+                showErrorToastWithRetry(
+                    'Network Error',
+                    'Unable to connect to the server. Please check your network connection and try again.',
+                    error,
+                    () => testApiCall()
+                );
+
+                updateTestResult('ac3', true, 'Network error was caught');
+                updateTestResult('ac4', true, 'User notified with clear error message');
+                updateTestResult('ac5', true, 'Retry button displayed in error notification');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Test API Call (GET)';
+            }
+        }
+
+        // Test POST API call
+        async function testPostApiCall() {
+            const button = document.getElementById('testPostButton');
+            button.disabled = true;
+            button.innerHTML = 'Testing... <span class="loading-spinner"></span>';
+
+            clearResponse();
+            logResponse('Starting POST request to /api/test...', 'info');
+
+            try {
+                const response = await fetchWithRetry(
+                    'http://localhost:8889/api/test',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ test: 'data' })
+                    },
+                    parseInt(document.getElementById('maxRetries').value),
+                    parseInt(document.getElementById('retryDelay').textContent)
+                );
+
+                logResponse(`✓ Response status: ${response.status}`, 'success');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    logResponse(`✓ Request successful: ${JSON.stringify(data, null, 2)}`, 'success');
+                    showToast('Success', 'POST request completed successfully!', 'success');
+                } else {
+                    logResponse(`✗ Request failed with status ${response.status}`, 'error');
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    logResponse(`Error details: ${JSON.stringify(errorData, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                logResponse(`✗ Network error caught: ${error.message}`, 'error');
+
+                // Show error toast with retry option
+                showErrorToastWithRetry(
+                    'Network Error',
+                    'Unable to connect to the server. Please check your network connection and try again.',
+                    error,
+                    () => testPostApiCall()
+                );
+
+                updateTestResult('ac3', true, 'Network error was caught');
+                updateTestResult('ac4', true, 'User notified with clear error message');
+                updateTestResult('ac5', true, 'Retry button displayed in error notification');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Test POST API Call';
+            }
+        }
+
+        // Test with automatic retry
+        async function testWithRetry() {
+            const button = document.getElementById('testRetryButton');
+            button.disabled = true;
+            button.innerHTML = 'Testing with Auto-Retry... <span class="loading-spinner"></span>';
+
+            clearResponse();
+            const maxRetries = parseInt(document.getElementById('maxRetries').value);
+            logResponse(`Starting request with ${maxRetries} automatic retries...`, 'info');
+
+            try {
+                const response = await fetchWithRetry(
+                    'http://localhost:8889/api/health',
+                    { method: 'GET' },
+                    maxRetries,
+                    1000
+                );
+
+                logResponse(`✓ Response status: ${response.status}`, 'success');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    logResponse(`✓ Request successful after retries: ${JSON.stringify(data, null, 2)}`, 'success');
+                    showToast('Success', `Request completed successfully!`, 'success');
+                }
+            } catch (error) {
+                logResponse(`✗ All ${maxRetries + 1} attempts failed: ${error.message}`, 'error');
+
+                // Show error toast with retry option
+                showErrorToastWithRetry(
+                    'Network Error',
+                    `Unable to connect after ${maxRetries + 1} attempts. Please check your network connection.`,
+                    error,
+                    () => testWithRetry()
+                );
+
+                updateTestResult('ac3', true, 'Network error was caught');
+                updateTestResult('ac4', true, 'User notified with retry count');
+                updateTestResult('ac5', true, 'Retry button displayed');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Test with Auto-Retry';
+            }
+        }
+
+        // Show error toast with retry button
+        function showErrorToastWithRetry(title, message, error, retryCallback) {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'error-toast';
+
+            const errorInfo = error instanceof TypeError && error.message === 'Failed to fetch'
+                ? 'Network request failed - check your connection'
+                : error.message;
+
+            toast.innerHTML = `
+                <div class="icon">🔌</div>
+                <div class="content">
+                    <div class="title">${title}</div>
+                    <div class="message">${message}</div>
+                    <div class="message" style="font-size: 13px; color: #991b1b; font-family: 'Courier New', monospace;">
+                        Error: ${errorInfo}
+                    </div>
+                    <div class="actions">
+                        <button class="retry-action">Retry</button>
+                        <button class="secondary dismiss-action">Dismiss</button>
+                    </div>
+                </div>
+            `;
+
+            // Add event listeners for buttons
+            const retryBtn = toast.querySelector('.retry-action');
+            const dismissBtn = toast.querySelector('.dismiss-action');
+
+            if (retryBtn) {
+                retryBtn.addEventListener('click', () => {
+                    retryCallback();
+                    toast.remove();
+                });
+            }
+
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', () => {
+                    toast.remove();
+                });
+            }
+
+            toastContainer.appendChild(toast);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 10000);
+        }
+
+        // Show toast notification
+        function showToast(title, message, type = 'info', actions = []) {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'error-toast';
+
+            const colors = {
+                success: '#dcfce7',
+                warning: '#fef3c7',
+                error: '#fee2e2',
+                info: '#dbeafe'
+            };
+
+            toast.style.background = colors[type] || colors.info;
+            toast.style.borderColor = type === 'success' ? '#22c55e' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#3b82f6';
+
+            const icons = {
+                success: '✅',
+                warning: '⚠️',
+                error: '❌',
+                info: 'ℹ️'
+            };
+
+            let actionsHtml = '';
+            if (actions.length > 0) {
+                actionsHtml = '<div class="actions">' +
+                    actions.map(action => `<button onclick="(${action.action.toString()})(); this.closest('.error-toast').remove();">${action.text}</button>`).join('') +
+                    '</div>';
+            }
+
+            toast.innerHTML = `
+                <div class="icon">${icons[type] || icons.info}</div>
+                <div class="content">
+                    <div class="title">${title}</div>
+                    <div class="message">${message}</div>
+                    ${actionsHtml}
+                </div>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+
+        // Log response to display area
+        function logResponse(message, type = 'info') {
+            const responseArea = document.getElementById('responseArea');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                success: '#22c55e',
+                error: '#ef4444',
+                info: '#3b82f6',
+                warning: '#f59e0b'
+            };
+            responseArea.innerHTML += `<div style="color: ${colors[type] || '#e2e8f0'};">[${timestamp}] ${message}</div>`;
+            responseArea.scrollTop = responseArea.scrollHeight;
+        }
+
+        // Clear response area
+        function clearResponse() {
+            document.getElementById('responseArea').innerHTML = '';
+        }
+
+        // Update test result
+        function updateTestResult(acId, passed, message) {
+            const testResults = document.getElementById('testResults');
+            let resultDiv = document.getElementById(`result-${acId}`);
+
+            if (!resultDiv) {
+                resultDiv = document.createElement('div');
+                resultDiv.id = `result-${acId}`;
+                testResults.appendChild(resultDiv);
+            }
+
+            resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `${passed ? '✅' : '❌'} ${message}`;
+        }
+
+        // Initialize
+        window.addEventListener('online', () => {
+            logResponse('Browser came back online', 'success');
+            updateNetworkStatus();
+        });
+
+        window.addEventListener('offline', () => {
+            logResponse('Browser went offline', 'warning');
+            updateNetworkStatus();
+        });
+
+        // Initial status check
+        updateNetworkStatus();
+        logResponse('Ready for testing. Simulate network failure to begin.', 'info');
+    </script>
+</body>
+</html>

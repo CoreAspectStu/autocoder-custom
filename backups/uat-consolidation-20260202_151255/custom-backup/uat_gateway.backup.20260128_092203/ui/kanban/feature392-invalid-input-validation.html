@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #392: Invalid Input Validation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #fecaca 0%, #f87171 50%, #ef4444 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #991b1b;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #dc2626;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fef2f2;
+            border-radius: 8px;
+            border: 1px solid #fecaca;
+        }
+
+        .section h2 {
+            font-size: 20px;
+            color: #991b1b;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="email"],
+        input[type="url"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Invalid field highlighting - AC4 */
+        input.invalid,
+        textarea.invalid,
+        select.invalid {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        input.invalid:focus,
+        textarea.invalid:focus,
+        select.invalid:focus {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .error-message {
+            display: none;
+            color: #dc2626;
+            font-size: 13px;
+            margin-top: 6px;
+            padding: 8px 12px;
+            background: #fef2f2;
+            border-left: 3px solid #ef4444;
+            border-radius: 4px;
+        }
+
+        .error-message.visible {
+            display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .test-cases {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .test-case {
+            padding: 12px;
+            background: white;
+            border: 2px solid #fecaca;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .test-case:hover {
+            border-color: #ef4444;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(239, 68, 68, 0.2);
+        }
+
+        .test-case.active {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .test-case-title {
+            font-weight: 600;
+            color: #991b1b;
+            margin-bottom: 4px;
+        }
+
+        .test-case-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .validation-summary {
+            padding: 16px;
+            background: #fef2f2;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .validation-summary h3 {
+            font-size: 16px;
+            color: #991b1b;
+            margin-bottom: 12px;
+        }
+
+        .validation-summary ul {
+            list-style: none;
+        }
+
+        .validation-summary li {
+            padding: 8px 0;
+            color: #374151;
+            font-size: 14px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .validation-summary li:before {
+            content: "✗";
+            position: absolute;
+            left: 0;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .validation-summary li.valid:before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .acceptance-criteria {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .acceptance-criteria h3 {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .acceptance-criteria ul {
+            list-style: none;
+        }
+
+        .acceptance-criteria li {
+            padding: 8px 0;
+            color: #4b5563;
+            font-size: 14px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .acceptance-criteria li:before {
+            content: "○";
+            position: absolute;
+            left: 0;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .acceptance-criteria li.passed:before {
+            content: "✓";
+            color: #10b981;
+        }
+
+        .acceptance-criteria li.passed {
+            color: #065f46;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .demo-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .demo-input {
+            padding: 8px;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .demo-input:hover {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        @media (max-width: 768px) {
+            .demo-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Feature #392: Invalid Input Validation</h1>
+        <p class="subtitle">Verify form validation catches invalid input with specific error messages</p>
+
+        <!-- Acceptance Criteria Checklist -->
+        <div class="section">
+            <h2>Acceptance Criteria</h2>
+            <div class="acceptance-criteria">
+                <h3>Verification Status</h3>
+                <ul id="ac-list">
+                    <li id="ac1">AC1: Submit form with invalid data</li>
+                    <li id="ac2">AC2: Verify validation error occurs</li>
+                    <li id="ac3">AC3: Verify error message is specific</li>
+                    <li id="ac4">AC4: Verify field is highlighted</li>
+                    <li id="ac5">AC5: Verify form doesn't submit</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Test Case Selector -->
+        <div class="section">
+            <h2>Test Cases</h2>
+            <div class="test-cases">
+                <div class="test-case" onclick="loadTestCase('empty')">
+                    <div class="test-case-title">Empty Field</div>
+                    <div class="test-case-desc">Submit with empty journey name</div>
+                </div>
+                <div class="test-case" onclick="loadTestCase('too-short')">
+                    <div class="test-case-title">Too Short</div>
+                    <div class="test-case-desc">Name less than 3 characters</div>
+                </div>
+                <div class="test-case" onclick="loadTestCase('too-long')">
+                    <div class="test-case-title">Too Long</div>
+                    <div class="test-case-desc">Name over 100 characters</div>
+                </div>
+                <div class="test-case" onclick="loadTestCase('invalid-chars')">
+                    <div class="test-case-title">Invalid Characters</div>
+                    <div class="test-case-desc">Special characters @#$%^&*</div>
+                </div>
+                <div class="test-case" onclick="loadTestCase('whitespace')">
+                    <div class="test-case-title">Leading/Trailing Space</div>
+                    <div class="test-case-desc">Whitespace at edges</div>
+                </div>
+                <div class="test-case" onclick="loadTestCase('reserved')">
+                    <div class="test-case-title">Reserved Name</div>
+                    <div class="test-case-desc">System reserved words</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form with Validation -->
+        <div class="section">
+            <h2>Journey Creation Form</h2>
+            <form id="journey-form" novalidate>
+                <div class="form-group">
+                    <label for="journey-name">Journey Name *</label>
+                    <input
+                        type="text"
+                        id="journey-name"
+                        name="name"
+                        placeholder="Enter journey name (3-100 characters)"
+                        required
+                    >
+                    <div class="error-message" id="name-error"></div>
+                    <div class="help-text">
+                        Only letters, numbers, spaces, hyphens, and underscores allowed
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="journey-description">Description</label>
+                    <textarea
+                        id="journey-description"
+                        name="description"
+                        rows="4"
+                        placeholder="Describe the journey (minimum 10 characters if provided)"
+                    ></textarea>
+                    <div class="error-message" id="description-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="journey-priority">Priority</label>
+                    <select id="journey-priority" name="priority">
+                        <option value="">Select priority</option>
+                        <option value="1">1 - Lowest</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5 - Medium</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10 - Highest</option>
+                    </select>
+                    <div class="error-message" id="priority-error"></div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn-primary" id="submit-btn">
+                        Create Journey
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="resetForm()">
+                        Reset Form
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="validateAll()">
+                        Validate All
+                    </button>
+                </div>
+            </form>
+
+            <div class="validation-summary" id="validation-summary" style="display: none;">
+                <h3>Validation Results</h3>
+                <ul id="validation-list"></ul>
+            </div>
+        </div>
+
+        <!-- Demo Input Values -->
+        <div class="section">
+            <h2>Quick Test Inputs</h2>
+            <p class="help-text">Click any value to insert it into the journey name field</p>
+            <div class="demo-inputs">
+                <button class="demo-input" onclick="setInput('')">(empty string)</button>
+                <button class="demo-input" onclick="setInput('   ')">(whitespace only)</button>
+                <button class="demo-input" onclick="setInput('ab')">ab (too short)</button>
+                <button class="demo-input" onclick="setInput('Test@Journey')">Test@Journey (@ not allowed)</button>
+                <button class="demo-input" onclick="setInput('Journey#123')">Journey#123 (# not allowed)</button>
+                <button class="demo-input" onclick="setInput('  Test  ')">  Test  (leading/trailing space)</button>
+                <button class="demo-input" onclick="setInput('con')">con (reserved name)</button>
+                <button class="demo-input" onclick="setInput('nul')">nul (reserved name)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Validation rules from JourneyNameValidator
+        const VALIDATION_RULES = {
+            MIN_LENGTH: 3,
+            MAX_LENGTH: 100,
+            ALLOWED_PATTERN: /^[\w\s\-]+$/,
+            FORBIDDEN_NAMES: ['null', 'undefined', 'none', 'void', 'con', 'prn', 'aux', 'nul',
+                            'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+                            'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9']
+        };
+
+        let acStatus = {
+            ac1: false,
+            ac2: false,
+            ac3: false,
+            ac4: false,
+            ac5: false
+        };
+
+        // Test case definitions
+        const testCases = {
+            empty: { name: '', description: 'Testing empty field' },
+            tooShort: { name: 'ab', description: 'Testing minimum length' },
+            tooLong: { name: 'a'.repeat(101), description: 'Testing maximum length' },
+            invalidChars: { name: 'Test@Journey#123', description: 'Testing invalid characters' },
+            whitespace: { name: '  Test Journey  ', description: 'Testing whitespace' },
+            reserved: { name: 'con', description: 'Testing reserved name' }
+        };
+
+        function loadTestCase(type) {
+            const testCase = testCases[type];
+            document.getElementById('journey-name').value = testCase.name;
+            document.getElementById('journey-description').value = testCase.description;
+
+            // Clear previous validation
+            clearValidation();
+
+            // Highlight test case button
+            document.querySelectorAll('.test-case').forEach(el => el.classList.remove('active'));
+            event.target.closest('.test-case').classList.add('active');
+
+            // Auto-validate
+            validateField('journey-name');
+        }
+
+        function setInput(value) {
+            document.getElementById('journey-name').value = value;
+            clearValidation();
+            validateField('journey-name');
+        }
+
+        function validateJourneyName(value) {
+            const errors = [];
+
+            // Rule 1: Required field
+            if (value === null || value === undefined) {
+                return { valid: false, message: 'Journey name is required' };
+            }
+
+            // Rule 2: Must be string
+            if (typeof value !== 'string') {
+                return { valid: false, message: 'Journey name must be a string' };
+            }
+
+            // Rule 3: Cannot be empty or whitespace only
+            const stripped = value.trim();
+            if (!stripped) {
+                return { valid: false, message: 'Journey name cannot be empty or contain only whitespace' };
+            }
+
+            // Rule 4: No leading/trailing whitespace
+            if (value !== stripped) {
+                return { valid: false, message: 'Journey name cannot start or end with whitespace' };
+            }
+
+            // Rule 5: Minimum length
+            if (stripped.length < VALIDATION_RULES.MIN_LENGTH) {
+                return { valid: false, message: `Journey name must be at least ${VALIDATION_RULES.MIN_LENGTH} characters long (got ${stripped.length})` };
+            }
+
+            // Rule 6: Maximum length
+            if (stripped.length > VALIDATION_RULES.MAX_LENGTH) {
+                return { valid: false, message: `Journey name must be no more than ${VALIDATION_RULES.MAX_LENGTH} characters long (got ${stripped.length})` };
+            }
+
+            // Rule 7: Allowed characters only
+            if (!VALIDATION_RULES.ALLOWED_PATTERN.test(stripped)) {
+                return { valid: false, message: 'Journey name can only contain letters, numbers, spaces, hyphens, and underscores' };
+            }
+
+            // Rule 8: Forbidden/reserved names
+            if (VALIDATION_RULES.FORBIDDEN_NAMES.includes(stripped.toLowerCase())) {
+                return { valid: false, message: `'${stripped}' is a reserved name and cannot be used` };
+            }
+
+            return { valid: true, message: '' };
+        }
+
+        function validateDescription(value) {
+            if (!value) {
+                return { valid: true, message: '' }; // Optional
+            }
+
+            if (value.length < 10) {
+                return { valid: false, message: 'Description must be at least 10 characters long' };
+            }
+
+            if (value.length > 1000) {
+                return { valid: false, message: 'Description must be no more than 1000 characters long' };
+            }
+
+            return { valid: true, message: '' };
+        }
+
+        function validateField(fieldId) {
+            const field = document.getElementById(fieldId);
+            const errorEl = document.getElementById(`${fieldId.replace('journey-', '')}-error`);
+            let result;
+
+            if (fieldId === 'journey-name') {
+                result = validateJourneyName(field.value);
+            } else if (fieldId === 'journey-description') {
+                result = validateDescription(field.value);
+            } else {
+                return;
+            }
+
+            // AC2: Verify validation error occurs
+            if (!result.valid) {
+                acStatus.ac2 = true;
+                updateACStatus('ac2');
+
+                // AC3: Verify error message is specific
+                if (result.message && result.message.length > 0) {
+                    acStatus.ac3 = true;
+                    updateACStatus('ac3');
+                }
+
+                // AC4: Verify field is highlighted
+                field.classList.add('invalid');
+                errorEl.textContent = result.message;
+                errorEl.classList.add('visible');
+                acStatus.ac4 = true;
+                updateACStatus('ac4');
+            } else {
+                field.classList.remove('invalid');
+                errorEl.classList.remove('visible');
+            }
+
+            return result.valid;
+        }
+
+        function validateAll() {
+            let allValid = true;
+            const results = [];
+
+            // Validate journey name
+            const nameValid = validateField('journey-name');
+            results.push({ field: 'Journey Name', valid: nameValid });
+
+            // Validate description
+            const descValid = validateField('journey-description');
+            results.push({ field: 'Description', valid: descValid });
+
+            // Show validation summary
+            const summary = document.getElementById('validation-summary');
+            const list = document.getElementById('validation-list');
+            list.innerHTML = '';
+
+            results.forEach(r => {
+                const li = document.createElement('li');
+                li.textContent = `${r.field}: ${r.valid ? 'Valid ✓' : 'Invalid ✗'}`;
+                if (r.valid) li.classList.add('valid');
+                list.appendChild(li);
+            });
+
+            summary.style.display = 'block';
+
+            allValid = results.every(r => r.valid);
+
+            if (!allValid) {
+                acStatus.ac5 = true;
+                updateACStatus('ac5');
+            }
+
+            return allValid;
+        }
+
+        function clearValidation() {
+            document.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+            document.querySelectorAll('.error-message').forEach(el => el.classList.remove('visible'));
+            document.getElementById('validation-summary').style.display = 'none';
+        }
+
+        function resetForm() {
+            document.getElementById('journey-form').reset();
+            clearValidation();
+            acStatus = { ac1: false, ac2: false, ac3: false, ac4: false, ac5: false };
+            document.querySelectorAll('.acceptance-criteria li').forEach(li => li.classList.remove('passed'));
+        }
+
+        function updateACStatus(acId) {
+            const el = document.getElementById(acId);
+            if (el && !el.classList.contains('passed')) {
+                el.classList.add('passed');
+            }
+        }
+
+        // Form submission handler
+        document.getElementById('journey-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // AC1: Submit form with invalid data
+            acStatus.ac1 = true;
+            updateACStatus('ac1');
+
+            const allValid = validateAll();
+
+            if (allValid) {
+                alert('Form would be submitted! (All validations passed)');
+            } else {
+                // AC5: Verify form doesn't submit
+                acStatus.ac5 = true;
+                updateACStatus('ac5');
+                console.log('Form submission blocked: Validation failed');
+            }
+        });
+
+        // Real-time validation on input
+        document.getElementById('journey-name').addEventListener('blur', function() {
+            validateField('journey-name');
+        });
+
+        document.getElementById('journey-description').addEventListener('blur', function() {
+            validateField('journey-description');
+        });
+
+        // Auto-select first test case on load
+        window.addEventListener('load', function() {
+            console.log('Feature #392: Invalid Input Validation Demo Loaded');
+            console.log('Click on a test case or enter invalid data to see validation in action');
+        });
+    </script>
+</body>
+</html>

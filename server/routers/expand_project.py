@@ -119,6 +119,17 @@ async def expand_project_websocket(websocket: WebSocket, project_name: str):
     - {"type": "error", "content": "..."} - Error message
     - {"type": "pong"} - Keep-alive pong
     """
+    # Accept the WebSocket connection FIRST (required by Starlette)
+    # This allows us to send proper error codes to the client
+    await websocket.accept()
+
+    # Security: Only allow connections from localhost
+    client_host = websocket.client.host if websocket.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost", None):
+        await websocket.close(code=4003, reason="Localhost access only")
+        return
+
+    # Validate project name
     try:
         project_name = validate_project_name(project_name)
     except HTTPException:
@@ -140,8 +151,6 @@ async def expand_project_websocket(websocket: WebSocket, project_name: str):
     if not spec_path.exists():
         await websocket.close(code=4004, reason="Project has no spec. Create spec first.")
         return
-
-    await websocket.accept()
 
     session: Optional[ExpandChatSession] = None
 

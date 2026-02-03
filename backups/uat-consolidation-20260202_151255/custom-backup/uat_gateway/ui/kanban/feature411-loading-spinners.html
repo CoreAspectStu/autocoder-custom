@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #411: Loading Spinners for Async Operations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .feature-info {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .feature-info h2 {
+            color: #1a1a1a;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .feature-info ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-info li {
+            color: #4b5563;
+            font-size: 14px;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .feature-info li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .demo-section {
+            margin-bottom: 30px;
+        }
+
+        .demo-section h3 {
+            color: #1a1a1a;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #async-operation-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #async-operation-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #async-operation-button:disabled {
+            background: #d1d5db;
+            color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #async-operation-button.loading {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0.7;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        #async-operation-button.loading .loading-spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .operation-status {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .operation-status h4 {
+            color: #1a1a1a;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            color: #6b7280;
+        }
+
+        .status-value {
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .status-value.pass {
+            color: #10b981;
+        }
+
+        .status-value.fail {
+            color: #ef4444;
+        }
+
+        #operation-result {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        #operation-result.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+            display: block !important;
+        }
+
+        #operation-result.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+            display: block !important;
+        }
+
+        .operation-count {
+            text-align: center;
+            margin-top: 20px;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .operation-count strong {
+            color: #1a1a1a;
+            font-size: 24px;
+        }
+
+        .acceptance-criteria {
+            background: #eff6ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .acceptance-criteria h3 {
+            color: #1e40af;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .ac-item {
+            background: white;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .ac-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .ac-number {
+            font-weight: 600;
+            color: #1e40af;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .ac-description {
+            color: #4b5563;
+            font-size: 13px;
+        }
+
+        .test-instructions {
+            background: #fffbeb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .test-instructions h3 {
+            color: #92400e;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .test-instructions ol {
+            margin-left: 20px;
+        }
+
+        .test-instructions li {
+            color: #78716c;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .visual-demo {
+            background: #faf5ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .visual-demo h3 {
+            color: #7c3aed;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .spinner-showcase {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .spinner-item {
+            text-align: center;
+        }
+
+        .spinner-preview {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 10px;
+        }
+
+        .spinner-label {
+            font-size: 12px;
+            color: #7c3aed;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Feature #411: Loading Spinners</h1>
+        <p class="subtitle">Loading spinners for async operations with button disable prevention</p>
+
+        <div class="feature-info">
+            <h2>What This Feature Does</h2>
+            <ul>
+                <li>Shows visual loading indicator during async operations</li>
+                <li>Prevents duplicate submissions by disabling button</li>
+                <li>Provides clear feedback about operation status</li>
+                <li>Automatically re-enables button after completion</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h3>Interactive Demo</h3>
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 15px;">
+                Click the button below to trigger a simulated async operation (3 seconds)
+            </p>
+
+            <div class="button-group">
+                <button id="async-operation-button">
+                    <span class="loading-spinner"></span>
+                    <span class="button-text">Start Async Operation</span>
+                </button>
+            </div>
+
+            <div class="operation-status">
+                <h4>Operation Status</h4>
+                <div class="status-item">
+                    <span class="status-label">Button State:</span>
+                    <span class="status-value" id="button-state">Enabled</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Spinner Visible:</span>
+                    <span class="status-value" id="spinner-state">No</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Operation Running:</span>
+                    <span class="status-value" id="operation-state">Idle</span>
+                </div>
+            </div>
+
+            <div id="operation-result"></div>
+
+            <div class="operation-count">
+                Operations completed: <strong id="operation-count">0</strong>
+            </div>
+        </div>
+
+        <div class="visual-demo">
+            <h3>Visual Spinner Showcase</h3>
+            <div class="spinner-showcase">
+                <div class="spinner-item">
+                    <div class="spinner-preview">
+                        <div style="width: 40px; height: 40px; border: 3px solid rgba(102, 126, 234, 0.3); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    </div>
+                    <div class="spinner-label">Spinner</div>
+                </div>
+                <div class="spinner-item">
+                    <div class="spinner-preview">
+                        <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                            <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.4s ease-in-out infinite;"></div>
+                            <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.4s ease-in-out 0.2s infinite;"></div>
+                            <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.4s ease-in-out 0.4s infinite;"></div>
+                        </div>
+                    </div>
+                    <div class="spinner-label">Dots</div>
+                </div>
+                <div class="spinner-item">
+                    <div class="spinner-preview">
+                        <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;">
+                            <div style="width: 20px; height: 20px; background: #667eea; border-radius: 50%;"></div>
+                        </div>
+                    </div>
+                    <div class="spinner-label">Pulse</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="acceptance-criteria">
+            <h3>✅ Acceptance Criteria</h3>
+            <div class="ac-item">
+                <div class="ac-number">AC1: Start async operation</div>
+                <div class="ac-description">User can trigger an async operation by clicking the button</div>
+            </div>
+            <div class="ac-item">
+                <div class="ac-number">AC2: Verify spinner appears</div>
+                <div class="ac-description">Loading spinner appears immediately after clicking</div>
+            </div>
+            <div class="ac-item">
+                <div class="ac-number">AC3: Verify operation can't be retried</div>
+                <div class="ac-description">Submit button is disabled during operation (prevents duplicate submissions)</div>
+            </div>
+            <div class="ac-item">
+                <div class="ac-number">AC4: Wait for completion</div>
+                <div class="ac-description">Operation completes successfully (3 seconds)</div>
+            </div>
+            <div class="ac-item">
+                <div class="ac-number">AC5: Verify spinner disappears</div>
+                <div class="ac-description">Loading spinner is removed and button re-enabled after completion</div>
+            </div>
+        </div>
+
+        <div class="test-instructions">
+            <h3>📋 Test Instructions</h3>
+            <ol>
+                <li>Click "Start Async Operation" button</li>
+                <li>Verify: Button becomes disabled immediately</li>
+                <li>Verify: Spinner appears on the button</li>
+                <li>Wait: Operation runs for 3 seconds</li>
+                <li>Verify: Success message appears</li>
+                <li>Verify: Button re-enables after completion</li>
+                <li>Try clicking multiple times rapidly - only 1 operation should run</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let operationCount = 0;
+        let isRunning = false;
+        let operationStartTime = 0;
+        let clickLock = false; // Global lock variable
+        let currentTimeout = null; // Store timeout ID so we can cancel it
+
+        // Set up event listener when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const button = document.getElementById('async-operation-button');
+            if (button) {
+                // Use onclick attribute for immediate execution
+                button.onclick = startAsyncOperation;
+            }
+        });
+
+        function startAsyncOperation(event) {
+            // Prevent default to avoid any form submission issues
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation(); // Prevent other click handlers
+            }
+
+            const button = document.getElementById('async-operation-button');
+
+            const now = Date.now();
+
+            // CRITICAL: Check global lock FIRST - this is our primary defense
+            if (clickLock) {
+                console.log('Click lock is active - click prevented');
+                return false;
+            }
+
+            // CRITICAL: Check timestamp second - prevent clicks within 100ms of each other
+            if (now - operationStartTime < 100) {
+                console.log('Click too soon - click prevented');
+                return false;
+            }
+
+            // CRITICAL: Check disabled state - this is the third guard
+            if (button.disabled) {
+                console.log('Button is disabled - click prevented');
+                return false;
+            }
+
+            // CRITICAL: Check flag - provides additional guard
+            if (isRunning) {
+                console.log('Operation already running - click prevented');
+                button.disabled = true; // Ensure button stays disabled
+                return false;
+            }
+
+            // Set lock and flags IMMEDIATELY - this must happen synchronously
+            clickLock = true;
+            isRunning = true;
+            operationStartTime = now;
+
+            // DISABLE BUTTON IMMEDIATELY - this is the fifth action
+            button.disabled = true;
+
+            // CRITICAL: Cancel any existing timeout to prevent stale operations
+            // This should rarely happen if guards work correctly, but it's a safety net
+            if (currentTimeout) {
+                console.log('Warning: Canceling stale timeout from previous operation');
+                clearTimeout(currentTimeout);
+                currentTimeout = null;
+            }
+
+            const buttonText = button.querySelector('.button-text');
+            const resultDiv = document.getElementById('operation-result');
+            const buttonState = document.getElementById('button-state');
+            const spinnerState = document.getElementById('spinner-state');
+            const operationState = document.getElementById('operation-state');
+
+            // Clear previous result
+            resultDiv.className = '';
+            resultDiv.style.display = 'none';
+
+            // AC2: Spinner appears
+            // AC3: Button disabled (already done above, just adding visual state)
+            button.classList.add('loading');
+            buttonText.textContent = 'Processing...';
+
+            // Update status display
+            buttonState.textContent = 'Disabled';
+            buttonState.className = 'status-value fail';
+            spinnerState.textContent = 'Yes';
+            spinnerState.className = 'status-value pass';
+            operationState.textContent = 'Running';
+            operationState.className = 'status-value pass';
+
+            console.log('[AC1] Async operation started');
+            console.log('[AC2] Loading spinner appeared');
+            console.log('[AC3] Button disabled - operation cannot be retried');
+
+            // Simulate async operation (3 seconds)
+            // Store timeout ID so we can cancel it if clicked again
+            currentTimeout = setTimeout(() => {
+
+                // AC4: Operation completes
+                operationCount++;
+                document.getElementById('operation-count').textContent = operationCount;
+
+                // AC5: Spinner disappears, button re-enabled
+                button.classList.remove('loading');
+                button.disabled = false;
+                buttonText.textContent = 'Start Async Operation';
+
+                // Show success result
+                resultDiv.textContent = `✅ Operation completed successfully! (Operation #${operationCount})`;
+                resultDiv.className = 'success';
+
+                // Update status display
+                buttonState.textContent = 'Enabled';
+                buttonState.className = 'status-value pass';
+                spinnerState.textContent = 'No';
+                spinnerState.className = 'status-value fail';
+                operationState.textContent = 'Complete';
+                operationState.className = 'status-value pass';
+
+                // Reset all locks and flags
+                clickLock = false;
+                isRunning = false;
+                operationStartTime = 0;
+                currentTimeout = null;
+
+                console.log('[AC4] Operation completed successfully');
+                console.log('[AC5] Spinner disappeared, button re-enabled');
+            }, 3000);
+        }
+
+        // Add CSS animations for showcase
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0%, 100% { opacity: 0.3; transform: scale(0.8); }
+                50% { opacity: 1; transform: scale(1); }
+            }
+
+            @keyframes pulse-ring {
+                0% { transform: scale(0.8); opacity: 0.8; }
+                50% { transform: scale(1.2); opacity: 0.4; }
+                100% { transform: scale(0.8); opacity: 0.8; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

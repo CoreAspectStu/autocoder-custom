@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #388: Multi-Step Configuration Wizard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        /* Progress Steps */
+        .progress-container {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #e9ecef;
+            z-index: 1;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            z-index: 2;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .step-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 3;
+            flex: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+            color: #6c757d;
+            transition: all 0.3s ease;
+        }
+
+        .step-indicator.active .step-circle {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .step-indicator.completed .step-circle {
+            border-color: #10b981;
+            background: #10b981;
+            color: white;
+        }
+
+        .step-label {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #6c757d;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .step-indicator.active .step-label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .step-indicator.completed .step-label {
+            color: #10b981;
+        }
+
+        /* Wizard Content */
+        .wizard-content {
+            padding: 40px;
+            min-height: 400px;
+        }
+
+        .wizard-step {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .wizard-step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step-description {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 15px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="url"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group .help-text {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 6px;
+        }
+
+        .form-group.error input,
+        .form-group.error textarea,
+        .form-group.error select {
+            border-color: #ef4444;
+        }
+
+        .form-group.error .error-message {
+            display: block;
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .form-group .error-message {
+            display: none;
+        }
+
+        /* Scenario List */
+        .scenario-list {
+            margin-top: 20px;
+        }
+
+        .scenario-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        .scenario-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .scenario-item h4 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .scenario-item p {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .scenario-item .scenario-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .add-scenario-btn {
+            background: white;
+            border: 2px dashed #667eea;
+            color: #667eea;
+            padding: 15px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .add-scenario-btn:hover {
+            background: #f8f9fa;
+            border-color: #5568d3;
+            color: #5568d3;
+        }
+
+        /* Summary Section */
+        .summary-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .summary-section h3 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        .summary-value {
+            color: #6c757d;
+            font-size: 14px;
+            text-align: right;
+            max-width: 60%;
+        }
+
+        /* Navigation Buttons */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: white;
+            border: 2px solid #e9ecef;
+            color: #495057;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f8f9fa;
+            border-color: #dee2e6;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Success State */
+        .success-message {
+            text-align: center;
+            padding: 60px 40px;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: white;
+        }
+
+        .success-message h2 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .success-message p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        /* Acceptance Criteria Checklist */
+        .acceptance-criteria {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .acceptance-criteria h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .criteria-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .criteria-item:last-child {
+            border-bottom: none;
+        }
+
+        .criteria-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+        }
+
+        .criteria-text {
+            flex: 1;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .criteria-item.checked .criteria-text {
+            text-decoration: line-through;
+            color: #10b981;
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1001;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: #10b981;
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Feature #388: Multi-Step Configuration Wizard</h1>
+            <p>Verify multi-step configuration wizard works</p>
+        </header>
+
+        <!-- Progress Steps -->
+        <div class="progress-container">
+            <div class="progress-steps">
+                <div class="progress-line" id="progressLine"></div>
+
+                <div class="step-indicator active" data-step="1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Basic Info</div>
+                </div>
+
+                <div class="step-indicator" data-step="2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Scenarios</div>
+                </div>
+
+                <div class="step-indicator" data-step="3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Settings</div>
+                </div>
+
+                <div class="step-indicator" data-step="4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Review</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Step 1: Basic Info -->
+            <div class="wizard-step active" data-step="1">
+                <h2 class="step-title">Journey Basic Information</h2>
+                <p class="step-description">Enter the basic details for your UAT journey</p>
+
+                <div class="form-group" id="journeyNameGroup">
+                    <label for="journeyName">Journey Name *</label>
+                    <input type="text" id="journeyName" placeholder="e.g., User Authentication Flow">
+                    <span class="error-message">Journey name is required</span>
+                </div>
+
+                <div class="form-group" id="journeyDescGroup">
+                    <label for="journeyDesc">Description</label>
+                    <textarea id="journeyDesc" placeholder="Describe what this journey tests..."></textarea>
+                    <span class="help-text">Provide a clear description of the journey's purpose</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="journeyUrl">Base URL</label>
+                    <input type="url" id="journeyUrl" placeholder="https://example.com">
+                    <span class="help-text">The base URL for testing (optional)</span>
+                </div>
+            </div>
+
+            <!-- Step 2: Scenarios -->
+            <div class="wizard-step" data-step="2">
+                <h2 class="step-title">Configure Scenarios</h2>
+                <p class="step-description">Add test scenarios to your journey</p>
+
+                <div class="scenario-list" id="scenarioList">
+                    <div class="scenario-item">
+                        <h4>📝 Login - Happy Path</h4>
+                        <p>Verify user can successfully log in with valid credentials</p>
+                        <div class="scenario-meta">
+                            <span>🔢 8 steps</span>
+                            <span>⏱️ ~5 min</span>
+                        </div>
+                    </div>
+
+                    <div class="scenario-item">
+                        <h4>🔒 Password Reset Flow</h4>
+                        <p>Test password reset functionality from request to completion</p>
+                        <div class="scenario-meta">
+                            <span>🔢 6 steps</span>
+                            <span>⏱️ ~4 min</span>
+                        </div>
+                    </div>
+
+                    <div class="scenario-item">
+                        <h4>👤 Profile Management</h4>
+                        <p>Verify users can update their profile information</p>
+                        <div class="scenario-meta">
+                            <span>🔢 5 steps</span>
+                            <span>⏱️ ~3 min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="add-scenario-btn" id="addScenarioBtn">
+                    + Add Another Scenario
+                </button>
+            </div>
+
+            <!-- Step 3: Settings -->
+            <div class="wizard-step" data-step="3">
+                <h2 class="step-title">Test Settings</h2>
+                <p class="step-description">Configure how the tests should run</p>
+
+                <div class="form-group">
+                    <label for="browser">Browser</label>
+                    <select id="browser">
+                        <option value="chromium">Chromium</option>
+                        <option value="firefox">Firefox</option>
+                        <option value="webkit">WebKit (Safari)</option>
+                        <option value="all">All Browsers</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="viewport">Viewport Size</label>
+                    <select id="viewport">
+                        <option value="desktop">Desktop (1920x1080)</option>
+                        <option value="laptop">Laptop (1366x768)</option>
+                        <option value="tablet">Tablet (768x1024)</option>
+                        <option value="mobile">Mobile (375x667)</option>
+                        <option value="responsive">Responsive (All)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="timeout">Test Timeout (seconds)</label>
+                    <input type="number" id="timeout" value="30" min="10" max="300">
+                </div>
+
+                <div class="form-group">
+                    <label for="retries">Retry Failed Tests</label>
+                    <select id="retries">
+                        <option value="0">No retries</option>
+                        <option value="1">Retry once</option>
+                        <option value="2" selected>Retry twice</option>
+                        <option value="3">Retry three times</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="parallel">Parallel Execution</label>
+                    <select id="parallel">
+                        <option value="false" selected>No (sequential)</option>
+                        <option value="true">Yes (faster)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Step 4: Review -->
+            <div class="wizard-step" data-step="4">
+                <h2 class="step-title">Review Configuration</h2>
+                <p class="step-description">Review your journey configuration before creating</p>
+
+                <div class="summary-section">
+                    <h3>📋 Journey Details</h3>
+                    <div class="summary-item">
+                        <span class="summary-label">Name:</span>
+                        <span class="summary-value" id="summaryName">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Description:</span>
+                        <span class="summary-value" id="summaryDesc">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Base URL:</span>
+                        <span class="summary-value" id="summaryUrl">-</span>
+                    </div>
+                </div>
+
+                <div class="summary-section">
+                    <h3>🧪 Scenarios</h3>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Scenarios:</span>
+                        <span class="summary-value" id="summaryScenarios">3 scenarios</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Steps:</span>
+                        <span class="summary-value" id="summarySteps">19 steps</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Estimated Time:</span>
+                        <span class="summary-value" id="summaryTime">~12 minutes</span>
+                    </div>
+                </div>
+
+                <div class="summary-section">
+                    <h3>⚙️ Test Settings</h3>
+                    <div class="summary-item">
+                        <span class="summary-label">Browser:</span>
+                        <span class="summary-value" id="summaryBrowser">Chromium</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Viewport:</span>
+                        <span class="summary-value" id="summaryViewport">Desktop (1920x1080)</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Timeout:</span>
+                        <span class="summary-value" id="summaryTimeout">30 seconds</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Retries:</span>
+                        <span class="summary-value" id="summaryRetries">Retry twice</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Parallel:</span>
+                        <span class="summary-value" id="summaryParallel">No (sequential)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success State -->
+            <div class="wizard-step" data-step="success">
+                <div class="success-message">
+                    <div class="success-icon">✓</div>
+                    <h2>Journey Created Successfully!</h2>
+                    <p>Your journey has been configured and saved.</p>
+                    <div class="summary-section" style="text-align: left;">
+                        <h3>🎉 Configuration Summary</h3>
+                        <div class="summary-item">
+                            <span class="summary-label">Journey ID:</span>
+                            <span class="summary-value" id="successJourneyId">-</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Name:</span>
+                            <span class="summary-value" id="successName">-</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Scenarios:</span>
+                            <span class="summary-value" id="successScenarios">-</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="startNewWizard">Create Another Journey</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="wizard-nav" id="wizardNav">
+            <button class="btn btn-secondary" id="prevBtn" disabled>
+                ← Back
+            </button>
+            <button class="btn btn-primary" id="nextBtn">
+                Next →
+            </button>
+        </div>
+
+        <!-- Acceptance Criteria Checklist -->
+        <div class="acceptance-criteria">
+            <h3>✅ Acceptance Criteria</h3>
+            <div class="criteria-item">
+                <input type="checkbox" class="criteria-checkbox" id="ac1">
+                <span class="criteria-text">Start configuration wizard</span>
+            </div>
+            <div class="criteria-item">
+                <input type="checkbox" class="criteria-checkbox" id="ac2">
+                <span class="criteria-text">Complete step 1 (Basic Info)</span>
+            </div>
+            <div class="criteria-item">
+                <input type="checkbox" class="criteria-checkbox" id="ac3">
+                <span class="criteria-text">Complete step 2 (Scenarios)</span>
+            </div>
+            <div class="criteria-item">
+                <input type="checkbox" class="criteria-checkbox" id="ac4">
+                <span class="criteria-text">Complete step 3 (Settings)</span>
+            </div>
+            <div class="criteria-item">
+                <input type="checkbox" class="criteria-checkbox" id="ac5">
+                <span class="criteria-text">Verify configuration is saved</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Multi-Step Wizard Logic
+        class MultiStepWizard {
+            constructor() {
+                this.currentStep = 1;
+                this.totalSteps = 4;
+                this.wizardData = {};
+
+                this.init();
+            }
+
+            init() {
+                // Cache DOM elements
+                this.progressLine = document.getElementById('progressLine');
+                this.stepIndicators = document.querySelectorAll('.step-indicator');
+                this.wizardSteps = document.querySelectorAll('.wizard-step');
+                this.prevBtn = document.getElementById('prevBtn');
+                this.nextBtn = document.getElementById('nextBtn');
+                this.wizardNav = document.getElementById('wizardNav');
+                this.loadingOverlay = document.getElementById('loadingOverlay');
+
+                // Form elements
+                this.journeyNameInput = document.getElementById('journeyName');
+                this.journeyDescInput = document.getElementById('journeyDesc');
+                this.journeyUrlInput = document.getElementById('journeyUrl');
+                this.browserSelect = document.getElementById('browser');
+                this.viewportSelect = document.getElementById('viewport');
+                this.timeoutInput = document.getElementById('timeout');
+                this.retriesSelect = document.getElementById('retries');
+                this.parallelSelect = document.getElementById('parallel');
+
+                // Bind events
+                this.prevBtn.addEventListener('click', () => this.previousStep());
+                this.nextBtn.addEventListener('click', () => this.nextStep());
+                document.getElementById('startNewWizard').addEventListener('click', () => this.resetWizard());
+                document.getElementById('addScenarioBtn').addEventListener('click', () => this.addScenario());
+
+                // Initialize first step
+                this.updateUI();
+            }
+
+            updateUI() {
+                // Update progress line
+                const progress = ((this.currentStep - 1) / (this.totalSteps - 1)) * 100;
+                this.progressLine.style.width = `${progress}%`;
+
+                // Update step indicators
+                this.stepIndicators.forEach(indicator => {
+                    const step = parseInt(indicator.dataset.step);
+                    indicator.classList.remove('active', 'completed');
+
+                    if (step === this.currentStep) {
+                        indicator.classList.add('active');
+                    } else if (step < this.currentStep) {
+                        indicator.classList.add('completed');
+                    }
+                });
+
+                // Update wizard steps
+                this.wizardSteps.forEach(step => {
+                    step.classList.remove('active');
+                    if (parseInt(step.dataset.step) === this.currentStep) {
+                        step.classList.add('active');
+                    }
+                });
+
+                // Update navigation buttons
+                this.prevBtn.disabled = this.currentStep === 1;
+
+                if (this.currentStep === this.totalSteps) {
+                    this.nextBtn.textContent = '✓ Complete Configuration';
+                    this.nextBtn.className = 'btn btn-success';
+                    this.populateSummary();
+                } else {
+                    this.nextBtn.textContent = 'Next →';
+                    this.nextBtn.className = 'btn btn-primary';
+                }
+
+                // Check acceptance criteria
+                this.updateAcceptanceCriteria();
+            }
+
+            updateAcceptanceCriteria() {
+                const ac1 = document.getElementById('ac1');
+                ac1.checked = true;
+                ac1.closest('.criteria-item').classList.add('checked');
+
+                if (this.currentStep >= 2) {
+                    const ac2 = document.getElementById('ac2');
+                    ac2.checked = true;
+                    ac2.closest('.criteria-item').classList.add('checked');
+                }
+
+                if (this.currentStep >= 3) {
+                    const ac3 = document.getElementById('ac3');
+                    ac3.checked = true;
+                    ac3.closest('.criteria-item').classList.add('checked');
+                }
+
+                if (this.currentStep >= 4) {
+                    const ac4 = document.getElementById('ac4');
+                    ac4.checked = true;
+                    ac4.closest('.criteria-item').classList.add('checked');
+                }
+            }
+
+            validateStep(step) {
+                let isValid = true;
+
+                if (step === 1) {
+                    // Validate journey name
+                    const nameGroup = document.getElementById('journeyNameGroup');
+                    if (!this.journeyNameInput.value.trim()) {
+                        nameGroup.classList.add('error');
+                        isValid = false;
+                    } else {
+                        nameGroup.classList.remove('error');
+                    }
+
+                    // Store data
+                    this.wizardData.name = this.journeyNameInput.value.trim();
+                    this.wizardData.description = this.journeyDescInput.value.trim();
+                    this.wizardData.base_url = this.journeyUrlInput.value.trim();
+                }
+
+                if (step === 2) {
+                    // Store scenarios (default 3 scenarios for demo)
+                    this.wizardData.scenarios = [
+                        {
+                            name: 'Login - Happy Path',
+                            description: 'Verify user can successfully log in with valid credentials',
+                            steps: 8,
+                            duration: 5
+                        },
+                        {
+                            name: 'Password Reset Flow',
+                            description: 'Test password reset functionality from request to completion',
+                            steps: 6,
+                            duration: 4
+                        },
+                        {
+                            name: 'Profile Management',
+                            description: 'Verify users can update their profile information',
+                            steps: 5,
+                            duration: 3
+                        }
+                    ];
+                }
+
+                if (step === 3) {
+                    // Store settings
+                    this.wizardData.browser = this.browserSelect.value;
+                    this.wizardData.viewport = this.viewportSelect.value;
+                    this.wizardData.timeout = parseInt(this.timeoutInput.value);
+                    this.wizardData.retries = parseInt(this.retriesSelect.value);
+                    this.wizardData.parallel = this.parallelSelect.value === 'true';
+                }
+
+                return isValid;
+            }
+
+            nextStep() {
+                if (!this.validateStep(this.currentStep)) {
+                    this.showToast('Please fix validation errors before proceeding', 'error');
+                    return;
+                }
+
+                if (this.currentStep < this.totalSteps) {
+                    this.currentStep++;
+                    this.updateUI();
+                } else {
+                    this.completeWizard();
+                }
+            }
+
+            previousStep() {
+                if (this.currentStep > 1) {
+                    this.currentStep--;
+                    this.updateUI();
+                }
+            }
+
+            populateSummary() {
+                // Journey details
+                document.getElementById('summaryName').textContent = this.wizardData.name || '-';
+                document.getElementById('summaryDesc').textContent = this.wizardData.description || 'No description';
+                document.getElementById('summaryUrl').textContent = this.wizardData.base_url || 'Not specified';
+
+                // Scenarios
+                const scenarioCount = this.wizardData.scenarios?.length || 3;
+                const totalSteps = this.wizardData.scenarios?.reduce((sum, s) => sum + s.steps, 0) || 19;
+                const totalTime = this.wizardData.scenarios?.reduce((sum, s) => sum + s.duration, 0) || 12;
+
+                document.getElementById('summaryScenarios').textContent = `${scenarioCount} scenarios`;
+                document.getElementById('summarySteps').textContent = `${totalSteps} steps`;
+                document.getElementById('summaryTime').textContent = `~${totalTime} minutes`;
+
+                // Settings
+                const browserNames = {
+                    chromium: 'Chromium',
+                    firefox: 'Firefox',
+                    webkit: 'WebKit (Safari)',
+                    all: 'All Browsers'
+                };
+                const viewportNames = {
+                    desktop: 'Desktop (1920x1080)',
+                    laptop: 'Laptop (1366x768)',
+                    tablet: 'Tablet (768x1024)',
+                    mobile: 'Mobile (375x667)',
+                    responsive: 'Responsive (All)'
+                };
+                const retryNames = {
+                    0: 'No retries',
+                    1: 'Retry once',
+                    2: 'Retry twice',
+                    3: 'Retry three times'
+                };
+
+                document.getElementById('summaryBrowser').textContent = browserNames[this.wizardData.browser] || 'Chromium';
+                document.getElementById('summaryViewport').textContent = viewportNames[this.wizardData.viewport] || 'Desktop';
+                document.getElementById('summaryTimeout').textContent = `${this.wizardData.timeout} seconds`;
+                document.getElementById('summaryRetries').textContent = retryNames[this.wizardData.retries] || 'Retry twice';
+                document.getElementById('summaryParallel').textContent = this.wizardData.parallel ? 'Yes (faster)' : 'No (sequential)';
+            }
+
+            async completeWizard() {
+                this.loadingOverlay.classList.add('active');
+
+                try {
+                    // Simulate API call
+                    await this.saveConfiguration();
+
+                    // Show success
+                    this.wizardNav.style.display = 'none';
+                    this.wizardSteps.forEach(step => step.classList.remove('active'));
+                    document.querySelector('.wizard-step[data-step="success"]').classList.add('active');
+
+                    // Populate success details
+                    const journeyId = `journey-${Date.now().toString(36).toUpperCase()}`;
+                    document.getElementById('successJourneyId').textContent = journeyId;
+                    document.getElementById('successName').textContent = this.wizardData.name;
+                    document.getElementById('successScenarios').textContent = `${this.wizardData.scenarios?.length || 3} scenarios`;
+
+                    // Mark AC5 as complete
+                    const ac5 = document.getElementById('ac5');
+                    ac5.checked = true;
+                    ac5.closest('.criteria-item').classList.add('checked');
+
+                    this.showToast('Journey created successfully!', 'success');
+                } catch (error) {
+                    this.showToast('Failed to create journey: ' + error.message, 'error');
+                } finally {
+                    this.loadingOverlay.classList.remove('active');
+                }
+            }
+
+            async saveConfiguration() {
+                // Simulate network delay
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                // Store in localStorage for verification
+                const journeyId = `journey-${Date.now().toString(36).toUpperCase()}`;
+                const journeyData = {
+                    ...this.wizardData,
+                    id: journeyId,
+                    created_at: new Date().toISOString(),
+                    status: 'active'
+                };
+
+                // Save to localStorage
+                const journeys = JSON.parse(localStorage.getItem('uat_journeys') || '[]');
+                journeys.push(journeyData);
+                localStorage.setItem('uat_journeys', JSON.stringify(journeys));
+                localStorage.setItem('uat_last_journey', JSON.stringify(journeyData));
+
+                console.log('✅ Configuration saved:', journeyData);
+                return journeyData;
+            }
+
+            resetWizard() {
+                this.currentStep = 1;
+                this.wizardData = {};
+
+                // Reset form fields
+                this.journeyNameInput.value = '';
+                this.journeyDescInput.value = '';
+                this.journeyUrlInput.value = '';
+                this.browserSelect.value = 'chromium';
+                this.viewportSelect.value = 'desktop';
+                this.timeoutInput.value = '30';
+                this.retriesSelect.value = '2';
+                this.parallelSelect.value = 'false';
+
+                // Reset acceptance criteria
+                document.querySelectorAll('.criteria-item').forEach(item => {
+                    item.classList.remove('checked');
+                    const checkbox = item.querySelector('.criteria-checkbox');
+                    if (checkbox) checkbox.checked = false;
+                });
+
+                // Show wizard nav
+                this.wizardNav.style.display = 'flex';
+
+                // Update UI
+                this.updateUI();
+            }
+
+            addScenario() {
+                const scenarioList = document.getElementById('scenarioList');
+                const scenarioNum = scenarioList.children.length + 1;
+
+                const scenarioItem = document.createElement('div');
+                scenarioItem.className = 'scenario-item';
+                scenarioItem.innerHTML = `
+                    <h4>📝 New Scenario ${scenarioNum}</h4>
+                    <p>Custom scenario description</p>
+                    <div class="scenario-meta">
+                        <span>🔢 ? steps</span>
+                        <span>⏱️ ~? min</span>
+                    </div>
+                `;
+
+                scenarioList.appendChild(scenarioItem);
+                this.showToast('Scenario added', 'success');
+            }
+
+            showToast(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = `toast ${type} show`;
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Initialize wizard when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new MultiStepWizard();
+        });
+    </script>
+</body>
+</html>

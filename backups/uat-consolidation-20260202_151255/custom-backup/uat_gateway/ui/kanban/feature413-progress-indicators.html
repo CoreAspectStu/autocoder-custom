@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #413: Progress Indicators for Long Operations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .scenarios {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .scenario {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .scenario h2 {
+            color: #667eea;
+            margin-bottom: 16px;
+            font-size: 1.5rem;
+        }
+
+        .scenario p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-section {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-section.active {
+            display: block;
+        }
+
+        .loading-indicator {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .loading-indicator.success {
+            border-left-color: #10b981;
+        }
+
+        .loading-indicator.error {
+            border-left-color: #ef4444;
+        }
+
+        .indicator-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .indicator-icon {
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .loading .indicator-icon {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.1);
+            }
+        }
+
+        .indicator-message {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+
+        .indicator-status {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .indicator-progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .indicator-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .indicator-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .indicator-percentage {
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .indicator-duration {
+            color: #9ca3af;
+        }
+
+        .event-log {
+            background: #1a1a1a;
+            color: #10b981;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 16px;
+        }
+
+        .event-log-entry {
+            margin-bottom: 4px;
+            opacity: 0.9;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .stat-box {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .acceptance-criteria {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .acceptance-criteria h2 {
+            color: #667eea;
+            margin-bottom: 16px;
+            font-size: 1.5rem;
+        }
+
+        .criteria-list {
+            list-style: none;
+        }
+
+        .criteria-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+        }
+
+        .criteria-item strong {
+            color: #1a1a1a;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .criteria-item span {
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Feature #413: Progress Indicators</h1>
+            <p>Verification of progress indicators for long-running operations</p>
+        </header>
+
+        <div class="scenarios">
+            <!-- Scenario 1: Test Execution -->
+            <div class="scenario">
+                <h2>🧪 Scenario 1: Test Execution</h2>
+                <p>Simulates running a test suite with multiple test cases. Progress updates show completed tests, percentage, and estimated time remaining.</p>
+                <div class="button-group">
+                    <button onclick="startTestExecution()">▶️ Start Test Suite (20 tests, 5s)</button>
+                    <button onclick="startQuickTest()">⚡ Quick Tests (10 tests, 2s)</button>
+                    <button onclick="clearScenario('scenario1')">🗑️ Clear</button>
+                </div>
+                <div id="scenario1" class="progress-section"></div>
+            </div>
+
+            <!-- Scenario 2: Data Processing -->
+            <div class="scenario">
+                <h2>📊 Scenario 2: Data Processing</h2>
+                <p>Simulates processing large batches of data. Shows detailed progress with batch numbers and throughput information.</p>
+                <div class="button-group">
+                    <button onclick="startDataProcessing()">▶️ Process Data (100 batches, 6s)</button>
+                    <button onclick="startLargeProcessing()">🔄 Large Batch (500 batches, 8s)</button>
+                    <button onclick="clearScenario('scenario2')">🗑️ Clear</button>
+                </div>
+                <div id="scenario2" class="progress-section"></div>
+            </div>
+
+            <!-- Scenario 3: File Upload -->
+            <div class="scenario">
+                <h2>📤 Scenario 3: File Upload</h2>
+                <p>Simulates uploading a large file with real-time progress, upload speed, and estimated completion time.</p>
+                <div class="button-group">
+                    <button onclick="startFileUpload()">▶️ Upload File (50MB, 4s)</button>
+                    <button onclick="startLargeUpload()">📦 Upload Large File (200MB, 7s)</button>
+                    <button onclick="simulateUploadError()">❌ Simulate Error</button>
+                    <button onclick="clearScenario('scenario3')">🗑️ Clear</button>
+                </div>
+                <div id="scenario3" class="progress-section"></div>
+            </div>
+
+            <!-- Scenario 4: Multi-Step Workflow -->
+            <div class="scenario">
+                <h2>🔄 Scenario 4: Multi-Step Workflow</h2>
+                <p>Simulates a complex multi-step operation with distinct phases. Shows progress through each step with status messages.</p>
+                <div class="button-group">
+                    <button onclick="startMultiStepWorkflow()">▶️ Start Workflow (5 steps, 8s)</button>
+                    <button onclick="startExtendedWorkflow()">🔧 Extended Workflow (8 steps, 12s)</button>
+                    <button onclick="clearScenario('scenario4')">🗑️ Clear</button>
+                </div>
+                <div id="scenario4" class="progress-section"></div>
+            </div>
+        </div>
+
+        <!-- Acceptance Criteria -->
+        <div class="acceptance-criteria">
+            <h2>✅ Acceptance Criteria</h2>
+            <ul class="criteria-list">
+                <li class="criteria-item">
+                    <strong>AC1: Start long operation</strong>
+                    <span>Progress indicator appears when operation starts</span>
+                </li>
+                <li class="criteria-item">
+                    <strong>AC2: Progress bar appears</strong>
+                    <span>Visual progress bar is shown to the user</span>
+                </li>
+                <li class="criteria-item">
+                    <strong>AC3: Percentage updates</strong>
+                    <span>Progress percentage updates in real-time during operation</span>
+                </li>
+                <li class="criteria-item">
+                    <strong>AC4: Estimated time shown</strong>
+                    <span>Estimated time remaining is displayed and updates</span>
+                </li>
+                <li class="criteria-item">
+                    <strong>AC5: Completion is clear</strong>
+                    <span>Success or error message clearly indicates completion</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Progress indicator class
+        class ProgressIndicator {
+            constructor(operationId, operationName, containerId) {
+                this.operationId = operationId;
+                this.operationName = operationName;
+                this.containerId = containerId;
+                this.progress = 0;
+                this.startTime = null;
+                this.state = 'loading'; // loading, success, error
+                this.events = [];
+                this.element = null;
+            }
+
+            start(message) {
+                this.startTime = Date.now();
+                this.progress = 0;
+                this.state = 'loading';
+                this.log('START', message || 'Operation started');
+                this.render();
+            }
+
+            updateProgress(progress, message) {
+                this.progress = Math.max(0, Math.min(100, progress));
+                this.log('UPDATE', message || `Progress: ${this.progress}%`);
+                this.render();
+            }
+
+            complete(message) {
+                this.progress = 100;
+                this.state = 'success';
+                const duration = ((Date.now() - this.startTime) / 1000).toFixed(2);
+                this.log('COMPLETE', message || 'Operation completed successfully');
+                this.render();
+            }
+
+            fail(message) {
+                this.state = 'error';
+                this.log('ERROR', message || 'Operation failed');
+                this.render();
+            }
+
+            log(type, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                this.events.unshift({ type, message, timestamp });
+                if (this.events.length > 20) {
+                    this.events.pop();
+                }
+            }
+
+            getDuration() {
+                if (!this.startTime) return '0.00s';
+                const duration = (Date.now() - this.startTime) / 1000;
+                return duration.toFixed(2) + 's';
+            }
+
+            getEstimatedTimeRemaining() {
+                if (!this.startTime || this.progress <= 0) return 'Calculating...';
+                const elapsed = (Date.now() - this.startTime) / 1000;
+                const estimatedTotal = (elapsed / this.progress) * 100;
+                const remaining = Math.max(0, estimatedTotal - elapsed);
+
+                if (remaining < 60) {
+                    return `~${remaining.toFixed(0)}s remaining`;
+                } else {
+                    return `~${(remaining / 60).toFixed(1)}m remaining`;
+                }
+            }
+
+            render() {
+                const container = document.getElementById(this.containerId);
+                if (!container) return;
+
+                const stateClass = this.state === 'success' ? 'success' : this.state === 'error' ? 'error' : '';
+
+                const icon = this.state === 'success' ? '✅' : this.state === 'error' ? '❌' : '⏳';
+
+                const progressFill = this.state === 'loading' ? this.progress : 100;
+
+                const html = `
+                    <div class="loading-indicator ${stateClass}">
+                        <div class="indicator-header">
+                            <div class="indicator-icon">${icon}</div>
+                            <div>
+                                <div class="indicator-message">${this.operationName}</div>
+                                ${this.events.length > 0 ? `<div class="indicator-status">${this.events[0].message}</div>` : ''}
+                            </div>
+                        </div>
+                        ${this.state === 'loading' || this.progress > 0 ? `
+                            <div class="indicator-progress-bar">
+                                <div class="indicator-progress-fill" style="width: ${progressFill}%"></div>
+                            </div>
+                            <div class="indicator-meta">
+                                <div class="indicator-percentage">${this.progress.toFixed(0)}%</div>
+                                <div class="indicator-duration">
+                                    ${this.getDuration()} • ${this.getEstimatedTimeRemaining()}
+                                </div>
+                            </div>
+                        ` : ''}
+                        <div class="event-log">
+                            ${this.events.map(e => `
+                                <div class="event-log-entry">
+                                    [${e.timestamp}] ${e.type}: ${e.message}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+                container.classList.add('active');
+            }
+        }
+
+        // Global indicator tracker
+        const indicators = {};
+
+        function getIndicator(id, name, containerId) {
+            if (!indicators[id]) {
+                indicators[id] = new ProgressIndicator(id, name, containerId);
+            }
+            return indicators[id];
+        }
+
+        // Scenario 1: Test Execution
+        function startTestExecution() {
+            const indicator = getIndicator('test1', 'Test Suite Execution', 'scenario1');
+            indicator.start('Initializing test environment...');
+
+            const totalTests = 20;
+            const duration = 5000; // 5 seconds
+            const interval = duration / totalTests;
+
+            let currentTest = 0;
+            const timer = setInterval(() => {
+                currentTest++;
+                const progress = (currentTest / totalTests) * 100;
+                indicator.updateProgress(progress, `Running test ${currentTest}/${totalTests}...`);
+
+                if (currentTest >= totalTests) {
+                    clearInterval(timer);
+                    indicator.complete(`All ${totalTests} tests passed!`);
+                }
+            }, interval);
+        }
+
+        function startQuickTest() {
+            const indicator = getIndicator('test1-quick', 'Quick Test Suite', 'scenario1');
+            indicator.start('Starting quick tests...');
+
+            const totalTests = 10;
+            const duration = 2000; // 2 seconds
+            const interval = duration / totalTests;
+
+            let currentTest = 0;
+            const timer = setInterval(() => {
+                currentTest++;
+                const progress = (currentTest / totalTests) * 100;
+                indicator.updateProgress(progress, `Quick test ${currentTest}/${totalTests}...`);
+
+                if (currentTest >= totalTests) {
+                    clearInterval(timer);
+                    indicator.complete(`Quick tests complete: ${totalTests}/${totalTests} passed`);
+                }
+            }, interval);
+        }
+
+        // Scenario 2: Data Processing
+        function startDataProcessing() {
+            const indicator = getIndicator('process1', 'Data Processing', 'scenario2');
+            indicator.start('Initializing data processor...');
+
+            const totalBatches = 100;
+            const duration = 6000; // 6 seconds
+            const interval = duration / totalBatches;
+
+            let currentBatch = 0;
+            const timer = setInterval(() => {
+                currentBatch++;
+                const progress = (currentBatch / totalBatches) * 100;
+                indicator.updateProgress(progress, `Processing batch ${currentBatch}/${totalBatches} (${(currentBatch * 100).toLocaleString()} records)...`);
+
+                if (currentBatch >= totalBatches) {
+                    clearInterval(timer);
+                    indicator.complete(`Processed ${totalBatches} batches successfully`);
+                }
+            }, interval);
+        }
+
+        function startLargeProcessing() {
+            const indicator = getIndicator('process2', 'Large Data Processing', 'scenario2');
+            indicator.start('Initializing large dataset...');
+
+            const totalBatches = 500;
+            const duration = 8000; // 8 seconds
+            const interval = duration / totalBatches;
+
+            let currentBatch = 0;
+            const timer = setInterval(() => {
+                currentBatch++;
+                const progress = (currentBatch / totalBatches) * 100;
+                indicator.updateProgress(progress, `Processing batch ${currentBatch}/${totalBatches}...`);
+
+                if (currentBatch >= totalBatches) {
+                    clearInterval(timer);
+                    indicator.complete(`Large dataset processing complete: ${totalBatches} batches`);
+                }
+            }, interval);
+        }
+
+        // Scenario 3: File Upload
+        function startFileUpload() {
+            const indicator = getIndicator('upload1', 'File Upload: data.csv', 'scenario3');
+            indicator.start('Starting upload...');
+
+            const fileSize = 50; // MB
+            const duration = 4000; // 4 seconds
+            const updateInterval = 100; // Update every 100ms
+            const totalUpdates = duration / updateInterval;
+            const progressPerUpdate = 100 / totalUpdates;
+
+            let uploaded = 0;
+            const timer = setInterval(() => {
+                uploaded += progressPerUpdate;
+                const uploadedMB = (uploaded / 100) * fileSize;
+                const speed = (fileSize / ((uploaded / 100) * (duration / 1000))).toFixed(2); // MB/s
+
+                indicator.updateProgress(uploaded, `Uploading ${uploadedMB.toFixed(1)} MB / ${fileSize} MB at ${speed} MB/s...`);
+
+                if (uploaded >= 100) {
+                    clearInterval(timer);
+                    indicator.complete(`File uploaded successfully: ${fileSize} MB`);
+                }
+            }, updateInterval);
+        }
+
+        function startLargeUpload() {
+            const indicator = getIndicator('upload2', 'File Upload: backup.tar.gz', 'scenario3');
+            indicator.start('Starting large file upload...');
+
+            const fileSize = 200; // MB
+            const duration = 7000; // 7 seconds
+            const updateInterval = 100;
+            const totalUpdates = duration / updateInterval;
+            const progressPerUpdate = 100 / totalUpdates;
+
+            let uploaded = 0;
+            const timer = setInterval(() => {
+                uploaded += progressPerUpdate;
+                const uploadedMB = (uploaded / 100) * fileSize;
+                const speed = (fileSize / ((uploaded / 100) * (duration / 1000))).toFixed(2);
+
+                indicator.updateProgress(uploaded, `Uploading ${uploadedMB.toFixed(1)} MB / ${fileSize} MB at ${speed} MB/s...`);
+
+                if (uploaded >= 100) {
+                    clearInterval(timer);
+                    indicator.complete(`Large file uploaded successfully: ${fileSize} MB`);
+                }
+            }, updateInterval);
+        }
+
+        function simulateUploadError() {
+            const indicator = getIndicator('upload3', 'File Upload: document.pdf', 'scenario3');
+            indicator.start('Starting upload...');
+
+            // Simulate some progress then fail
+            setTimeout(() => {
+                indicator.updateProgress(25, 'Uploading 12.5 MB / 50.0 MB...');
+            }, 500);
+
+            setTimeout(() => {
+                indicator.updateProgress(45, 'Uploading 22.5 MB / 50.0 MB...');
+            }, 1000);
+
+            setTimeout(() => {
+                indicator.fail('Upload failed: Network connection lost');
+            }, 1500);
+        }
+
+        // Scenario 4: Multi-Step Workflow
+        function startMultiStepWorkflow() {
+            const indicator = getIndicator('workflow1', 'Multi-Step Workflow', 'scenario4');
+            indicator.start('Initializing workflow...');
+
+            const steps = [
+                { progress: 20, message: 'Validating input data...', delay: 1600 },
+                { progress: 40, message: 'Processing business logic...', delay: 1600 },
+                { progress: 60, message: 'Generating reports...', delay: 1600 },
+                { progress: 80, message: 'Sending notifications...', delay: 1600 },
+                { progress: 100, message: 'Workflow complete!', delay: 1600 }
+            ];
+
+            let stepIndex = 0;
+            function executeStep() {
+                if (stepIndex >= steps.length) {
+                    indicator.complete('All workflow steps completed successfully');
+                    return;
+                }
+
+                const step = steps[stepIndex];
+                indicator.updateProgress(step.progress, step.message);
+
+                stepIndex++;
+                setTimeout(executeStep, step.delay);
+            }
+
+            setTimeout(executeStep, 100);
+        }
+
+        function startExtendedWorkflow() {
+            const indicator = getIndicator('workflow2', 'Extended Workflow', 'scenario4');
+            indicator.start('Initializing extended workflow...');
+
+            const steps = [
+                { progress: 12.5, message: 'Step 1: Preparing environment...', delay: 1500 },
+                { progress: 25, message: 'Step 2: Loading configuration...', delay: 1500 },
+                { progress: 37.5, message: 'Step 3: Validating permissions...', delay: 1500 },
+                { progress: 50, message: 'Step 4: Processing data...', delay: 1500 },
+                { progress: 62.5, message: 'Step 5: Running analysis...', delay: 1500 },
+                { progress: 75, message: 'Step 6: Generating output...', delay: 1500 },
+                { progress: 87.5, message: 'Step 7: Verifying results...', delay: 1500 },
+                { progress: 100, message: 'Step 8: Finalizing workflow...', delay: 1500 }
+            ];
+
+            let stepIndex = 0;
+            function executeStep() {
+                if (stepIndex >= steps.length) {
+                    indicator.complete('Extended workflow completed: 8/8 steps successful');
+                    return;
+                }
+
+                const step = steps[stepIndex];
+                indicator.updateProgress(step.progress, step.message);
+
+                stepIndex++;
+                setTimeout(executeStep, step.delay);
+            }
+
+            setTimeout(executeStep, 100);
+        }
+
+        // Utility functions
+        function clearScenario(containerId) {
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = '';
+                container.classList.remove('active');
+            }
+            // Clear associated indicators
+            Object.keys(indicators).forEach(id => {
+                if (indicators[id].containerId === containerId) {
+                    delete indicators[id];
+                }
+            });
+        }
+    </script>
+</body>
+</html>

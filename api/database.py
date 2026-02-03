@@ -51,12 +51,12 @@ class Feature(Base):
     category = Column(String(100), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
-    steps = Column(JSON, nullable=False)  # Stored as JSON array
+    steps = Column(JSON, nullable=False, default=list)  # Stored as JSON array, NOT NULL
     passes = Column(Boolean, nullable=False, default=False, index=True)
     in_progress = Column(Boolean, nullable=False, default=False, index=True)
     # Dependencies: list of feature IDs that must be completed before this feature
-    # NULL/empty = no dependencies (backwards compatible)
-    dependencies = Column(JSON, nullable=True, default=None)
+    # Default to empty list for new features (NULL only for legacy data)
+    dependencies = Column(JSON, nullable=False, default=list)
     # Complexity score for model routing (1=simple/Haiku, 2=medium/Sonnet, 3=complex/Sonnet)
     # Default 2 (medium) for backwards compatibility
     complexity_score = Column(Integer, nullable=False, default=2, index=True)
@@ -243,6 +243,24 @@ def _migrate_add_dependencies_column(engine) -> None:
             conn.commit()
 
 
+def _migrate_fix_null_dependencies(engine) -> None:
+    """Fix NULL values in dependencies column.
+
+    Converts NULL values to empty JSON arrays '[]' to ensure all features
+    have valid dependency lists. This is needed because the schema now
+    requires NOT NULL with default [].
+    """
+    with engine.connect() as conn:
+        # Check if column exists and has NULL values
+        result = conn.execute(text("PRAGMA table_info(features)"))
+        columns = [row[1] for row in result.fetchall()]
+
+        if "dependencies" in columns:
+            # Fix NULL dependencies values
+            conn.execute(text("UPDATE features SET dependencies = '[]' WHERE dependencies IS NULL"))
+            conn.commit()
+
+
 def _migrate_add_complexity_score_column(engine) -> None:
     """Add complexity_score column to existing databases that don't have it.
 
@@ -411,6 +429,7 @@ def create_database(project_dir: Path) -> tuple:
     _migrate_add_in_progress_column(engine)
     _migrate_fix_null_boolean_fields(engine)
     _migrate_add_dependencies_column(engine)
+    _migrate_fix_null_dependencies(engine)  # Fix NULL dependencies to empty arrays
     _migrate_add_complexity_score_column(engine)
     _migrate_add_testing_columns(engine)
 

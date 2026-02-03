@@ -267,6 +267,17 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
     - {"type": "error", "content": "..."} - Error message
     - {"type": "pong"} - Keep-alive pong
     """
+    # Accept the WebSocket connection FIRST (required by Starlette)
+    # This allows us to send proper error codes to the client
+    await websocket.accept()
+
+    # Security: Only allow connections from localhost
+    client_host = websocket.client.host if websocket.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost", None):
+        await websocket.close(code=4003, reason="Localhost access only")
+        return
+
+    # Validate project name
     if not validate_project_name(project_name):
         await websocket.close(code=4000, reason="Invalid project name")
         return
@@ -282,6 +293,7 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
     except Exception as e:
         logger.warning(f"Failed to parse query params: {e}")
 
+    # Get project directory
     project_dir = _get_project_path(project_name)
     if not project_dir:
         await websocket.close(code=4004, reason="Project not found in registry")
@@ -291,7 +303,6 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
         await websocket.close(code=4004, reason="Project directory not found")
         return
 
-    await websocket.accept()
     logger.info(f"Assistant WebSocket connected for project: {project_name}, mode: {mode}")
 
     session: Optional[AssistantChatSession] = None

@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #435: Mobile Tables Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .header p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .viewport-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        /* View Toggle Buttons */
+        .view-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .view-controls h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 48px;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn.active {
+            background: #28a745;
+            color: white;
+        }
+
+        /* ==================== SCROLLABLE TABLE VIEW ==================== */
+
+        .scroll-view {
+            display: block;
+        }
+
+        .scroll-view.hidden {
+            display: none;
+        }
+
+        .table-wrapper-scrollable {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-scroll-hint {
+            background: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-align: center;
+            border-left: 4px solid #ffc107;
+        }
+
+        .mobile-table {
+            width: 100%;
+            min-width: 600px; /* Force horizontal scroll */
+            border-collapse: collapse;
+            font-size: 16px; /* Prevent iOS zoom */
+        }
+
+        .mobile-table thead {
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .mobile-table th {
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            white-space: nowrap;
+        }
+
+        .mobile-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #dee2e6;
+            color: #212529;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .mobile-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .mobile-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 14px;
+            min-height: 44px; /* Touch target */
+        }
+
+        .btn-edit {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        /* ==================== CARD VIEW ==================== */
+
+        .card-view {
+            display: none;
+        }
+
+        .card-view.active {
+            display: block;
+        }
+
+        .cards-container {
+            display: grid;
+            gap: 16px;
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #212529;
+        }
+
+        .card-status {
+            font-size: 14px;
+        }
+
+        .card-field {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 14px;
+        }
+
+        .field-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .field-value {
+            font-size: 16px;
+            color: #212529;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        /* ==================== ACCEPTANCE CRITERIA ==================== */
+
+        .acceptance-criteria {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-top: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .acceptance-criteria h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .criteria-list {
+            list-style: none;
+        }
+
+        .criteria-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #dee2e6;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .criteria-item.passed {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+
+        .criteria-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .criteria-item.passed .criteria-checkbox {
+            background: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+
+        .criteria-text {
+            flex: 1;
+        }
+
+        .criteria-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 4px;
+        }
+
+        .criteria-desc {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .test-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        /* ==================== RESPONSIVE ==================== */
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .btn {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+
+            .toggle-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📱 Feature #435: Mobile Tables</h1>
+            <p>
+                Demonstrates two patterns for making tables usable on mobile devices:
+                <strong>Horizontal Scroll</strong> and <strong>Card View</strong>.
+            </p>
+            <div class="viewport-info" id="viewport-info">
+                Loading viewport info...
+            </div>
+        </div>
+
+        <!-- View Toggle Controls -->
+        <div class="view-controls">
+            <h3>Choose Table View Pattern</h3>
+            <div class="toggle-group">
+                <button class="btn btn-primary active" id="btnScrollView" onclick="switchToScrollView()">
+                    📜 Horizontal Scroll View
+                </button>
+                <button class="btn btn-secondary" id="btnCardView" onclick="switchToCardView()">
+                    🃏 Card View (Stacked)
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Table View -->
+        <div class="scroll-view" id="scrollView">
+            <div class="table-wrapper-scrollable">
+                <div class="table-scroll-hint">
+                    📱 <strong>Mobile Tip:</strong> Swipe left/right to see more columns →
+                </div>
+                <table class="mobile-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Test Name</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                            <th>Timestamp</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>Login Authentication Test</td>
+                            <td><span class="status-badge status-active">Active</span></td>
+                            <td>245ms</td>
+                            <td>2026-01-26 14:32:15</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-sm btn-edit">Edit</button>
+                                    <button class="btn btn-sm btn-delete">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>Database Connection Test</td>
+                            <td><span class="status-badge status-pending">Pending</span></td>
+                            <td>892ms</td>
+                            <td>2026-01-26 14:33:47</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-sm btn-edit">Edit</button>
+                                    <button class="btn btn-sm btn-delete">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>API Endpoint Verification</td>
+                            <td><span class="status-badge status-error">Error</span></td>
+                            <td>156ms</td>
+                            <td>2026-01-26 14:35:22</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-sm btn-edit">Edit</button>
+                                    <button class="btn btn-sm btn-delete">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>UI Component Rendering Test</td>
+                            <td><span class="status-badge status-active">Active</span></td>
+                            <td>412ms</td>
+                            <td>2026-01-26 14:36:05</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-sm btn-edit">Edit</button>
+                                    <button class="btn btn-sm btn-delete">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>Mobile Responsive Layout Check</td>
+                            <td><span class="status-badge status-active">Active</span></td>
+                            <td>678ms</td>
+                            <td>2026-01-26 14:37:18</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-sm btn-edit">Edit</button>
+                                    <button class="btn btn-sm btn-delete">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Card View -->
+        <div class="card-view" id="cardView">
+            <div class="cards-container">
+                <!-- Card 1 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <div class="card-title">Login Authentication Test</div>
+                        <div class="card-status">
+                            <span class="status-badge status-active">Active</span>
+                        </div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">ID</div>
+                        <div class="field-value">1</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Status</div>
+                        <div class="field-value">Active</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Duration</div>
+                        <div class="field-value">245ms</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Timestamp</div>
+                        <div class="field-value">2026-01-26 14:32:15</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-edit">Edit</button>
+                        <button class="btn btn-sm btn-delete">Delete</button>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <div class="card-title">Database Connection Test</div>
+                        <div class="card-status">
+                            <span class="status-badge status-pending">Pending</span>
+                        </div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">ID</div>
+                        <div class="field-value">2</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Status</div>
+                        <div class="field-value">Pending</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Duration</div>
+                        <div class="field-value">892ms</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Timestamp</div>
+                        <div class="field-value">2026-01-26 14:33:47</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-edit">Edit</button>
+                        <button class="btn btn-sm btn-delete">Delete</button>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <div class="card-title">API Endpoint Verification</div>
+                        <div class="card-status">
+                            <span class="status-badge status-error">Error</span>
+                        </div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">ID</div>
+                        <div class="field-value">3</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Status</div>
+                        <div class="field-value">Error</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Duration</div>
+                        <div class="field-value">156ms</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Timestamp</div>
+                        <div class="field-value">2026-01-26 14:35:22</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-edit">Edit</button>
+                        <button class="btn btn-sm btn-delete">Delete</button>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <div class="card-title">UI Component Rendering Test</div>
+                        <div class="card-status">
+                            <span class="status-badge status-active">Active</span>
+                        </div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">ID</div>
+                        <div class="field-value">4</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Status</div>
+                        <div class="field-value">Active</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Duration</div>
+                        <div class="field-value">412ms</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Timestamp</div>
+                        <div class="field-value">2026-01-26 14:36:05</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-edit">Edit</button>
+                        <button class="btn btn-sm btn-delete">Delete</button>
+                    </div>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <div class="card-title">Mobile Responsive Layout Check</div>
+                        <div class="card-status">
+                            <span class="status-badge status-active">Active</span>
+                        </div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">ID</div>
+                        <div class="field-value">5</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Status</div>
+                        <div class="field-value">Active</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Duration</div>
+                        <div class="field-value">678ms</div>
+                    </div>
+                    <div class="card-field">
+                        <div class="field-label">Timestamp</div>
+                        <div class="field-value">2026-01-26 14:37:18</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-edit">Edit</button>
+                        <button class="btn btn-sm btn-delete">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acceptance Criteria -->
+        <div class="acceptance-criteria">
+            <h2>✅ Acceptance Criteria</h2>
+            <ul class="criteria-list">
+                <li class="criteria-item" id="ac1">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC1: View table on mobile</div>
+                        <div class="criteria-desc">Table displays correctly at 375px viewport width</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac2">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC2: Verify table scrolls or stacks</div>
+                        <div class="criteria-desc">Horizontal scroll OR card stacking works properly</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac3">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC3: Verify headers meaningful</div>
+                        <div class="criteria-desc">Headers explain data or cards have labeled fields</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac4">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC4: Verify data readable</div>
+                        <div class="criteria-desc">Text is 16px minimum, good contrast, not truncated</div>
+                    </div>
+                </li>
+                <li class="criteria-item" id="ac5">
+                    <div class="criteria-checkbox">✓</div>
+                    <div class="criteria-text">
+                        <div class="criteria-title">AC5: Verify interactions work</div>
+                        <div class="criteria-desc">Buttons are tappable (44x44px minimum), properly spaced</div>
+                    </div>
+                </li>
+            </ul>
+
+            <div class="test-actions">
+                <button class="btn btn-primary" onclick="verifyAllCriteria()">✅ Verify All Criteria</button>
+                <button class="btn btn-secondary" onclick="resetDemo()">🔄 Reset Demo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update viewport info
+        function updateViewportInfo() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const info = document.getElementById('viewport-info');
+
+            info.innerHTML = `
+                <strong>Current Viewport:</strong> ${width}px × ${height}px<br>
+                <strong>Device Type:</strong> ${width <= 375 ? 'Mobile (Small)' : width <= 768 ? 'Tablet' : 'Desktop'}<br>
+                <strong>Recommended:</strong> 375px width for mobile testing
+            `;
+        }
+
+        // Switch to scroll view
+        function switchToScrollView() {
+            document.getElementById('scrollView').classList.remove('hidden');
+            document.getElementById('cardView').classList.remove('active');
+            document.getElementById('btnScrollView').classList.add('active');
+            document.getElementById('btnCardView').classList.remove('active');
+            logEvent('Switched to horizontal scroll view');
+        }
+
+        // Switch to card view
+        function switchToCardView() {
+            document.getElementById('scrollView').classList.add('hidden');
+            document.getElementById('cardView').classList.add('active');
+            document.getElementById('btnScrollView').classList.remove('active');
+            document.getElementById('btnCardView').classList.add('active');
+            logEvent('Switched to card view (stacked layout)');
+        }
+
+        // Verify all acceptance criteria
+        function verifyAllCriteria() {
+            const results = {
+                ac1: verifyAC1(),
+                ac2: verifyAC2(),
+                ac3: verifyAC3(),
+                ac4: verifyAC4(),
+                ac5: verifyAC5()
+            };
+
+            // Update UI
+            for (const [ac, passed] of Object.entries(results)) {
+                const element = document.getElementById(ac);
+                if (passed) {
+                    element.classList.add('passed');
+                } else {
+                    element.classList.remove('passed');
+                }
+            }
+
+            // Show summary
+            const passedCount = Object.values(results).filter(v => v).length;
+            const totalCount = Object.keys(results).length;
+
+            logEvent(`Verification complete: ${passedCount}/${totalCount} criteria passed`);
+
+            return results;
+        }
+
+        // AC1: View table on mobile
+        function verifyAC1() {
+            const width = window.innerWidth;
+            const table = document.querySelector('.mobile-table') || document.querySelector('.data-card');
+
+            const passed = (width <= 375) && (table !== null);
+            logEvent(`AC1: ${passed ? 'PASS' : 'FAIL'} - Viewport: ${width}px, Table found: ${!!table}`);
+            return passed;
+        }
+
+        // AC2: Table scrolls or stacks
+        function verifyAC2() {
+            const scrollContainer = document.querySelector('.table-wrapper-scrollable');
+            const cardView = document.getElementById('cardView');
+
+            const hasScroll = scrollContainer && scrollContainer.offsetWidth > 0;
+            const hasCards = cardView && cardView.classList.contains('active');
+
+            const passed = hasScroll || hasCards;
+            logEvent(`AC2: ${passed ? 'PASS' : 'FAIL'} - Scroll: ${hasScroll}, Cards: ${hasCards}`);
+            return passed;
+        }
+
+        // AC3: Headers meaningful
+        function verifyAC3() {
+            const headers = document.querySelectorAll('.mobile-table thead th');
+            const cardLabels = document.querySelectorAll('.field-label');
+
+            const hasHeaders = headers.length > 0;
+            const hasCardLabels = cardLabels.length > 0;
+
+            const passed = hasHeaders || hasCardLabels;
+            logEvent(`AC3: ${passed ? 'PASS' : 'FAIL'} - Headers: ${headers.length}, Card labels: ${cardLabels.length}`);
+            return passed;
+        }
+
+        // AC4: Data readable
+        function verifyAC4() {
+            const cells = document.querySelectorAll('.mobile-table td');
+            const cardValues = document.querySelectorAll('.field-value');
+
+            let fontSizeOK = true;
+
+            if (cells.length > 0) {
+                const fontSize = window.getComputedStyle(cells[0]).fontSize;
+                fontSizeOK = parseFloat(fontSize) >= 14;
+            } else if (cardValues.length > 0) {
+                const fontSize = window.getComputedStyle(cardValues[0]).fontSize;
+                fontSizeOK = parseFloat(fontSize) >= 14;
+            }
+
+            const passed = fontSizeOK;
+            logEvent(`AC4: ${passed ? 'PASS' : 'FAIL'} - Font size >= 14px: ${fontSizeOK}`);
+            return passed;
+        }
+
+        // AC5: Interactions work
+        function verifyAC5() {
+            const buttons = document.querySelectorAll('button');
+            let allTappable = true;
+
+            buttons.forEach(btn => {
+                const height = btn.offsetHeight;
+                const width = btn.offsetWidth;
+                if (height < 44 && width < 44) {
+                    allTappable = false;
+                }
+            });
+
+            const passed = allTappable;
+            logEvent(`AC5: ${passed ? 'PASS' : 'FAIL'} - All buttons tappable: ${allTappable}`);
+            return passed;
+        }
+
+        // Reset demo
+        function resetDemo() {
+            // Reset criteria
+            document.querySelectorAll('.criteria-item').forEach(item => {
+                item.classList.remove('passed');
+            });
+
+            // Reset to scroll view
+            switchToScrollView();
+
+            logEvent('Demo reset - Click "Verify All Criteria" to check acceptance criteria');
+        }
+
+        // Log event
+        function logEvent(message) {
+            console.log(`[Mobile Tables Demo] ${message}`);
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            updateViewportInfo();
+            logEvent('Demo loaded - Feature #435: Mobile Tables');
+
+            // Auto-verify on load
+            setTimeout(() => {
+                verifyAllCriteria();
+            }, 500);
+        });
+
+        window.addEventListener('resize', updateViewportInfo);
+    </script>
+</body>
+</html>

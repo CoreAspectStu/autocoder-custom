@@ -9,7 +9,9 @@
  */
 
 import { useState } from 'react'
-import { AlertCircle, Mail, MessageSquare, CreditCard, Globe, Database, Lock } from 'lucide-react'
+import { AlertCircle, Mail, MessageSquare, CreditCard, Globe, Database, Lock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
+import { ConnectionTestSkeleton } from './SkeletonLoader'
+import { testConnection } from '../lib/api'
 
 // ============================================================================
 // Types
@@ -34,6 +36,12 @@ export interface BlockerConfig {
   notes?: string
 }
 
+export interface ConnectionTestResult {
+  success: boolean
+  message: string
+  details?: Record<string, any>
+}
+
 export interface DetectBlockersResponse {
   success: boolean
   project_name: string
@@ -52,7 +60,6 @@ interface BlockerQuestionsProps {
   projectName: string
   blockers: BlockerConfig[]
   onConfigure: (blockers: BlockerConfig[]) => void
-  onSkip?: () => void
 }
 
 // ============================================================================
@@ -92,28 +99,80 @@ function getActionDescription(action: BlockerAction): string {
 // ============================================================================
 
 export function BlockerQuestions({
-  projectName: _projectName, // Prefix with underscore to indicate intentionally unused
+  projectName,
   blockers,
   onConfigure,
-  onSkip
 }: BlockerQuestionsProps) {
   const [selectedActions, setSelectedActions] = useState<Record<string, BlockerAction>>({})
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
 
   const currentBlocker = blockers[currentIndex]
   const isLast = currentIndex === blockers.length - 1
   const isFirst = currentIndex === 0
 
-  const handleSelectAction = (action: BlockerAction) => {
+  const handleSelectAction = async (action: BlockerAction) => {
     setSelectedActions(prev => ({
       ...prev,
       [currentBlocker.blocker_type]: action
     }))
+
+    // If "wait" is selected, test the connection
+    if (action === 'wait') {
+      await testBlockerConnection()
+    }
+  }
+
+  const testBlockerConnection = async () => {
+    setIsTesting(true)
+    setTestResult(null)
+
+    try {
+      const result = await testConnection({
+        blocker_id: `${currentBlocker.blocker_type}_${currentBlocker.blocker_type}`,
+        blocker_type: mapBlockerTypeToAPI(currentBlocker.blocker_type),
+        service: currentBlocker.blocker_type,
+        timeout: 10
+      })
+
+      setTestResult({
+        success: result.success,
+        message: result.message,
+        details: result.details
+      })
+    } catch (error) {
+      setTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to test connection'
+      })
+    } finally {
+      setIsTesting(false)
+    }
+  }
+
+  // Map UI blocker types to API blocker types
+  const mapBlockerTypeToAPI = (type: BlockerType): string => {
+    const mapping: Record<BlockerType, string> = {
+      email_verification: 'service_unavailable',
+      sms: 'service_unavailable',
+      payment_gateway: 'api_key',
+      external_api: 'service_unavailable',
+      database_migration: 'resource_missing',
+      auth_provider: 'auth_provider'
+    }
+    return mapping[type] || 'service_unavailable'
   }
 
   const handleNext = () => {
-    if (!selectedActions[currentBlocker.blocker_type]) {
+    const selectedAction = selectedActions[currentBlocker.blocker_type]
+    if (!selectedAction) {
       return // Must select an action first
+    }
+
+    // For "wait" action, require successful connection test
+    if (selectedAction === 'wait' && (!testResult || !testResult.success)) {
+      return // Must have successful connection test
     }
 
     if (isLast) {
@@ -124,8 +183,14 @@ export function BlockerQuestions({
       }))
       onConfigure(configuredBlockers)
     } else {
+      // Reset test result for next blocker
+      setTestResult(null)
       setCurrentIndex(prev => prev + 1)
     }
+  }
+
+  const handleRetry = () => {
+    testBlockerConnection()
   }
 
   const handleBack = () => {
@@ -217,12 +282,14 @@ export function BlockerQuestions({
                 <button
                   key={action}
                   onClick={() => handleSelectAction(action)}
+                  disabled={isTesting}
                   className={`
                     w-full text-left p-4 rounded-lg border-2 transition-all duration-200
                     ${isSelected
                       ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                       : 'border-gray-300 dark:border-gray-600 hover:border-purple-300 dark:hover:border-purple-600'
                     }
+                    ${isTesting ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
                   <div className="flex items-start gap-3">
@@ -251,38 +318,90 @@ export function BlockerQuestions({
             })}
           </div>
         </div>
+
+        {/* Connection Test Result - shown when "wait" is selected */}
+        {selectedAction === 'wait' && (
+          <div className="mt-4">
+            {isTesting ? (
+              <ConnectionTestSkeleton service={getBlockerLabel(currentBlocker.blocker_type)} />
+            ) : testResult ? (
+              <div className={`p-4 rounded-lg border-2 ${
+                testResult.success
+                  ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-400'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-400'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {testResult.success ? (
+                    <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className={`font-semibold ${
+                      testResult.success
+                        ? 'text-green-900 dark:text-green-100'
+                        : 'text-red-900 dark:text-red-100'
+                    }`}>
+                      {testResult.success ? 'Connection Successful!' : 'Connection Failed'}
+                    </p>
+                    <p className={`text-sm mt-1 ${
+                      testResult.success
+                        ? 'text-green-700 dark:text-green-300'
+                        : 'text-red-700 dark:text-red-300'
+                    }`}>
+                      {testResult.message}
+                    </p>
+                    {!testResult.success && (
+                      <button
+                        onClick={handleRetry}
+                        className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Retry Connection
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between gap-3">
-        <button
-          onClick={onSkip}
-          className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-        >
-          Skip Blocker Configuration
-        </button>
-
+      <div className="flex justify-end gap-3">
         <div className="flex gap-3">
           {!isFirst && (
             <button
               onClick={handleBack}
-              className="px-4 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              disabled={isTesting}
+              className={`px-4 py-2 border-2 rounded-lg transition-colors ${
+                isTesting
+                  ? 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
             >
               Back
             </button>
           )}
           <button
             onClick={handleNext}
-            disabled={!selectedAction}
+            disabled={
+              !selectedAction ||
+              isTesting ||
+              (selectedAction === 'wait' && (!testResult || !testResult.success))
+            }
             className={`
               px-6 py-2 rounded-lg font-semibold transition-all duration-200
-              ${selectedAction
+              ${selectedAction &&
+                (selectedAction !== 'wait' || (testResult && testResult.success)) &&
+                !isTesting
                 ? 'bg-purple-500 text-white hover:bg-purple-600 cursor-pointer'
                 : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
               }
             `}
           >
-            {isLast ? 'Finish Configuration' : 'Next'}
+            {isTesting ? 'Testing Connection...' : isLast ? 'Finish Configuration' : 'Next'}
           </button>
         </div>
       </div>
@@ -303,13 +422,24 @@ export function useBlockerDetection() {
     setError(null)
 
     try {
-      const response = await fetch(`/api/uat/detect-blockers`, {
+      // Get project path from registry
+      const projectsResp = await fetch('/api/projects')
+      const projects = await projectsResp.json()
+      const project = projects.find((p: any) => p.name === projectName)
+
+      if (!project) {
+        throw new Error(`Project ${projectName} not found`)
+      }
+
+      // Use the new blocker detection API
+      const response = await fetch('/api/blocker/detect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           project_name: projectName,
+          project_path: project.path,
         }),
       })
 
@@ -318,7 +448,25 @@ export function useBlockerDetection() {
       }
 
       const data = await response.json()
-      return data
+
+      // Transform the response to match the expected format
+      const blockers: BlockerConfig[] = data.blockers.map((b: any) => ({
+        blocker_type: b.blocker_type as BlockerType,
+        detected: true,
+        reason: b.description,
+        affected_tests: b.affected_tests,
+        notes: b.priority === 'critical' ? 'This is critical for test execution' : undefined,
+      }))
+
+      return {
+        success: data.blockers_detected,
+        project_name: projectName,
+        blockers_detected: blockers,
+        total_blockers: blockers.length,
+        critical_blockers: blockers.filter((b: BlockerConfig) => b.notes?.includes('critical')).length,
+        message: data.summary,
+        recommendations: data.summary,
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to detect blockers'
       setError(message)
@@ -333,22 +481,26 @@ export function useBlockerDetection() {
     setError(null)
 
     try {
-      const response = await fetch(`/api/uat/configure-blockers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          project_name: projectName,
-          blockers,
-        }),
-      })
+      // Use the new blocker respond API for each configured blocker
+      for (const blocker of blockers) {
+        if (blocker.action) {
+          const response = await fetch('/api/blocker/respond', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              blocker_id: `${blocker.blocker_type}_${blocker.blocker_type}`,
+              action: blocker.action,
+              project_name: projectName,
+            }),
+          })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+        }
       }
-
-      await response.json()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to configure blockers'
       setError(message)

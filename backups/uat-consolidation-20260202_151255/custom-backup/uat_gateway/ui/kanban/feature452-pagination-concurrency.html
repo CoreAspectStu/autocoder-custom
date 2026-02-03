@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #452: Pagination During Updates</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #1f2937;
+            font-size: 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-icon {
+            font-size: 24px;
+        }
+
+        .control-panel {
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results-container {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .result-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-item.new {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .result-item.missed {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .pagination-info {
+            flex: 1;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .test-log {
+            background: #1f2937;
+            color: #f3f4f6;
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+        }
+
+        .log-entry.success {
+            color: #10b981;
+        }
+
+        .log-entry.error {
+            color: #ef4444;
+        }
+
+        .log-entry.info {
+            color: #60a5fa;
+        }
+
+        .log-entry.warning {
+            color: #f59e0b;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .status-badge.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .checklist {
+            margin-top: 20px;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checklist-item label {
+            flex: 1;
+            color: #374151;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="feature-badge">Feature #452</span>
+            <h1>🔄 Pagination During Concurrent Updates</h1>
+            <p>Verify that pagination handles new records correctly when data is added while viewing paginated results</p>
+        </div>
+
+        <div class="alert alert-info">
+            <strong>What This Tests:</strong> When viewing page 1 of results, if new results are added (by another user, tab, or process),
+            navigating to page 2 should show correct results without missing or duplicating any records.
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2><span class="card-icon">📊</span> Results Viewer (Page 1)</h2>
+                <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px;">
+                    This simulates a user viewing the first page of results
+                </p>
+
+                <div class="control-panel">
+                    <div class="input-group">
+                        <label for="page1-limit">Results per page:</label>
+                        <input type="number" id="page1-limit" value="5" min="1" max="50">
+                    </div>
+                    <button class="btn btn-primary" onclick="loadPage1()">Load Page 1</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="page1-count">0</div>
+                        <div class="stat-label">Showing</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="page1-total">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+
+                <div class="results-container" id="page1-results">
+                    <div style="color: #9ca3af; text-align: center; padding: 20px;">
+                        Click "Load Page 1" to start
+                    </div>
+                </div>
+
+                <div class="pagination-controls">
+                    <button class="btn btn-primary" id="btn-page2" onclick="loadPage2()" disabled>
+                        Go to Page 2 →
+                    </button>
+                    <div class="pagination-info" id="page1-info"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><span class="card-icon">➕</span> Add New Results</h2>
+                <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px;">
+                    Simulates another user/process adding new results while viewing page 1
+                </p>
+
+                <div class="control-panel">
+                    <div class="input-group">
+                        <label for="new-result-name">Test Name:</label>
+                        <input type="text" id="new-result-name" placeholder="e.g., Test_CONCURRENT_452">
+                    </div>
+                    <button class="btn btn-success" onclick="addNewResult()">Add Single Result</button>
+                    <button class="btn btn-primary" onclick="addMultipleResults(3)">Add 3 Results</button>
+                    <button class="btn btn-danger" onclick="clearTestData()">Clear Test Data</button>
+                </div>
+
+                <div class="alert alert-warning">
+                    <strong>⚠️ Test Scenario:</strong><br>
+                    1. Load page 1 (shows results 1-5)<br>
+                    2. Add new results while viewing page 1<br>
+                    3. Go to page 2<br>
+                    4. Verify no results are missed or duplicated
+                </div>
+
+                <div class="checklist">
+                    <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 12px;">Verification Checklist:</h3>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check1">
+                        <label for="check1">Loaded page 1 successfully</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check2">
+                        <label for="check2">Added new result(s) while viewing page 1</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check3">
+                        <label for="check3">Navigated to page 2</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check4">
+                        <label for="check4">Page 2 shows correct results (no overlap with page 1)</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="check5">
+                        <label for="check5">All results accounted for (none missed)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="card-icon">🧪</span> Automated Test Suite</h2>
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px;">
+                Run automated tests to verify pagination correctness during concurrent updates
+            </p>
+
+            <div class="control-panel">
+                <button class="btn btn-primary" onclick="runAutomatedTests()">
+                    <span id="test-btn-text">▶ Run All Tests</span>
+                </button>
+                <button class="btn btn-danger" onclick="clearTestLog()">Clear Log</button>
+            </div>
+
+            <div class="test-log" id="test-log">
+                <div class="log-entry info">[INFO] Automated test suite ready</div>
+                <div class="log-entry info">[INFO] Click "Run All Tests" to begin</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="card-icon">📖</span> Acceptance Criteria</h2>
+            <div style="color: #374151; font-size: 14px; line-height: 1.8;">
+                <p><strong>AC1:</strong> View page 1 of results - User can load and view the first page of paginated results</p>
+                <p><strong>AC2:</strong> New result is added - While viewing page 1, new results are added to the dataset</p>
+                <p><strong>AC3:</strong> Go to page 2 - User can navigate from page 1 to page 2</p>
+                <p><strong>AC4:</strong> Verify pagination correct - Page 2 shows the correct set of results (offset-based)</p>
+                <p><strong>AC5:</strong> Verify no results missed - No results are duplicated or skipped across pages</p>
+            </div>
+
+            <h3 style="color: #1f2937; font-size: 18px; margin-top: 24px; margin-bottom: 12px;">Why This Matters</h3>
+            <div style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+                <p>In multi-user environments, it's common for one user to be viewing paginated results while another user
+                adds new data. The pagination system must handle this gracefully:</p>
+                <ul style="margin-left: 20px; margin-top: 8px;">
+                    <li><strong>Offset-based pagination</strong> (used here) is stable - page 2 always shows results [limit:limit*2]</li>
+                    <li>New results are added to the end, so they don't disrupt pages currently being viewed</li>
+                    <li>This prevents "shifting pages" where results move between pages as new data arrives</li>
+                </ul>
+            </div>
+
+            <h3 style="color: #1f2937; font-size: 18px; margin-top: 24px; margin-bottom: 12px;">Implementation Details</h3>
+            <div style="background: #1f2937; color: #f3f4f6; padding: 16px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; overflow-x: auto;">
+                <div style="color: #60a5fa;"># API endpoint uses offset-based pagination</div>
+                <div>GET /api/results?offset={offset}&limit={limit}</div>
+                <br>
+                <div style="color: #60a5fa;"># Page 1: offset=0, limit=5 → results [0:5]</div>
+                <div style="color: #60a5fa;"># Page 2: offset=5, limit=5 → results [5:10]</div>
+                <br>
+                <div style="color: #60a5fa;"># When new result is added:</div>
+                <div style="color: #10b981;"># ✓ It's appended to the end of the list</div>
+                <div style="color: #10b981;"># ✓ Existing page boundaries don't shift</div>
+                <div style="color: #10b981;"># ✓ Page 2 still shows the same results as before</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+        let authToken = localStorage.getItem('uat_token') || 'test-token';
+        let page1Results = [];
+        let page2Results = [];
+        let allResults = [];
+        let currentOffset = 0;
+        let currentLimit = 5;
+
+        // Set auth token for testing
+        function setAuthToken() {
+            // Try to get a real token by logging in
+            fetch(`${API_BASE}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: 'test_user',
+                    password: 'test_password'
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.access_token) {
+                      authToken = data.access_token;
+                      localStorage.setItem('uat_token', authToken);
+                      log('Authenticated successfully', 'success');
+                  }
+              }).catch(err => {
+                  // Use test token if login fails
+                  authToken = 'test-token-452';
+                  log('Using test token', 'info');
+              });
+        }
+
+        // Get auth headers
+        function getAuthHeaders() {
+            return {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        // Load page 1 of results
+        async function loadPage1() {
+            currentLimit = parseInt(document.getElementById('page1-limit').value) || 5;
+            currentOffset = 0;
+
+            log(`Loading page 1 (offset=${currentOffset}, limit=${currentLimit})...`, 'info');
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/results?offset=${currentOffset}&limit=${currentLimit}&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                page1Results = data.results || [];
+                allResults = []; // Clear and fetch all for comparison
+
+                document.getElementById('page1-count').textContent = page1Results.length;
+                document.getElementById('page1-total').textContent = data.pagination?.total || 0;
+                document.getElementById('page1-info').textContent =
+                    `Page 1 of ${Math.ceil((data.pagination?.total || 0) / currentLimit)} • ${data.pagination?.total || 0} total`;
+
+                displayResults('page1-results', page1Results, false);
+                document.getElementById('btn-page2').disabled = page1Results.length < currentLimit;
+
+                log(`✓ Page 1 loaded: ${page1Results.length} results`, 'success');
+                document.getElementById('check1').checked = true;
+
+                // Fetch all results for comparison
+                await fetchAllResults();
+
+            } catch (error) {
+                log(`✗ Error loading page 1: ${error.message}`, 'error');
+            }
+        }
+
+        // Load page 2 of results
+        async function loadPage2() {
+            const offset = currentLimit; // Page 2 starts after page 1
+
+            log(`Loading page 2 (offset=${offset}, limit=${currentLimit})...`, 'info');
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/results?offset=${offset}&limit=${currentLimit}&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                page2Results = data.results || [];
+
+                log(`✓ Page 2 loaded: ${page2Results.length} results`, 'success');
+
+                // Check for overlap with page 1
+                const overlap = checkOverlap(page1Results, page2Results);
+                if (overlap.length > 0) {
+                    log(`✗ WARNING: Found ${overlap.length} overlapping results between pages`, 'error');
+                    overlap.forEach(id => log(`  - Duplicate result ID: ${id}`, 'error'));
+                } else {
+                    log(`✓ No overlap between page 1 and page 2`, 'success');
+                }
+
+                // Check for missed results
+                await checkForMissedResults();
+
+                document.getElementById('check3').checked = true;
+                document.getElementById('check4').checked = overlap.length === 0;
+
+                // Display page 2 results
+                displayResults('page1-results', page2Results, true);
+
+            } catch (error) {
+                log(`✗ Error loading page 2: ${error.message}`, 'error');
+            }
+        }
+
+        // Add a new test result
+        async function addNewResult() {
+            const testName = document.getElementById('new-result-name').value ||
+                           `Test_CONCURRENT_${Date.now()}`;
+
+            log(`Adding new result: ${testName}...`, 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/results`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        test_name: testName,
+                        journey_id: 'test-journey-452',
+                        status: 'passed',
+                        duration_ms: 1000,
+                        steps: [
+                            { name: 'Step 1', status: 'passed', duration_ms: 500 },
+                            { name: 'Step 2', status: 'passed', duration_ms: 500 }
+                        ],
+                        browser: 'chrome',
+                        viewport: '1920x1080',
+                        started_at: new Date().toISOString(),
+                        completed_at: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                log(`✓ Added result: ${testName}`, 'success');
+                document.getElementById('check2').checked = true;
+
+                // Clear input
+                document.getElementById('new-result-name').value = '';
+
+            } catch (error) {
+                log(`✗ Error adding result: ${error.message}`, 'error');
+            }
+        }
+
+        // Add multiple results
+        async function addMultipleResults(count) {
+            for (let i = 0; i < count; i++) {
+                await addNewResult();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        // Fetch all results (no pagination) for comparison
+        async function fetchAllResults() {
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/results?scope=active&limit=1000`,
+                    { headers: getAuthHeaders() }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                allResults = data.results || [];
+                log(`Fetched ${allResults.length} total results for comparison`, 'info');
+
+            } catch (error) {
+                log(`Warning: Could not fetch all results: ${error.message}`, 'warning');
+            }
+        }
+
+        // Check for overlap between two pages
+        function checkOverlap(page1, page2) {
+            const page1Ids = new Set(page1.map(r => r.test_id));
+            const page2Ids = page2.map(r => r.test_id);
+            return page2Ids.filter(id => page1Ids.has(id));
+        }
+
+        // Check for missed results
+        async function checkForMissedResults() {
+            if (allResults.length === 0) {
+                await fetchAllResults();
+            }
+
+            // Combine page 1 and page 2 results
+            const viewedResults = new Set([
+                ...page1Results.map(r => r.test_id),
+                ...page2Results.map(r => r.test_id)
+            ]);
+
+            // Check if any of the first (currentLimit * 2) results are missing
+            const expectedRange = allResults.slice(0, currentLimit * 2);
+            const missed = expectedRange.filter(r => !viewedResults.has(r.test_id));
+
+            if (missed.length > 0) {
+                log(`✗ WARNING: ${missed.length} results were missed!`, 'error');
+                missed.forEach(r => log(`  - Missed: ${r.test_id} (${r.test_name})`, 'error'));
+                document.getElementById('check5').checked = false;
+            } else {
+                log(`✓ All results accounted for - none missed`, 'success');
+                document.getElementById('check5').checked = true;
+            }
+
+            return missed.length === 0;
+        }
+
+        // Display results in container
+        function displayResults(containerId, results, isPage2) {
+            const container = document.getElementById(containerId);
+
+            if (results.length === 0) {
+                container.innerHTML = '<div style="color: #9ca3af; text-align: center; padding: 20px;">No results found</div>';
+                return;
+            }
+
+            container.innerHTML = results.map(r => `
+                <div class="result-item ${isPage2 ? 'new' : ''}">
+                    <div style="font-weight: 600; margin-bottom: 4px;">${r.test_name}</div>
+                    <div style="font-size: 11px; color: #6b7280;">
+                        ID: ${r.test_id} • Status: ${r.status} • ${new Date(r.timestamp).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Clear test data
+        async function clearTestData() {
+            if (!confirm('Are you sure you want to delete all test results with "CONCURRENT" in the name?')) {
+                return;
+            }
+
+            log('Clearing test data...', 'info');
+
+            try {
+                // Get all results
+                const response = await fetch(`${API_BASE}/api/results?scope=active&limit=1000`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const results = data.results || [];
+
+                // Delete test results
+                const testResults = results.filter(r =>
+                    r.test_name.includes('CONCURRENT') || r.test_name.includes('Test_')
+                );
+
+                let deleted = 0;
+                for (const result of testResults) {
+                    try {
+                        await fetch(`${API_BASE}/api/results/${result.test_id}`, {
+                            method: 'DELETE',
+                            headers: getAuthHeaders()
+                        });
+                        deleted++;
+                    } catch (err) {
+                        // Ignore individual delete errors
+                    }
+                }
+
+                log(`✓ Deleted ${deleted} test results`, 'success');
+
+                // Reset UI
+                page1Results = [];
+                page2Results = [];
+                allResults = [];
+                document.getElementById('page1-count').textContent = '0';
+                document.getElementById('page1-total').textContent = '0';
+                document.getElementById('page1-results').innerHTML =
+                    '<div style="color: #9ca3af; text-align: center; padding: 20px;">Test data cleared</div>';
+                document.getElementById('btn-page2').disabled = true;
+
+                // Uncheck all
+                document.querySelectorAll('.checklist-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+            } catch (error) {
+                log(`✗ Error clearing test data: ${error.message}`, 'error');
+            }
+        }
+
+        // Automated test suite
+        async function runAutomatedTests() {
+            const btn = document.querySelector('#test-btn-text').parentNode;
+            btn.disabled = true;
+            document.getElementById('test-btn-text').textContent = 'Running...';
+
+            clearTestLog();
+            log('=== Starting Automated Test Suite ===', 'info');
+            log('Feature #452: Pagination During Concurrent Updates', 'info');
+            log('', 'info');
+
+            let testsPassed = 0;
+            let testsFailed = 0;
+
+            // Test 1: Load page 1
+            log('Test 1: Load page 1 of results', 'info');
+            try {
+                currentLimit = 5;
+                currentOffset = 0;
+                const response = await fetch(
+                    `${API_BASE}/api/results?offset=${currentOffset}&limit=${currentLimit}&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+                const data = await response.json();
+                page1Results = data.results || [];
+
+                if (page1Results.length > 0) {
+                    log(`✓ Test 1 PASSED: Loaded ${page1Results.length} results on page 1`, 'success');
+                    testsPassed++;
+                } else {
+                    log(`✓ Test 1 PASSED: Page 1 loaded successfully (0 results)`, 'success');
+                    testsPassed++;
+                }
+            } catch (error) {
+                log(`✗ Test 1 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Test 2: Add new result
+            log('Test 2: Add new result while viewing page 1', 'info');
+            try {
+                const testName = `Test_AUTO_452_${Date.now()}`;
+                const response = await fetch(`${API_BASE}/api/results`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        test_name: testName,
+                        journey_id: 'test-journey-452',
+                        status: 'passed',
+                        duration_ms: 1000,
+                        steps: [
+                            { name: 'Step 1', status: 'passed', duration_ms: 500 },
+                            { name: 'Step 2', status: 'passed', duration_ms: 500 }
+                        ],
+                        browser: 'chrome',
+                        viewport: '1920x1080',
+                        started_at: new Date().toISOString(),
+                        completed_at: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    log(`✓ Test 2 PASSED: Added new result ${testName}`, 'success');
+                    testsPassed++;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`✗ Test 2 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Test 3: Navigate to page 2
+            log('Test 3: Navigate to page 2', 'info');
+            try {
+                const offset = currentLimit;
+                const response = await fetch(
+                    `${API_BASE}/api/results?offset=${offset}&limit=${currentLimit}&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+                const data = await response.json();
+                page2Results = data.results || [];
+
+                log(`✓ Test 3 PASSED: Page 2 loaded with ${page2Results.length} results`, 'success');
+                testsPassed++;
+            } catch (error) {
+                log(`✗ Test 3 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Test 4: Verify no overlap
+            log('Test 4: Verify no duplicate results between pages', 'info');
+            try {
+                const overlap = checkOverlap(page1Results, page2Results);
+                if (overlap.length === 0) {
+                    log(`✓ Test 4 PASSED: No overlapping results between page 1 and page 2`, 'success');
+                    testsPassed++;
+                } else {
+                    log(`✗ Test 4 FAILED: Found ${overlap.length} overlapping results`, 'error');
+                    overlap.forEach(id => log(`  - Duplicate: ${id}`, 'error'));
+                    testsFailed++;
+                }
+            } catch (error) {
+                log(`✗ Test 4 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Test 5: Verify no missed results
+            log('Test 5: Verify all results are present (none missed)', 'info');
+            try {
+                await fetchAllResults();
+                const viewedResults = new Set([
+                    ...page1Results.map(r => r.test_id),
+                    ...page2Results.map(r => r.test_id)
+                ]);
+                const expectedRange = allResults.slice(0, currentLimit * 2);
+                const missed = expectedRange.filter(r => !viewedResults.has(r.test_id));
+
+                if (missed.length === 0) {
+                    log(`✓ Test 5 PASSED: All results accounted for, none missed`, 'success');
+                    testsPassed++;
+                } else {
+                    log(`✗ Test 5 FAILED: ${missed.length} results were missed`, 'error');
+                    missed.forEach(r => log(`  - Missed: ${r.test_id}`, 'error'));
+                    testsFailed++;
+                }
+            } catch (error) {
+                log(`✗ Test 5 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Test 6: Pagination consistency
+            log('Test 6: Verify pagination metadata is consistent', 'info');
+            try {
+                const response1 = await fetch(
+                    `${API_BASE}/api/results?offset=0&limit=5&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+                const data1 = await response1.json();
+
+                const response2 = await fetch(
+                    `${API_BASE}/api/results?offset=5&limit=5&scope=active`,
+                    { headers: getAuthHeaders() }
+                );
+                const data2 = await response2.json();
+
+                const total1 = data1.pagination?.total || 0;
+                const total2 = data2.pagination?.total || 0;
+
+                if (total1 === total2) {
+                    log(`✓ Test 6 PASSED: Pagination total consistent (${total1} results)`, 'success');
+                    testsPassed++;
+                } else {
+                    log(`✗ Test 6 FAILED: Total mismatch between pages (${total1} vs ${total2})`, 'error');
+                    testsFailed++;
+                }
+            } catch (error) {
+                log(`✗ Test 6 FAILED: ${error.message}`, 'error');
+                testsFailed++;
+            }
+            log('', 'info');
+
+            // Summary
+            log('=== Test Suite Complete ===', 'info');
+            log(`Tests Passed: ${testsPassed}/6`, testsPassed === 6 ? 'success' : 'info');
+            log(`Tests Failed: ${testsFailed}/6`, testsFailed === 0 ? 'success' : 'error');
+            log('', 'info');
+
+            if (testsFailed === 0) {
+                log('✓ ALL TESTS PASSED - Feature #452 is working correctly', 'success');
+            } else {
+                log(`✗ SOME TESTS FAILED - ${testsFailed} failures need attention`, 'error');
+            }
+
+            btn.disabled = false;
+            document.getElementById('test-btn-text').textContent = '▶ Run All Tests';
+        }
+
+        // Logging utility
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Clear test log
+        function clearTestLog() {
+            document.getElementById('test-log').innerHTML =
+                '<div class="log-entry info">[INFO] Log cleared</div>';
+        }
+
+        // Initialize
+        window.onload = function() {
+            setAuthToken();
+            log('Feature #452 demo page loaded', 'info');
+            log('Ready to test pagination during concurrent updates', 'info');
+        };
+    </script>
+</body>
+</html>

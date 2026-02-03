@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #313: Form Persistence Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        .subtitle { color: #6b7280; margin-bottom: 30px; }
+        .test-form { data-persist: "true"; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; }
+        input[type="text"],
+        input[type="email"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        input[type="checkbox"] { width: 18px; height: 18px; }
+        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .status {
+            margin-top: 24px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .status.info { background: #dbeafe; color: #1e40af; }
+        .status.success { background: #d1fae5; color: #065f46; }
+        .status.error { background: #fee2e2; color: #991b1b; }
+        .test-log {
+            margin-top: 24px;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-entry.pass { color: #059669; }
+        .log-entry.fail { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Feature #313: Form Persistence Test</h1>
+        <p class="subtitle">Test form data that survives page refresh using localStorage</p>
+
+        <div id="testForm" data-persist="true" data-form-id="test_form">
+            <div class="form-group">
+                <label for="testName">Test Name:</label>
+                <input
+                    type="text"
+                    id="testName"
+                    name="testName"
+                    placeholder="Enter test name..."
+                    data-persist="true"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="testEmail">Email:</label>
+                <input
+                    type="email"
+                    id="testEmail"
+                    name="testEmail"
+                    placeholder="Enter email..."
+                    data-persist="true"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="testNumber">Number:</label>
+                <input
+                    type="number"
+                    id="testNumber"
+                    name="testNumber"
+                    placeholder="Enter number..."
+                    data-persist="true"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="testSelect">Test Option:</label>
+                <select id="testSelect" name="testSelect" data-persist="true">
+                    <option value="">Choose an option...</option>
+                    <option value="option1">Option 1</option>
+                    <option value="option2">Option 2</option>
+                    <option value="option3">Option 3</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="testTextarea">Message:</label>
+                <textarea
+                    id="testTextarea"
+                    name="testTextarea"
+                    rows="4"
+                    placeholder="Enter your message..."
+                    data-persist="true"
+                ></textarea>
+            </div>
+
+            <div class="form-group checkbox-group">
+                <input
+                    type="checkbox"
+                    id="testCheckbox"
+                    name="testCheckbox"
+                    data-persist="true"
+                >
+                <label for="testCheckbox" style="margin: 0;">I agree to the terms</label>
+            </div>
+
+            <div class="btn-group">
+                <button type="button" class="btn-primary" onclick="runTests()">Run Tests</button>
+                <button type="button" class="btn-secondary" onclick="fillTestValues()">Fill Test Values</button>
+                <button type="button" class="btn-danger" onclick="clearAll()">Clear All Data</button>
+            </div>
+        </div>
+
+        <div id="status" class="status info" style="display: none;"></div>
+        <div id="testLog" class="test-log" style="display: none;"></div>
+    </div>
+
+    <script src="form_persistence.js"></script>
+    <script>
+        let testResults = [];
+
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            status.style.display = 'block';
+        }
+
+        function log(message, passed = null) {
+            const log = document.getElementById('testLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            if (passed === true) entry.classList.add('pass');
+            if (passed === false) entry.classList.add('fail');
+            entry.textContent = `${passed === true ? '✓' : passed === false ? '✗' : '→'} ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            log.style.display = 'block';
+        }
+
+        function fillTestValues() {
+            document.getElementById('testName').value = 'TEST_USER_12345';
+            document.getElementById('testEmail').value = 'test@example.com';
+            document.getElementById('testNumber').value = '42';
+            document.getElementById('testSelect').value = 'option2';
+            document.getElementById('testTextarea').value = 'This is a test message with special characters: @#$!%';
+            document.getElementById('testCheckbox').checked = true;
+
+            // Trigger change events to save
+            const form = document.getElementById('testForm');
+            const elements = form.querySelectorAll('[data-persist="true"]');
+            elements.forEach(el => el.dispatchEvent(new Event('change')));
+
+            showStatus('Test values filled! Now refresh the page to verify persistence.', 'info');
+            log('Filled form with test values', null);
+        }
+
+        function clearAll() {
+            localStorage.clear();
+            document.getElementById('testForm').reset();
+            showStatus('All localStorage data cleared and form reset.', 'info');
+            log('Cleared all data', null);
+        }
+
+        async function runTests() {
+            testResults = [];
+            document.getElementById('testLog').innerHTML = '';
+
+            log('Starting Feature #313 tests...', null);
+            log('=', null);
+
+            // Test 1: Fill in form fields
+            log('Test 1: Fill in form fields', null);
+            document.getElementById('testName').value = 'login_test';
+            document.getElementById('testName').dispatchEvent(new Event('input'));
+            const value1 = document.getElementById('testName').value;
+            const test1 = value1 === 'login_test';
+            testResults.push(test1);
+            log(test1 ? 'AC1: Form field filled successfully' : 'AC1 FAILED', test1);
+
+            // Test 2: Refresh simulation (save and reload)
+            log('Test 2: Simulate page refresh', null);
+            const savedState = formPersistence.loadState('test_form');
+            const test2 = savedState !== null;
+            testResults.push(test2);
+            log(test2 ? 'AC2: State saved to localStorage' : 'AC2 FAILED', test2);
+
+            // Test 3: Verify data is still there (after reload simulation)
+            log('Test 3: Verify data persists', null);
+            // Simulate page reload by clearing form and restoring
+            const testNameValue = document.getElementById('testName').value;
+            formPersistence.saveState('test_form', {
+                testName: { value: testNameValue },
+                lastUpdated: Date.now()
+            });
+
+            // Now simulate reload by clearing and restoring
+            document.getElementById('testName').value = '';
+            formPersistence.restoreFormState('test_form', document.getElementById('testForm'));
+            const restoredValue = document.getElementById('testName').value;
+            const test3 = restoredValue === 'login_test';
+            testResults.push(test3);
+            log(test3 ? 'AC3: Data restored after refresh' : 'AC3 FAILED', test3);
+
+            // Test 4: Verify data accuracy
+            log('Test 4: Verify data accuracy with complex values', null);
+            const complexValue = 'test_USER_123 @#$ !@#复杂字符';
+            document.getElementById('testTextarea').value = complexValue;
+            formPersistence.saveState('test_form', formPersistence.loadState('test_form'));
+            document.getElementById('testTextarea').value = '';
+            formPersistence.restoreFormState('test_form', document.getElementById('testForm'));
+            const restoredComplex = document.getElementById('testTextarea').value;
+            const test4 = restoredComplex === complexValue;
+            testResults.push(test4);
+            log(test4 ? 'AC4: Complex values preserved accurately' : 'AC4 FAILED', test4);
+
+            // Test 5: Verify form is still valid
+            log('Test 5: Verify form validity', null);
+            // Fill multiple fields
+            document.getElementById('testName').value = 'valid_test';
+            document.getElementById('testEmail').value = 'test@example.com';
+            document.getElementById('testSelect').value = 'option3';
+            document.getElementById('testCheckbox').checked = true;
+
+            formPersistence.saveFormState('test_form', document.getElementById('testForm'));
+
+            // Clear and restore
+            document.getElementById('testName').value = '';
+            document.getElementById('testEmail').value = '';
+            document.getElementById('testSelect').value = '';
+            document.getElementById('testCheckbox').checked = false;
+
+            formPersistence.restoreFormState('test_form', document.getElementById('testForm'));
+
+            const validName = document.getElementById('testName').value === 'valid_test';
+            const validEmail = document.getElementById('testEmail').value === 'test@example.com';
+            const validSelect = document.getElementById('testSelect').value === 'option3';
+            const validCheckbox = document.getElementById('testCheckbox').checked === true;
+
+            const test5 = validName && validEmail && validSelect && validCheckbox;
+            testResults.push(test5);
+            log(test5 ? 'AC5: All fields restored correctly' : 'AC5 FAILED', test5);
+            log(`  - Name: ${validName ? '✓' : '✗'}`, validName);
+            log(`  - Email: ${validEmail ? '✓' : '✗'}`, validEmail);
+            log(`  - Select: ${validSelect ? '✓' : '✗'}`, validSelect);
+            log(`  - Checkbox: ${validCheckbox ? '✓' : '✗'}`, validCheckbox);
+
+            // Summary
+            log('=', null);
+            const passed = testResults.filter(r => r).length;
+            const total = testResults.length;
+            log(`Results: ${passed}/${total} tests passed`, passed === total);
+
+            if (passed === total) {
+                showStatus('🎉 All tests passed! Feature #313 is working correctly.', 'success');
+                log('All acceptance criteria verified!', true);
+            } else {
+                showStatus(`⚠ ${total - passed} test(s) failed.`, 'error');
+            }
+        }
+
+        // Auto-restore on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Page loaded - form initialized', null);
+            log('Click "Fill Test Values" to test persistence, then refresh the page', null);
+        });
+    </script>
+</body>
+</html>

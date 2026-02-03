@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #420: Filter Application is Instant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .metric-unit {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #667eea;
+            color: white;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.secondary:hover {
+            background: #5a6268;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .filter-btn.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .results-container {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+
+        .result-item:hover {
+            background: #f8f9fa;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-icon {
+            font-size: 20px;
+        }
+
+        .result-name {
+            flex: 1;
+            font-size: 14px;
+            color: #212529;
+        }
+
+        .result-meta {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.passed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .log {
+            background: #212529;
+            color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid transparent;
+        }
+
+        .log-entry.success {
+            border-left-color: #28a745;
+        }
+
+        .log-entry.warning {
+            border-left-color: #ffc107;
+        }
+
+        .log-entry.error {
+            border-left-color: #dc3545;
+        }
+
+        .log-entry.info {
+            border-left-color: #17a2b8;
+        }
+
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .test-result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .test-result-item.pass {
+            border-left: 4px solid #28a745;
+        }
+
+        .test-result-item.fail {
+            border-left: 4px solid #dc3545;
+        }
+
+        .test-result-name {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .test-result-value {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #004085;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            color: #004085;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Feature #420: Filter Application is Instant</h1>
+            <p>Performance testing for instant filter application</p>
+        </div>
+
+        <div class="content">
+            <div class="info-box">
+                <h3>📋 What This Feature Tests</h3>
+                <p>
+                    This feature verifies that filters apply instantly without blocking the UI.
+                    "Instant" means the filter operation completes in less than 100ms (0.1 seconds),
+                    which is the threshold for human perception of delay.
+                </p>
+            </div>
+
+            <div class="section">
+                <h2>📊 Real-Time Performance Metrics</h2>
+                <div class="performance-metrics">
+                    <div class="metric-card">
+                        <div class="metric-value" id="avgFilterTime">0</div>
+                        <div class="metric-label">Avg Filter Time</div>
+                        <div class="metric-unit">milliseconds</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="maxFilterTime">0</div>
+                        <div class="metric-label">Max Filter Time</div>
+                        <div class="metric-unit">milliseconds</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="minFilterTime">0</div>
+                        <div class="metric-label">Min Filter Time</div>
+                        <div class="metric-unit">milliseconds</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="instantPercent">0</div>
+                        <div class="metric-label">Instant Rate</div>
+                        <div class="metric-unit">(% &lt; 100ms)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🎛️ Filter Controls</h2>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all" onclick="applyFilter('all')">
+                        All (<span id="count-all">0</span>)
+                    </button>
+                    <button class="filter-btn" data-filter="passed" onclick="applyFilter('passed')">
+                        ✅ Passed (<span id="count-passed">0</span>)
+                    </button>
+                    <button class="filter-btn" data-filter="failed" onclick="applyFilter('failed')">
+                        ❌ Failed (<span id="count-failed">0</span>)
+                    </button>
+                </div>
+
+                <div class="controls">
+                    <button onclick="generateTestData(100)">🎲 Generate 100 Results</button>
+                    <button onclick="generateTestData(500)">🎲 Generate 500 Results</button>
+                    <button onclick="generateTestData(1000)">🎲 Generate 1000 Results</button>
+                    <button onclick="runPerformanceTest()" class="secondary">🧪 Run Performance Test</button>
+                    <button onclick="clearLog()" class="secondary">🗑️ Clear Log</button>
+                </div>
+
+                <div class="results-container" id="results">
+                    <!-- Results will be rendered here -->
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📝 Performance Log</h2>
+                <div class="log" id="log">
+                    <div class="log-entry info">Ready. Generate test data to begin.</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>✅ Test Results</h2>
+                <div class="test-results" id="testResults">
+                    <p style="color: #6c757d; font-style: italic;">Run performance test to see results...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script>
+        // Test data
+        let allResults = [];
+        let filteredResults = [];
+        let filterTimes = [];
+        const INSTANT_THRESHOLD = 100; // milliseconds
+
+        // Generate mock test results
+        function generateTestData(count) {
+            log(`Generating ${count} test results...`, 'info');
+
+            const startTime = performance.now();
+            allResults = [];
+
+            const testNames = [
+                'User Login', 'User Registration', 'Password Reset', 'Profile Update',
+                'Search Functionality', 'Filter Results', 'Sort Data', 'Delete Item',
+                'Create New Item', 'Edit Item', 'Navigation', 'Form Submission',
+                'API Request', 'Data Validation', 'Error Handling', 'Loading State'
+            ];
+
+            for (let i = 0; i < count; i++) {
+                const passed = Math.random() > 0.3; // 70% pass rate
+                allResults.push({
+                    id: `test-${i}`,
+                    name: testNames[i % testNames.length] + (Math.floor(i / testNames.length) > 0 ? ` ${Math.floor(i / testNames.length) + 1}` : ''),
+                    passed: passed,
+                    duration: Math.floor(Math.random() * 500) + 50,
+                    timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString()
+                });
+            }
+
+            const endTime = performance.now();
+            const generationTime = (endTime - startTime).toFixed(2);
+
+            log(`✅ Generated ${count} results in ${generationTime}ms`, 'success');
+
+            // Update counts
+            updateCounts();
+
+            // Show all results initially
+            filteredResults = [...allResults];
+            renderResults();
+
+            // Clear filter metrics
+            filterTimes = [];
+            updateMetrics();
+        }
+
+        // Update count displays
+        function updateCounts() {
+            const total = allResults.length;
+            const passed = allResults.filter(r => r.passed).length;
+            const failed = total - passed;
+
+            document.getElementById('count-all').textContent = total;
+            document.getElementById('count-passed').textContent = passed;
+            document.getElementById('count-failed').textContent = failed;
+        }
+
+        // Apply filter with performance measurement
+        function applyFilter(filterType) {
+            const startTime = performance.now();
+
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-filter="${filterType}"]`).classList.add('active');
+
+            // Apply filter (simulate filtering operation)
+            if (filterType === 'all') {
+                filteredResults = [...allResults];
+            } else if (filterType === 'passed') {
+                filteredResults = allResults.filter(r => r.passed);
+            } else if (filterType === 'failed') {
+                filteredResults = allResults.filter(r => !r.passed);
+            }
+
+            const endTime = performance.now();
+            const filterTime = endTime - startTime;
+
+            // Record filter time
+            filterTimes.push(filterTime);
+
+            // Update metrics
+            updateMetrics();
+
+            // Log filter time
+            const isInstant = filterTime < INSTANT_THRESHOLD;
+            const status = isInstant ? '✅' : '⚠️';
+            const logClass = isInstant ? 'success' : 'warning';
+            log(`${status} Filter "${filterType}" applied in ${filterTime.toFixed(2)}ms (${filteredResults.length} results)`, logClass);
+
+            // Render results
+            renderResults();
+        }
+
+        // Update performance metrics display
+        function updateMetrics() {
+            if (filterTimes.length === 0) {
+                document.getElementById('avgFilterTime').textContent = '0';
+                document.getElementById('maxFilterTime').textContent = '0';
+                document.getElementById('minFilterTime').textContent = '0';
+                document.getElementById('instantPercent').textContent = '0';
+                return;
+            }
+
+            const avg = filterTimes.reduce((a, b) => a + b, 0) / filterTimes.length;
+            const max = Math.max(...filterTimes);
+            const min = Math.min(...filterTimes);
+            const instantCount = filterTimes.filter(t => t < INSTANT_THRESHOLD).length;
+            const instantPercent = (instantCount / filterTimes.length) * 100;
+
+            document.getElementById('avgFilterTime').textContent = avg.toFixed(2);
+            document.getElementById('maxFilterTime').textContent = max.toFixed(2);
+            document.getElementById('minFilterTime').textContent = min.toFixed(2);
+            document.getElementById('instantPercent').textContent = instantPercent.toFixed(1);
+        }
+
+        // Render filtered results
+        function renderResults() {
+            const container = document.getElementById('results');
+
+            if (filteredResults.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: #6c757d;">
+                        <p style="font-size: 48px; margin-bottom: 10px;">📭</p>
+                        <p>No results found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = filteredResults.slice(0, 100).map(result => `
+                <div class="result-item">
+                    <span class="status-icon">${result.passed ? '✅' : '❌'}</span>
+                    <span class="result-name">${result.name}</span>
+                    <span class="result-meta">${result.duration}ms</span>
+                    <span class="status-badge ${result.passed ? 'passed' : 'failed'}">
+                        ${result.passed ? 'PASSED' : 'FAILED'}
+                    </span>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+
+            if (filteredResults.length > 100) {
+                container.innerHTML += `
+                    <div style="padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+                        Showing first 100 of ${filteredResults.length} results
+                    </div>
+                `;
+            }
+        }
+
+        // Run comprehensive performance test
+        function runPerformanceTest() {
+            if (allResults.length === 0) {
+                log('⚠️ Please generate test data first', 'warning');
+                return;
+            }
+
+            log('🧪 Starting performance test...', 'info');
+
+            const results = [];
+            const iterations = 10;
+
+            // Test each filter type multiple times
+            const filterTypes = ['all', 'passed', 'failed'];
+
+            filterTypes.forEach(filterType => {
+                const times = [];
+
+                for (let i = 0; i < iterations; i++) {
+                    const startTime = performance.now();
+
+                    // Apply filter
+                    let filtered;
+                    if (filterType === 'all') {
+                        filtered = [...allResults];
+                    } else if (filterType === 'passed') {
+                        filtered = allResults.filter(r => r.passed);
+                    } else if (filterType === 'failed') {
+                        filtered = allResults.filter(r => !r.passed);
+                    }
+
+                    const endTime = performance.now();
+                    const filterTime = endTime - startTime;
+                    times.push(filterTime);
+                }
+
+                const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+                const maxTime = Math.max(...times);
+                const minTime = Math.min(...times);
+
+                results.push({
+                    filter: filterType,
+                    avg: avgTime,
+                    max: maxTime,
+                    min: minTime,
+                    instant: times.filter(t => t < INSTANT_THRESHOLD).length,
+                    iterations: iterations
+                });
+
+                log(`  Filter "${filterType}": avg=${avgTime.toFixed(2)}ms, min=${minTime.toFixed(2)}ms, max=${maxTime.toFixed(2)}ms`, 'info');
+            });
+
+            // Display results
+            displayTestResults(results);
+
+            log('✅ Performance test complete', 'success');
+        }
+
+        // Display test results
+        function displayTestResults(results) {
+            const container = document.getElementById('testResults');
+
+            let allPassed = true;
+
+            const html = results.map(result => {
+                const passed = result.avg < INSTANT_THRESHOLD;
+                if (!passed) allPassed = false;
+
+                return `
+                    <div class="test-result-item ${passed ? 'pass' : 'fail'}">
+                        <div>
+                            <div class="test-result-name">Filter: "${result.filter}"</div>
+                            <div class="test-result-value">
+                                Avg: ${result.avg.toFixed(2)}ms |
+                                Min: ${result.min.toFixed(2)}ms |
+                                Max: ${result.max.toFixed(2)}ms |
+                                Instant: ${result.instant}/${result.iterations} (${(result.instant / result.iterations * 100).toFixed(0)}%)
+                            </div>
+                        </div>
+                        <div style="color: ${passed ? '#28a745' : '#dc3545'}; font-size: 24px;">
+                            ${passed ? '✅' : '❌'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <h3 style="margin-bottom: 15px; color: #495057;">
+                    ${allPassed ? '✅ All Tests Passed' : '⚠️ Some Tests Failed'}
+                </h3>
+                ${html}
+                <div style="margin-top: 15px; padding: 10px; background: ${allPassed ? '#d4edda' : '#f8d7da'}; border-radius: 4px; font-size: 13px; color: ${allPassed ? '#155724' : '#721c24'};">
+                    <strong>Threshold:</strong> ${INSTANT_THRESHOLD}ms (0.1 seconds) - This is the limit for human perception of delay.<br>
+                    <strong>Result:</strong> ${allPassed ? 'All filters are instant!' : 'Some filters exceeded the instant threshold.'}
+                </div>
+            `;
+        }
+
+        // Log message
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Clear log
+        function clearLog() {
+            document.getElementById('log').innerHTML = '<div class="log-entry info">Log cleared.</div>';
+        }
+
+        // Initialize with some data
+        window.addEventListener('DOMContentLoaded', () => {
+            log('🚀 Feature #420: Filter Application is Instant', 'info');
+            log('📊 Performance monitoring ready', 'info');
+            log('💡 Generate test data to begin testing', 'info');
+        });
+    </script>
+</body>
+</html>

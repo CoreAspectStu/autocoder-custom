@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react'
 import { MessageSquare, Trash2, Loader2, AlertCircle } from 'lucide-react'
 import { useConversations, useDeleteConversation } from '../hooks/useConversations'
+import { useUATMode } from '../contexts/UATModeContext'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { AssistantConversation } from '../lib/types'
 
@@ -51,9 +52,12 @@ export function ConversationHistory({
 }: ConversationHistoryProps) {
   const [conversationToDelete, setConversationToDelete] = useState<AssistantConversation | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { isUATMode } = useUATMode()
 
-  const { data: conversations, isLoading } = useConversations(projectName)
-  const deleteConversation = useDeleteConversation(projectName)
+  // Pass mode to ensure conversations are isolated between dev and UAT
+  const mode = isUATMode ? 'uat' : 'dev'
+  const { data: conversations, isLoading } = useConversations(projectName, mode)
+  const deleteConversation = useDeleteConversation(projectName, mode)
 
   // Clear error when dropdown closes
   useEffect(() => {

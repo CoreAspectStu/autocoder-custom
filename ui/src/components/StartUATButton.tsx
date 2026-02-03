@@ -38,14 +38,14 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
     setAgentCount(0)
 
     try {
-      // For now, use a hardcoded cycle_id or get from state
-      // In production, this would come from the approved test plan
-      const cycleId = localStorage.getItem(`uat_cycle_${projectName}`) || 'latest'
-
-      // Trigger test execution
-      const result = await triggerUATExecution(cycleId, projectName)
+      // Trigger test execution - backend generates cycle_id
+      const result = await triggerUATExecution(projectName)
 
       console.log('[StartUAT] Execution triggered:', result)
+
+      // Save cycle_id for progress polling
+      const cycleId = result.cycle_id
+      localStorage.setItem(`uat_cycle_${projectName}`, cycleId)
 
       setStatus('running')
       setAgentCount(result.agents_spawned || 0)
@@ -53,7 +53,7 @@ export function StartUATButton({ projectName, pendingTestsCount, onExecutionStar
 
       // Show appropriate message based on execution mode
       if (result.execution_mode === 'direct') {
-        setMessage(`Playwright tests running - check terminal for output`)
+        setMessage(`Playwright tests running - ${result.message}`)
       } else {
         setMessage(`${result.agents_spawned || 0} test agents spawned successfully`)
       }

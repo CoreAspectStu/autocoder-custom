@@ -1,0 +1,727 @@
+"""
+UAT Gateway API Server
+
+FastAPI-based REST API with JWT authentication and rate limiting middleware.
+"""
+
+from fastapi import FastAPI, Request, Response, HTTPException, status, Depends, Body
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Dict, Any, Optional, List
+from datetime import datetime, timedelta
+import uvicorn
+import logging
+
+from .rate_limiter import RateLimiterMiddleware, RateLimitError, RateLimitInfo
+from .auth import JWTAuthenticator, AuthenticationError, TokenPayload
+from .user_preferences import get_preferences_manager
+
+
+logger = logging.getLogger(__name__)
+
+# Security scheme for JWT tokens
+security = HTTPBearer(auto_error=False)
+
+
+# Demo users for testing (in production, use a real database)
+DEMO_USERS = {
+    "admin": "admin123",  # Change in production!
+    "test": "test123",
+    "user": "user123"
+}
+
+
+def create_app(
+    jwt_secret_key: Optional[str] = None,
+    requests_per_minute: int = 60,
+    requests_per_hour: int = 1000,
+    burst_size: int = 10,
+    enable_rate_limiting: bool = True,
+    enable_auth: bool = True
+) -> FastAPI:
+    """
+    Create and configure FastAPI application
+
+    Args:
+        jwt_secret_key: Secret key for JWT signing
+        requests_per_minute: Rate limit per minute per client
+        requests_per_hour: Rate limit per hour per client
+        burst_size: Maximum burst size
+        enable_rate_limiting: Whether to enable rate limiting
+        enable_auth: Whether to enable JWT authentication
+
+    Returns:
+        Configured FastAPI application
+    """
+
+    app = FastAPI(
+        title="UAT Gateway API",
+        description="User Acceptance Testing Gateway API with authentication and rate limiting",
+        version="1.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc"
+    )
+
+    # Configure CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # In production, specify allowed origins
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Initialize JWT authenticator
+    authenticator = None
+    if enable_auth:
+        authenticator = JWTAuthenticator(secret_key=jwt_secret_key)
+        logger.info("JWT authentication enabled")
+
+    # Initialize rate limiter
+    rate_limiter = None
+    if enable_rate_limiting:
+        rate_limiter = RateLimiterMiddleware(
+            requests_per_minute=requests_per_minute,
+            requests_per_hour=requests_per_hour,
+            burst_size=burst_size
+        )
+
+    # Rate limiting middleware
+    @app.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        """Apply rate limiting to all requests"""
+        if not rate_limiter:
+            # Rate limiting disabled, proceed normally
+            return await call_next(request)
+
+        # Skip rate limiting for health check and documentation
+        if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+            return await call_next(request)
+
+        try:
+            # Check rate limit
+            allowed, rate_limit_info = await rate_limiter.check_rate_limit(request)
+
+            # Add rate limit headers to all responses
+            response = await call_next(request)
+
+            if rate_limit_info:
+                headers = rate_limiter.get_rate_limit_headers(rate_limit_info)
+                for key, value in headers.items():
+                    response.headers[key] = value
+
+            return response
+
+        except RateLimitError as e:
+            # Rate limit exceeded - return 429
+            rate_limit_info = e.rate_limit_info
+            headers = rate_limiter.get_rate_limit_headers(rate_limit_info)
+
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={
+                    "error": "Rate limit exceeded",
+                    "message": str(e),
+                    "limit": rate_limit_info.limit,
+                    "remaining": rate_limit_info.remaining,
+                    "reset_at": rate_limit_info.reset_time.isoformat()
+                },
+                headers=headers
+            )
+
+    # ========================================================================
+    # Authentication Dependencies
+    # ========================================================================
+
+    async def get_current_user(
+        credentials: HTTPAuthorizationCredentials = Depends(security)
+    ) -> TokenPayload:
+        """
+        Validate JWT token and return current user
+
+        Args:
+            credentials: HTTP Bearer credentials
+
+        Returns:
+            TokenPayload with user information, or anonymous user if auth disabled
+
+        Raises:
+            HTTPException: If authentication fails
+        """
+        if not enable_auth or authenticator is None:
+            # Auth disabled - return anonymous user
+            now = datetime.now()
+            return TokenPayload(
+                user_id="anonymous",
+                username="anonymous",
+                exp=now + timedelta(hours=24),  # No real expiry for anonymous
+                iat=now
+            )
+
+        if credentials is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No authentication token provided",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        token = credentials.credentials
+
+        try:
+            # Validate token
+            payload = authenticator.validate_token(token)
+            return payload
+
+        except AuthenticationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # ========================================================================
+    # Public Endpoints (No Authentication Required)
+    # ========================================================================
+
+    @app.get("/health")
+    async def health_check() -> Dict[str, str]:
+        """
+        Health check endpoint (not rate limited, no auth required)
+
+        Returns:
+            Health status
+        """
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    @app.get("/")
+    async def root() -> Dict[str, Any]:
+        """
+        Root endpoint with API information (no auth required)
+
+        Returns:
+            API information
+        """
+        return {
+            "name": "UAT Gateway API",
+            "version": "1.0.0",
+            "status": "operational",
+            "authentication": "enabled" if enable_auth else "disabled",
+            "endpoints": {
+                "health": "/health",
+                "login": "/auth/login",
+                "tests": "/api/tests",
+                "test_run": "/api/test-runs",
+                "results": "/api/results",
+                "docs": "/docs"
+            }
+        }
+
+    @app.post("/auth/login")
+    async def login(username: str, password: str) -> Dict[str, Any]:
+        """
+        Authenticate user and return JWT token
+
+        This is a demo implementation. In production, you would:
+        1. Hash passwords with bcrypt
+        2. Store users in a database
+        3. Use proper authentication flow
+
+        Args:
+            username: Username
+            password: Password
+
+        Returns:
+            JWT token and user info
+        """
+        if not enable_auth or authenticator is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Authentication not enabled"
+            )
+
+        # Validate credentials (demo only!)
+        if username not in DEMO_USERS or DEMO_USERS[username] != password:
+            logger.warning(f"Failed login attempt for user: {username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Create JWT token
+        token = authenticator.create_token(
+            user_id=username,  # In production, use real user ID
+            username=username
+        )
+
+        # Get expiry time
+        expiry = authenticator.get_token_expiry(token)
+
+        logger.info(f"User '{username}' logged in successfully")
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "expires_at": expiry.isoformat(),
+            "username": username
+        }
+
+    # ========================================================================
+    # Protected Endpoints (Authentication Required)
+    # ========================================================================
+
+    @app.get("/api/tests")
+    async def list_tests(
+        page: int = 1,
+        limit: int = 10,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        List available tests (authentication required)
+
+        Args:
+            page: Page number
+            limit: Items per page
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            List of tests
+        """
+        return {
+            "tests": [],
+            "page": page,
+            "limit": limit,
+            "total": 0,
+            "message": "Test listing endpoint",
+            "user": current_user.username
+        }
+
+    @app.post("/api/test-runs")
+    async def create_test_run(
+        test_data: Dict[str, Any],
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Create a new test run (authentication required)
+
+        Args:
+            test_data: Test configuration
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Created test run information
+        """
+        return {
+            "id": "test-run-123",
+            "status": "created",
+            "message": "Test run created",
+            "user": current_user.username
+        }
+
+    @app.get("/api/test-runs/{run_id}")
+    async def get_test_run(
+        run_id: str,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Get test run details (authentication required)
+
+        Args:
+            run_id: Test run ID
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Test run details
+        """
+        return {
+            "id": run_id,
+            "status": "running",
+            "message": "Test run details",
+            "user": current_user.username
+        }
+
+    @app.get("/api/results")
+    async def list_results(
+        test_run_id: Optional[str] = None,
+        page: int = 1,
+        limit: int = 10,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        List test results (authentication required)
+
+        Args:
+            test_run_id: Optional filter by test run
+            page: Page number
+            limit: Items per page
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            List of test results
+        """
+        return {
+            "results": [],
+            "page": page,
+            "limit": limit,
+            "total": 0,
+            "test_run_id": test_run_id,
+            "message": "Results listing",
+            "user": current_user.username
+        }
+
+    @app.get("/api/stats")
+    async def get_stats(
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Get rate limiting statistics (authentication required)
+
+        Args:
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Rate limiting statistics
+        """
+        if rate_limiter:
+            stats = rate_limiter.get_stats()
+            return {
+                "rate_limiting": {
+                    "enabled": True,
+                    **stats
+                },
+                "message": "Statistics",
+                "user": current_user.username
+            }
+        else:
+            return {
+                "rate_limiting": {
+                    "enabled": False
+                },
+                "user": current_user.username
+            }
+
+    @app.post("/api/admin/reset-rate-limit")
+    async def reset_rate_limit(
+        client_id: str,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, str]:
+        """
+        Reset rate limit for a client (admin endpoint, authentication required)
+
+        Args:
+            client_id: Client identifier to reset
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Reset confirmation
+        """
+        if rate_limiter:
+            rate_limiter.reset_client(client_id)
+            return {
+                "status": "success",
+                "message": f"Rate limit reset for client: {client_id}",
+                "user": current_user.username
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Rate limiting is not enabled",
+                "user": current_user.username
+            }
+
+    # ========================================================================
+    # User Preferences Endpoints
+    # ========================================================================
+
+    @app.get("/api/preferences")
+    async def get_preferences(
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Get all user preferences (authentication required)
+
+        Args:
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            All user preferences
+        """
+        prefs_manager = get_preferences_manager()
+        preferences = prefs_manager.get_all_preferences(current_user.user_id)
+
+        return {
+            "user_id": current_user.user_id,
+            "preferences": preferences,
+            "message": "User preferences retrieved"
+        }
+
+    @app.get("/api/preferences/{key}")
+    async def get_preference(
+        key: str,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Get a specific user preference (authentication required)
+
+        Args:
+            key: Preference key
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Preference value
+        """
+        prefs_manager = get_preferences_manager()
+        value = prefs_manager.get_preference(current_user.user_id, key)
+
+        if value is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Preference '{key}' not found"
+            )
+
+        return {
+            "user_id": current_user.user_id,
+            "key": key,
+            "value": value
+        }
+
+    @app.put("/api/preferences/{key}")
+    async def set_preference(
+        key: str,
+        value: Any = Body(..., embed=True),
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Set a user preference (authentication required)
+
+        Args:
+            key: Preference key
+            value: Preference value (will be JSON-decoded from request body)
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Updated preference
+        """
+        prefs_manager = get_preferences_manager()
+        prefs_manager.set_preference(current_user.user_id, key, value)
+
+        return {
+            "user_id": current_user.user_id,
+            "key": key,
+            "value": value,
+            "message": "Preference updated"
+        }
+
+    @app.post("/api/preferences")
+    async def set_preferences(
+        preferences: Dict[str, Any],
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Set multiple user preferences (authentication required)
+
+        Args:
+            preferences: Dictionary of preferences to set
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Updated preferences summary
+        """
+        prefs_manager = get_preferences_manager()
+        prefs_manager.set_preferences(current_user.user_id, preferences)
+
+        return {
+            "user_id": current_user.user_id,
+            "updated_count": len(preferences),
+            "message": f"Updated {len(preferences)} preferences"
+        }
+
+    @app.delete("/api/preferences/{key}")
+    async def delete_preference(
+        key: str,
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Delete a user preference (authentication required)
+
+        Args:
+            key: Preference key
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Deletion confirmation
+        """
+        prefs_manager = get_preferences_manager()
+        deleted = prefs_manager.delete_preference(current_user.user_id, key)
+
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Preference '{key}' not found"
+            )
+
+        return {
+            "user_id": current_user.user_id,
+            "key": key,
+            "message": "Preference deleted"
+        }
+
+    @app.post("/api/preferences/reset")
+    async def reset_preferences(
+        current_user: TokenPayload = Depends(get_current_user)
+    ) -> Dict[str, Any]:
+        """
+        Reset all user preferences to default (authentication required)
+
+        Args:
+            current_user: Authenticated user (injected by dependency)
+
+        Returns:
+            Reset confirmation
+        """
+        prefs_manager = get_preferences_manager()
+        prefs_manager.reset_user_preferences(current_user.user_id)
+
+        return {
+            "user_id": current_user.user_id,
+            "message": "All preferences reset to defaults"
+        }
+
+    # ========================================================================
+    # Enhanced 404 Not Found Handler
+    # ========================================================================
+
+    @app.exception_handler(404)
+    async def not_found_handler(request: Request, exc: HTTPException):
+        """
+        Handle 404 Not Found errors with helpful information
+
+        Feature #221: Provides helpful error messages and navigation options
+        """
+        requested_path = request.url.path
+
+        # Build helpful 404 response
+        error_response = {
+            "error": "Page Not Found",
+            "message": f"The requested endpoint '{requested_path}' does not exist",
+            "status_code": 404,
+            "requested_path": requested_path,
+            "available_endpoints": {
+                "public": {
+                    "root": "/",
+                    "health_check": "/health",
+                    "api_documentation": "/docs",
+                    "redoc": "/redoc",
+                    "openapi_spec": "/openapi.json"
+                },
+                "authentication": {
+                    "login": "/auth/login (POST)"
+                },
+                "protected": {
+                    "tests": "/api/tests (GET)",
+                    "create_test_run": "/api/test-runs (POST)",
+                    "test_run_details": "/api/test-runs/{run_id} (GET)",
+                    "results": "/api/results (GET)",
+                    "statistics": "/api/stats (GET)",
+                    "admin_reset_rate_limit": "/api/admin/reset-rate-limit (POST)"
+                }
+            },
+            "navigation": {
+                "return_to_root": "/",
+                "view_api_documentation": "/docs",
+                "check_health": "/health"
+            },
+            "help": "Visit /docs for interactive API documentation"
+        }
+
+        return JSONResponse(
+            status_code=404,
+            content=error_response
+        )
+
+    # ========================================================================
+    # Other Error Handlers
+    # ========================================================================
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        """
+        Handle other HTTP exceptions (4xx, 5xx)
+
+        Provides consistent error responses for all HTTP errors
+        """
+        # Don't handle 404 here - it has its own handler
+        if exc.status_code == 404:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "Not Found"}
+            )
+
+        # Generic error handler with helpful messages
+        error_response = {
+            "error": exc.detail,
+            "status_code": exc.status_code,
+            "path": request.url.path
+        }
+
+        # Add more context for common errors
+        if exc.status_code == 401:
+            error_response["message"] = "Authentication required. Please login at /auth/login"
+            error_response["login_url"] = "/auth/login"
+        elif exc.status_code == 403:
+            error_response["message"] = "Access denied. You don't have permission to access this resource"
+        elif exc.status_code == 422:
+            error_response["message"] = "Validation error. Please check your request parameters"
+        elif exc.status_code >= 500:
+            error_response["message"] = "Internal server error. Please try again later"
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_response
+        )
+
+    return app
+
+
+def run_server(
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    requests_per_minute: int = 60,
+    requests_per_hour: int = 1000,
+    reload: bool = False
+):
+    """
+    Run the UAT Gateway API server
+
+    Args:
+        host: Host to bind to
+        port: Port to bind to
+        requests_per_minute: Rate limit per minute
+        requests_per_hour: Rate limit per hour
+        reload: Enable auto-reload for development
+    """
+    app = create_app(
+        requests_per_minute=requests_per_minute,
+        requests_per_hour=requests_per_hour
+    )
+
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        reload=reload
+    )
+
+
+if __name__ == "__main__":
+    import sys
+
+    # Parse command line arguments
+    host = sys.argv[1] if len(sys.argv) > 1 else "0.0.0.0"
+    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
+
+    run_server(host=host, port=port, reload=True)

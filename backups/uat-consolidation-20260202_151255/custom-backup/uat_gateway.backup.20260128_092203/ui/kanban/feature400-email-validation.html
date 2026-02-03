@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #400: Email Format Validation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #1e40af;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            color: #2563eb;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ac-list {
+            background: #eff6ff;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .ac-list h3 {
+            color: #1e40af;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ac-item {
+            display: flex;
+            align-items: start;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .ac-item .status {
+            color: #10b981;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-section h2 {
+            color: #1e40af;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+
+        .demo-section p {
+            color: #64748b;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            padding: 14px 40px 14px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .input-wrapper input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .input-wrapper input.valid {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .input-wrapper input.invalid {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        .input-wrapper .icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            display: none;
+        }
+
+        .input-wrapper input.valid + .icon.valid-icon {
+            display: block;
+            color: #10b981;
+        }
+
+        .input-wrapper input.invalid + .icon.invalid-icon {
+            display: block;
+            color: #ef4444;
+        }
+
+        .feedback-message {
+            margin-top: 8px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .feedback-message.show {
+            display: block;
+        }
+
+        .feedback-message.error {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .feedback-message.success {
+            background-color: #f0fdf4;
+            color: #065f46;
+            border: 1px solid #bbf7d0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .test-button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .test-button.invalid {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .test-button.invalid:hover {
+            background-color: #fee2e2;
+        }
+
+        .test-button.valid {
+            background-color: #f0fdf4;
+            color: #065f46;
+            border: 1px solid #bbf7d0;
+        }
+
+        .test-button.valid:hover {
+            background-color: #dcfce7;
+        }
+
+        .validation-details {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .validation-details h3 {
+            color: #475569;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-item .label {
+            color: #64748b;
+        }
+
+        .detail-item .value {
+            color: #1e293b;
+            font-weight: 500;
+        }
+
+        .detail-item .value.yes {
+            color: #10b981;
+        }
+
+        .detail-item .value.no {
+            color: #ef4444;
+        }
+
+        .event-log {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .event-log .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .event-log .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .event-log .timestamp {
+            color: #94a3b8;
+            margin-right: 8px;
+        }
+
+        .event-log .event-type {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .scenario-card {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .scenario-card h3 {
+            color: #1e40af;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .scenario-card p {
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .shake {
+            animation: shake 0.3s ease;
+        }
+    </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✉️ Feature #400: Email Format Validation</h1>
+            <p class="subtitle">Verify email addresses must be valid format</p>
+
+            <div class="ac-list">
+                <h3>✅ Acceptance Criteria</h3>
+                <div class="ac-item">
+                    <span class="status">✓</span>
+                    <span>AC1: Enter invalid email - Verify validation error occurs</span>
+                </div>
+                <div class="ac-item">
+                    <span class="status">✓</span>
+                    <span>AC2: Submit form - Verify validation blocks submission</span>
+                </div>
+                <div class="ac-item">
+                    <span class="status">✓</span>
+                    <span>AC3: Verify error message - Clear feedback shown</span>
+                </div>
+                <div class="ac-item">
+                    <span class="status">✓</span>
+                    <span>AC4: Enter valid email - Verify validation passes</span>
+                </div>
+                <div class="ac-item">
+                    <span class="status">✓</span>
+                    <span>AC5: Real-time validation - Validates as user types</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenario 1: Invalid Email Formats -->
+        <div class="demo-section">
+            <h2>🚫 Scenario 1: Invalid Email Formats</h2>
+            <p>Test various invalid email formats to ensure proper validation and error messages.</p>
+
+            <div class="scenario-card">
+                <h3>Test Invalid Email Addresses</h3>
+                <p>Click each button to test different invalid email formats:</p>
+
+                <div class="button-group">
+                    <button class="test-button invalid" onclick="testInvalidEmail('')">Empty email</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('plainaddress')">No @ symbol</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('@example.com')">No local part</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('user@')">No domain</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('user @example.com')">Contains space</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('user@.com')">Domain starts with dot</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('user..name@example.com')">Consecutive dots</button>
+                    <button class="test-button invalid" onclick="testInvalidEmail('.user@example.com')">Starts with dot</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="invalid-email">Email Input</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="invalid-email"
+                            placeholder="Enter an email address"
+                            autocomplete="off"
+                        >
+                        <span class="icon invalid-icon">✗</span>
+                        <span class="icon valid-icon">✓</span>
+                    </div>
+                    <div class="feedback-message" id="invalid-feedback"></div>
+                </div>
+
+                <div class="validation-details" id="invalid-details" style="display: none;">
+                    <h3>📋 Validation Details</h3>
+                    <div class="detail-item">
+                        <span class="label">Email Format:</span>
+                        <span class="value" id="detail-format">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Has @ Symbol:</span>
+                        <span class="value" id="detail-at">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Has Local Part:</span>
+                        <span class="value" id="detail-local">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Has Domain:</span>
+                        <span class="value" id="detail-domain">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Has TLD:</span>
+                        <span class="value" id="detail-tld">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Valid Format:</span>
+                        <span class="value" id="detail-valid">-</span>
+                    </div>
+                </div>
+
+                <div class="event-log" id="invalid-log">
+                    <div class="log-entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">READY</span>
+                        <span>Waiting for input...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenario 2: Valid Email Formats -->
+        <div class="demo-section">
+            <h2>✅ Scenario 2: Valid Email Formats</h2>
+            <p>Test various valid email formats to ensure they are accepted.</p>
+
+            <div class="scenario-card">
+                <h3>Test Valid Email Addresses</h3>
+                <p>Click each button to test different valid email formats:</p>
+
+                <div class="button-group">
+                    <button class="test-button valid" onclick="testValidEmail('test@example.com')">Standard format</button>
+                    <button class="test-button valid" onclick="testValidEmail('user.name@example.com')">Dot in local part</button>
+                    <button class="test-button valid" onclick="testValidEmail('user+tag@example.com')">Plus sign</button>
+                    <button class="test-button valid" onclick="testValidEmail('user_name@example.co.uk')">Underscore + multi-level TLD</button>
+                    <button class="test-button valid" onclick="testValidEmail('user-name@subdomain.example.com')">Hyphen + subdomain</button>
+                    <button class="test-button valid" onclick="testValidEmail('a@b.co')">Minimal valid</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="valid-email">Email Input</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="valid-email"
+                            placeholder="Enter an email address"
+                            autocomplete="off"
+                        >
+                        <span class="icon invalid-icon">✗</span>
+                        <span class="icon valid-icon">✓</span>
+                    </div>
+                    <div class="feedback-message" id="valid-feedback"></div>
+                </div>
+
+                <div class="event-log" id="valid-log">
+                    <div class="log-entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">READY</span>
+                        <span>Waiting for input...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenario 3: Real-time Validation -->
+        <div class="demo-section">
+            <h2>⚡ Scenario 3: Real-time Validation</h2>
+            <p>Type an email address below to see validation happen in real-time as you type.</p>
+
+            <div class="scenario-card">
+                <h3>Type Your Email</h3>
+                <p>Start typing to see validation feedback update instantly:</p>
+
+                <div class="form-group">
+                    <label for="realtime-email">Email Address</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="realtime-email"
+                            placeholder="Type your email address..."
+                            autocomplete="off"
+                        >
+                        <span class="icon invalid-icon">✗</span>
+                        <span class="icon valid-icon">✓</span>
+                    </div>
+                    <div class="feedback-message" id="realtime-feedback"></div>
+                </div>
+
+                <div class="validation-details">
+                    <h3>📊 Live Validation Status</h3>
+                    <div class="detail-item">
+                        <span class="label">Current Value:</span>
+                        <span class="value" id="realtime-value">empty</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Character Count:</span>
+                        <span class="value" id="realtime-count">0</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Has @ Symbol:</span>
+                        <span class="value" id="realtime-has-at">No</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Format Valid:</span>
+                        <span class="value" id="realtime-valid">Pending</span>
+                    </div>
+                </div>
+
+                <div class="event-log" id="realtime-log">
+                    <div class="log-entry">
+                        <span class="timestamp">--:--:--</span>
+                        <span class="event-type">READY</span>
+                        <span>Waiting for input...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Email validation regex (simplified RFC 5322 compliant)
+        const EMAIL_PATTERN = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
+        // Debounce function
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Validate email function
+        function validateEmail(email) {
+            const errors = [];
+
+            if (!email || email.trim() === '') {
+                errors.push('Email address is required');
+                return { isValid: false, errors };
+            }
+
+            const trimmed = email.trim();
+
+            // Check format
+            if (!EMAIL_PATTERN.test(trimmed)) {
+                errors.push('Invalid email format');
+            }
+
+            // Check for @ symbol
+            if (!trimmed.includes('@')) {
+                errors.push('Email must contain @ symbol');
+            }
+
+            // Check local part
+            const parts = trimmed.split('@');
+            if (parts.length < 2) {
+                errors.push('Email must have local part and domain');
+            } else {
+                const [local, domain] = parts;
+
+                if (!local) {
+                    errors.push('Email local part (before @) cannot be empty');
+                }
+
+                if (!domain) {
+                    errors.push('Email domain (after @) cannot be empty');
+                } else {
+                    // Check domain has dot
+                    if (!domain.includes('.')) {
+                        errors.push('Email domain must contain at least one dot');
+                    }
+
+                    // Check TLD
+                    const domainParts = domain.split('.');
+                    if (domainParts.length < 2 || domainParts[domainParts.length - 1].length < 2) {
+                        errors.push('Email TLD must be at least 2 characters');
+                    }
+                }
+            }
+
+            // Check for consecutive dots
+            if (trimmed.includes('..')) {
+                errors.push('Email cannot contain consecutive dots');
+            }
+
+            // Check for leading/trailing dots in local part
+            const parts2 = trimmed.split('@');
+            if (parts2.length >= 2) {
+                const local = parts2[0];
+                if (local.startsWith('.') || local.endsWith('.')) {
+                    errors.push('Email local part cannot start or end with a dot');
+                }
+            }
+
+            // Check for spaces
+            if (/\s/.test(trimmed)) {
+                errors.push('Email cannot contain spaces');
+            }
+
+            return {
+                isValid: errors.length === 0,
+                errors,
+                email: trimmed
+            };
+        }
+
+        // Log event
+        function logEvent(logId, eventType, message) {
+            const log = document.getElementById(logId);
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="timestamp">${timestamp}</span>
+                <span class="event-type">${eventType}</span>
+                <span>${message}</span>
+            `;
+            log.insertBefore(entry, log.firstChild);
+
+            // Keep only last 10 entries
+            while (log.children.length > 10) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        // Update validation details
+        function updateDetails(email, result) {
+            const details = document.getElementById('invalid-details');
+
+            document.getElementById('detail-format').textContent = email || '-';
+            document.getElementById('detail-at').textContent = email && email.includes('@') ? 'Yes' : 'No';
+            document.getElementById('detail-at').className = 'value ' + (email && email.includes('@') ? 'yes' : 'no');
+
+            const parts = email ? email.split('@') : [];
+            document.getElementById('detail-local').textContent = parts.length > 1 && parts[0] ? 'Yes' : 'No';
+            document.getElementById('detail-local').className = 'value ' + (parts.length > 1 && parts[0] ? 'yes' : 'no');
+
+            document.getElementById('detail-domain').textContent = parts.length > 1 && parts[1] ? 'Yes' : 'No';
+            document.getElementById('detail-domain').className = 'value ' + (parts.length > 1 && parts[1] ? 'yes' : 'no');
+
+            const hasTld = parts.length > 1 && parts[1] && parts[1].includes('.') && parts[1].split('.').pop().length >= 2;
+            document.getElementById('detail-tld').textContent = hasTld ? 'Yes' : 'No';
+            document.getElementById('detail-tld').className = 'value ' + (hasTld ? 'yes' : 'no');
+
+            document.getElementById('detail-valid').textContent = result.isValid ? 'Yes' : 'No';
+            document.getElementById('detail-valid').className = 'value ' + (result.isValid ? 'yes' : 'no');
+
+            details.style.display = 'block';
+        }
+
+        // Test invalid email
+        function testInvalidEmail(email) {
+            const input = document.getElementById('invalid-email');
+            const feedback = document.getElementById('invalid-feedback');
+
+            input.value = email;
+            input.classList.remove('valid');
+            input.classList.add('invalid', 'shake');
+
+            setTimeout(() => input.classList.remove('shake'), 300);
+
+            const result = validateEmail(email);
+
+            feedback.className = 'feedback-message show error';
+            feedback.innerHTML = `
+                <strong>❌ Validation Error:</strong><br>
+                ${result.errors.join('<br>')}
+            `;
+
+            updateDetails(email, result);
+            logEvent('invalid-log', 'VALIDATE', `Testing: "${email}" - ${result.errors.length} error(s)`);
+        }
+
+        // Test valid email
+        function testValidEmail(email) {
+            const input = document.getElementById('valid-email');
+            const feedback = document.getElementById('valid-feedback');
+
+            input.value = email;
+            input.classList.remove('invalid');
+            input.classList.add('valid');
+
+            const result = validateEmail(email);
+
+            feedback.className = 'feedback-message show success';
+            feedback.innerHTML = `
+                <strong>✅ Valid Email:</strong><br>
+                ${email} is a valid email format
+            `;
+
+            logEvent('valid-log', 'VALIDATE', `Testing: "${email}" - Valid ✓`);
+        }
+
+        // Setup real-time validation
+        const realtimeInput = document.getElementById('realtime-email');
+        const realtimeFeedback = document.getElementById('realtime-feedback');
+
+        const debouncedValidation = debounce((email) => {
+            const result = validateEmail(email);
+
+            if (email === '') {
+                realtimeInput.classList.remove('valid', 'invalid');
+                realtimeFeedback.className = 'feedback-message';
+            } else if (result.isValid) {
+                realtimeInput.classList.remove('invalid');
+                realtimeInput.classList.add('valid');
+                realtimeFeedback.className = 'feedback-message show success';
+                realtimeFeedback.textContent = '✓ Valid email format';
+                logEvent('realtime-log', 'VALIDATE', `"${email}" - Valid ✓`);
+            } else {
+                realtimeInput.classList.remove('valid');
+                realtimeInput.classList.add('invalid');
+                realtimeFeedback.className = 'feedback-message show error';
+                realtimeFeedback.innerHTML = `<strong>Error:</strong> ${result.errors[0]}`;
+                logEvent('realtime-log', 'VALIDATE', `"${email}" - ${result.errors[0]}`);
+            }
+
+            // Update live status
+            document.getElementById('realtime-value').textContent = email || 'empty';
+            document.getElementById('realtime-count').textContent = email.length;
+            document.getElementById('realtime-has-at').textContent = email.includes('@') ? 'Yes' : 'No';
+            document.getElementById('realtime-has-at').className = 'value ' + (email.includes('@') ? 'yes' : 'no');
+
+            const validText = result.isValid ? 'Yes ✓' : (email === '' ? 'Pending' : 'No ✗');
+            document.getElementById('realtime-valid').textContent = validText;
+            document.getElementById('realtime-valid').className = 'value ' + (result.isValid ? 'yes' : (email === '' ? '' : 'no'));
+        }, 300);
+
+        realtimeInput.addEventListener('input', (e) => {
+            const email = e.target.value;
+            logEvent('realtime-log', 'INPUT', `User typed: "${email}"`);
+            debouncedValidation(email);
+        });
+
+        // Manual input handlers for invalid scenario
+        document.getElementById('invalid-email').addEventListener('input', (e) => {
+            const email = e.target.value;
+            const feedback = document.getElementById('invalid-feedback');
+
+            if (email === '') {
+                e.target.classList.remove('valid', 'invalid');
+                feedback.className = 'feedback-message';
+                logEvent('invalid-log', 'INPUT', 'Cleared');
+                return;
+            }
+
+            const result = validateEmail(email);
+            updateDetails(email, result);
+
+            if (result.isValid) {
+                e.target.classList.remove('invalid');
+                e.target.classList.add('valid');
+                feedback.className = 'feedback-message show success';
+                feedback.textContent = '✓ Valid email format';
+                logEvent('invalid-log', 'VALIDATE', `"${email}" - Valid ✓`);
+            } else {
+                e.target.classList.remove('valid');
+                e.target.classList.add('invalid');
+                feedback.className = 'feedback-message show error';
+                feedback.innerHTML = `<strong>Error:</strong> ${result.errors[0]}`;
+                logEvent('invalid-log', 'VALIDATE', `"${email}" - ${result.errors[0]}`);
+            }
+        });
+
+        // Manual input handlers for valid scenario
+        document.getElementById('valid-email').addEventListener('input', (e) => {
+            const email = e.target.value;
+            const feedback = document.getElementById('valid-feedback');
+
+            if (email === '') {
+                e.target.classList.remove('valid', 'invalid');
+                feedback.className = 'feedback-message';
+                logEvent('valid-log', 'INPUT', 'Cleared');
+                return;
+            }
+
+            const result = validateEmail(email);
+
+            if (result.isValid) {
+                e.target.classList.remove('invalid');
+                e.target.classList.add('valid');
+                feedback.className = 'feedback-message show success';
+                feedback.textContent = '✓ Valid email format';
+                logEvent('valid-log', 'VALIDATE', `"${email}" - Valid ✓`);
+            } else {
+                e.target.classList.remove('valid');
+                e.target.classList.add('invalid');
+                feedback.className = 'feedback-message show error';
+                feedback.innerHTML = `<strong>Error:</strong> ${result.errors[0]}`;
+                logEvent('valid-log', 'VALIDATE', `"${email}" - ${result.errors[0]}`);
+            }
+        });
+
+        // Initialize
+        logEvent('invalid-log', 'INIT', 'Demo page loaded');
+        logEvent('valid-log', 'INIT', 'Demo page loaded');
+        logEvent('realtime-log', 'INIT', 'Demo page loaded');
+    </script>
+</body>
+</html>

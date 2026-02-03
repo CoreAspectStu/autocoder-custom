@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UAT Gateway - Notification Persistence Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 2rem;
+    }
+
+    .demo-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      color: #a0a0a0;
+      margin-bottom: 2rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    button {
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 600;
+    }
+
+    .critical-btn {
+      background: linear-gradient(135deg, #e94560, #ff6b6b);
+      color: white;
+      box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
+    }
+
+    .critical-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(233, 69, 96, 0.4);
+    }
+
+    .warning-btn {
+      background: linear-gradient(135deg, #f59e0b, #fbbf24);
+      color: #1a1a2e;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+    }
+
+    .warning-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    }
+
+    .info-btn {
+      background: linear-gradient(135deg, #3b82f6, #60a5fa);
+      color: white;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .info-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    }
+
+    .clear-btn {
+      background: #4a5568;
+      color: white;
+    }
+
+    .clear-btn:hover {
+      background: #2d3748;
+    }
+
+    .info-box {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .info-box h3 {
+      color: #ff6b6b;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+
+    .info-box ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .info-box li {
+      padding: 0.5rem 0;
+      padding-left: 1.5rem;
+      position: relative;
+    }
+
+    .info-box li:before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: #e94560;
+      font-weight: bold;
+    }
+
+    /* Persistent Notification Container */
+    .persistent-notification-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 420px;
+      width: 100%;
+    }
+
+    .persistent-notification {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      animation: slideIn 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .persistent-notification.critical {
+      border-left: 4px solid #e94560;
+    }
+
+    .persistent-notification.warning {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .persistent-notification.info {
+      border-left: 4px solid #3b82f6;
+    }
+
+    .notification-icon {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .critical .notification-icon {
+      background: rgba(233, 69, 96, 0.1);
+      color: #e94560;
+    }
+
+    .warning .notification-icon {
+      background: rgba(245, 158, 11, 0.1);
+      color: #f59e0b;
+    }
+
+    .info .notification-icon {
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+    }
+
+    .notification-content {
+      flex: 1;
+    }
+
+    .notification-title {
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 0.25rem;
+      font-size: 1rem;
+    }
+
+    .notification-message {
+      color: #4a5568;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .notification-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .notification-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .notification-btn-primary {
+      background: #e94560;
+      color: white;
+    }
+
+    .notification-btn-primary:hover {
+      background: #d63350;
+    }
+
+    .notification-btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .notification-btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .notification-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: transparent;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 1.5rem;
+      line-height: 1;
+      padding: 0.25rem;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .notification-close:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: #374151;
+    }
+
+    .notification-dismissing {
+      animation: slideOut 0.3s ease forwards;
+    }
+
+    @keyframes slideOut {
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    .persistent-badge {
+      display: inline-block;
+      background: rgba(233, 69, 96, 0.1);
+      color: #e94560;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .verification-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .verification-section h3 {
+      margin-bottom: 1rem;
+      color: #fbbf24;
+    }
+
+    .verification-status {
+      display: grid;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+    }
+
+    .status-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-icon.passed {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .status-item.passed {
+      border-left: 3px solid #10b981;
+    }
+  </style>
+    <link rel="stylesheet" href="feature440-contrast-fixes.css">
+</head>
+<body>
+  <div class="demo-container">
+    <h1>🔔 Notification Persistence - Feature #416</h1>
+    <p class="subtitle">Critical notifications that require user acknowledgment</p>
+
+    <div class="button-group">
+      <button class="critical-btn" onclick="triggerCriticalNotification()">
+        🚨 Trigger Critical Notification
+      </button>
+      <button class="warning-btn" onclick="triggerWarningNotification()">
+        ⚠️ Trigger Warning Notification
+      </button>
+      <button class="info-btn" onclick="triggerInfoNotification()">
+        ℹ️ Trigger Info Notification
+      </button>
+      <button class="clear-btn" onclick="dismissAllNotifications()">
+        Clear All
+      </button>
+    </div>
+
+    <div class="info-box">
+      <h3>📋 Acceptance Criteria</h3>
+      <ul>
+        <li><strong>AC1:</strong> Trigger critical notification - Click "Trigger Critical Notification"</li>
+        <li><strong>AC2:</strong> Verify notification stays visible - No auto-dismiss (wait 10+ seconds)</li>
+        <li><strong>AC3:</strong> Verify notification requires action - Must click button to dismiss</li>
+        <li><strong>AC4:</strong> Acknowledge notification - Click "Acknowledge" or "Take Action"</li>
+        <li><strong>AC5:</strong> Verify notification dismisses - Removes after acknowledgment</li>
+      </ul>
+    </div>
+
+    <div class="verification-section">
+      <h3>✅ Verification Status</h3>
+      <div class="verification-status" id="verificationStatus">
+        <div class="status-item" id="status-ac1">
+          <div class="status-icon">1</div>
+          <div>AC1: Trigger Critical Notification - Not tested</div>
+        </div>
+        <div class="status-item" id="status-ac2">
+          <div class="status-icon">2</div>
+          <div>AC2: Notification Stays Visible - Not tested</div>
+        </div>
+        <div class="status-item" id="status-ac3">
+          <div class="status-icon">3</div>
+          <div>AC3: Requires Action - Not tested</div>
+        </div>
+        <div class="status-item" id="status-ac4">
+          <div class="status-icon">4</div>
+          <div>AC4: Acknowledge Notification - Not tested</div>
+        </div>
+        <div class="status-item" id="status-ac5">
+          <div class="status-icon">5</div>
+          <div>AC5: Notification Dismisses - Not tested</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Persistent Notification Container -->
+  <div class="persistent-notification-container" id="persistentNotificationContainer"></div>
+
+  <script>
+    /**
+     * Persistent Notification System - Feature #416
+     *
+     * Key differences from regular toasts:
+     * - NO auto-dismiss (must be manually acknowledged)
+     * - Requires explicit user action
+     * - Higher visual priority (larger, more prominent)
+     * - Action buttons (Acknowledge, Take Action, etc.)
+     * - "Persistent" badge to indicate requires attention
+     */
+
+    class PersistentNotificationManager {
+      constructor() {
+        this.container = null;
+        this.notifications = new Map();
+        this.nextId = 1;
+      }
+
+      init() {
+        this.container = document.getElementById('persistentNotificationContainer');
+        if (!this.container) {
+          console.error('Persistent notification container not found');
+          return false;
+        }
+        return true;
+      }
+
+      /**
+       * Show a persistent notification
+       *
+       * @param {Object} options
+       * @param {string} options.type - 'critical', 'warning', 'info'
+       * @param {string} options.title - Notification title
+       * @param {string} options.message - Notification message
+       * @param {string} [options.icon] - Icon emoji
+       * @param {Array} [options.actions] - Action buttons [{label, onClick, primary}]
+       * @returns {string} Notification ID
+       */
+      show({ type = 'info', title, message, icon, actions = [] }) {
+        if (!this.container && !this.init()) {
+          console.error('Cannot show persistent notification: container not available');
+          return null;
+        }
+
+        const notificationId = `persistent-${this.nextId++}`;
+        const notification = this.createNotification({
+          id: notificationId,
+          type,
+          title,
+          message,
+          icon,
+          actions
+        });
+
+        this.container.appendChild(notification);
+        this.notifications.set(notificationId, notification);
+
+        console.log(`🔔 Persistent notification shown: ${title} - ${message}`);
+
+        // No auto-dismiss - stays until user acknowledges
+        return notificationId;
+      }
+
+      createNotification({ id, type, title, message, icon, actions }) {
+        const notification = document.createElement('div');
+        notification.className = `persistent-notification ${type}`;
+        notification.id = id;
+        notification.setAttribute('role', 'alertdialog');
+        notification.setAttribute('aria-labelledby', `${id}-title`);
+        notification.setAttribute('aria-describedby', `${id}-message`);
+        notification.setAttribute('aria-modal', 'false');
+
+        // Default icons based on type
+        const defaultIcons = {
+          critical: '🚨',
+          warning: '⚠️',
+          info: 'ℹ️'
+        };
+
+        const notificationIcon = icon || defaultIcons[type] || 'ℹ️';
+
+        // Build action buttons
+        let actionsHtml = '';
+        if (actions.length > 0) {
+          const buttons = actions.map(action => {
+            const btnClass = action.primary ? 'notification-btn-primary' : 'notification-btn-secondary';
+            return `<button class="notification-btn ${btnClass}" data-action="${action.label}">${action.label}</button>`;
+          }).join('');
+
+          actionsHtml = `<div class="notification-actions">${buttons}</div>`;
+        }
+
+        notification.innerHTML = `
+          <button class="notification-close" aria-label="Close notification">×</button>
+          <div class="notification-icon">${notificationIcon}</div>
+          <div class="notification-content">
+            ${type === 'critical' ? '<span class="persistent-badge">Requires Attention</span>' : ''}
+            <div class="notification-title" id="${id}-title">${this.escapeHtml(title)}</div>
+            <div class="notification-message" id="${id}-message">${this.escapeHtml(message)}</div>
+            ${actionsHtml}
+          </div>
+        `;
+
+        // Close button handler
+        const closeBtn = notification.querySelector('.notification-close');
+        closeBtn.addEventListener('click', () => {
+          this.dismiss(id);
+        });
+
+        // Action button handlers
+        const actionButtons = notification.querySelectorAll('.notification-btn');
+        actionButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const actionLabel = btn.getAttribute('data-action');
+            const action = actions.find(a => a.label === actionLabel);
+            if (action && action.onClick) {
+              action.onClick();
+            }
+            this.dismiss(id);
+          });
+        });
+
+        return notification;
+      }
+
+      /**
+       * Dismiss a persistent notification
+       */
+      dismiss(notificationId) {
+        const notification = this.notifications.get(notificationId);
+        if (!notification) {
+          return;
+        }
+
+        notification.classList.add('notification-dismissing');
+
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+          this.notifications.delete(notificationId);
+          console.log(`✓ Persistent notification dismissed: ${notificationId}`);
+        }, 300);
+      }
+
+      /**
+       * Dismiss all persistent notifications
+       */
+      dismissAll() {
+        const notificationIds = Array.from(this.notifications.keys());
+        notificationIds.forEach(id => this.dismiss(id));
+      }
+
+      /**
+       * Get count of active persistent notifications
+       */
+      getActiveCount() {
+        return this.notifications.size;
+      }
+
+      escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+    }
+
+    // Global instance
+    const persistentManager = new PersistentNotificationManager();
+    persistentManager.init();
+
+    // ============================================================================
+    // Demo Functions for Testing Acceptance Criteria
+    // ============================================================================
+
+    function triggerCriticalNotification() {
+      updateStatus('ac1', true, 'Critical notification triggered');
+
+      persistentManager.show({
+        type: 'critical',
+        title: 'Security Alert: Unusual Login Activity',
+        message: 'We detected a login from a new device (IP: 192.168.1.100, Location: Unknown). If this was not you, please secure your account immediately.',
+        icon: '🚨',
+        actions: [
+          {
+            label: 'Secure Account',
+            primary: true,
+            onClick: () => {
+              console.log('User clicked: Secure Account');
+              alert('Account security initiated: Password reset email sent');
+            }
+          },
+          {
+            label: 'Acknowledge',
+            primary: false,
+            onClick: () => {
+              console.log('User clicked: Acknowledge');
+            }
+          }
+        ]
+      });
+
+      // AC2: Verify it stays visible (no auto-dismiss)
+      setTimeout(() => {
+        if (persistentManager.getActiveCount() > 0) {
+          updateStatus('ac2', true, 'Notification still visible after 5 seconds (no auto-dismiss)');
+          updateStatus('ac3', true, 'Notification has action buttons (requires user action)');
+        }
+      }, 5000);
+    }
+
+    function triggerWarningNotification() {
+      persistentManager.show({
+        type: 'warning',
+        title: 'Storage Space Running Low',
+        message: 'Your project storage is at 85% capacity. Consider archiving old journeys or upgrading your plan.',
+        icon: '⚠️',
+        actions: [
+          {
+            label: 'View Storage',
+            primary: true,
+            onClick: () => {
+              console.log('User clicked: View Storage');
+              alert('Opening storage management...');
+            }
+          },
+          {
+            label: 'Remind Later',
+            primary: false,
+            onClick: () => {
+              console.log('User clicked: Remind Later');
+            }
+          }
+        ]
+      });
+    }
+
+    function triggerInfoNotification() {
+      persistentManager.show({
+        type: 'info',
+        title: 'New Feature Available',
+        message: 'We\'ve added automated test generation! Try it out on your next journey extraction.',
+        icon: 'ℹ️',
+        actions: [
+          {
+            label: 'Try It Now',
+            primary: true,
+            onClick: () => {
+              console.log('User clicked: Try It Now');
+              alert('Navigating to test generation...');
+            }
+          },
+          {
+            label: 'Learn More',
+            primary: false,
+            onClick: () => {
+              console.log('User clicked: Learn More');
+            }
+          }
+        ]
+      });
+    }
+
+    function dismissAllNotifications() {
+      persistentManager.dismissAll();
+      console.log('All notifications dismissed');
+    }
+
+    // ============================================================================
+    // Verification Status Tracking
+    // ============================================================================
+
+    function updateStatus(ac, passed, message) {
+      const statusItem = document.getElementById(`status-${ac}`);
+      const icon = statusItem.querySelector('.status-icon');
+      const text = statusItem.querySelector('div:last-child');
+
+      if (passed) {
+        statusItem.classList.add('passed');
+        icon.classList.add('passed');
+        icon.textContent = '✓';
+        text.textContent = message;
+      }
+    }
+
+    // Track acknowledgment for AC4 and AC5
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('notification-btn')) {
+        updateStatus('ac4', true, 'User clicked action button (acknowledged)');
+
+        setTimeout(() => {
+          if (persistentManager.getActiveCount() === 0) {
+            updateStatus('ac5', true, 'Notification dismissed after acknowledgment');
+          }
+        }, 500);
+      }
+    });
+  </script>
+</body>
+</html>

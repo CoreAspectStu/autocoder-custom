@@ -555,6 +555,97 @@ export async function createUATTest(testData: {
   return response.json()
 }
 
+// ============================================================================
+// Blocker Management API
+// ============================================================================
+
+export async function detectBlockers(projectName: string, projectPath: string): Promise<{
+  blockers_detected: boolean
+  blockers: Array<{
+    id: string
+    blocker_type: string
+    service: string
+    key_name?: string
+    description: string
+    affected_tests: string[]
+    suggested_actions: string[]
+    priority: string
+  }>
+  summary: string
+}> {
+  const response = await fetch('/api/blocker/detect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_name: projectName, project_path: projectPath })
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to detect blockers')
+  }
+
+  return response.json()
+}
+
+export async function respondToBlocker(request: {
+  blocker_id: string
+  action: string
+  value?: string
+  project_name: string
+}): Promise<{
+  blocker_id: string
+  status: string
+  message: string
+}> {
+  const response = await fetch('/api/blocker/respond', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to resolve blocker')
+  }
+
+  return response.json()
+}
+
+export async function testConnection(request: {
+  blocker_id: string
+  blocker_type: string
+  service: string
+  test_params?: Record<string, any>
+  timeout?: number
+}): Promise<{
+  blocker_id: string
+  success: boolean
+  message: string
+  details?: Record<string, any>
+}> {
+  const response = await fetch('/api/blocker/test-connection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to test connection')
+  }
+
+  return response.json()
+}
+
+export async function getPendingBlockers(projectName: string): Promise<{
+  project_name: string
+  pending_blockers: any[]
+  resolved_count: number
+  total_count: number
+}> {
+  return fetchJSON(`/blocker/pending/${projectName}`)
+}
+
 export async function getUATProjectContext(
   projectName: string
 ): Promise<{
@@ -586,7 +677,6 @@ export async function getUATProjectContext(
 }
 
 export async function triggerUATExecution(
-  cycleId: string,
   projectName: string
 ): Promise<{
   success: boolean
@@ -599,7 +689,6 @@ export async function triggerUATExecution(
   return fetchJSON('/uat/trigger', {
     method: 'POST',
     body: JSON.stringify({
-      cycle_id: cycleId,
       project_name: projectName
     }),
   })
