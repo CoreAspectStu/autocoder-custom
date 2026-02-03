@@ -42,9 +42,21 @@ except ImportError as e:
     print(f"⚠️  UAT database not available: {e}")
     UAT_DATABASE_AVAILABLE = False
 
-# Optional: Full orchestrator for orchestrated mode
+# ============================================================================
+# CRITICAL: UAT Orchestrator Import
+# ============================================================================
+# There are TWO orchestrators in the codebase:
+#   1. custom/uat_plugin/orchestrator.py - BROKEN (missing dev_task_creator.py)
+#   2. custom/uat_gateway/orchestrator/orchestrator.py - WORKING
+#
+# ALWAYS import from custom.uat_gateway.orchestrator.orchestrator
+# DO NOT change to custom.uat_plugin.orchestrator
+#
+# See: /docs/projects/autocoder/uat-mode-trigger-fixes.md
+# ============================================================================
+
 try:
-    from custom.uat_plugin.orchestrator import Orchestrator
+    from custom.uat_gateway.orchestrator.orchestrator import Orchestrator, OrchestratorConfig
     UAT_ORCHESTRATOR_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  UAT Orchestrator not available (orchestrated mode disabled): {e}")
@@ -390,8 +402,31 @@ async def trigger_uat_cycle(
     Returns:
         UATTriggerResponse with cycle ID and status URL
     """
-    # Check if we should use direct test execution (for projects without UAT journeys)
-    use_direct_execution = request.force or True  # Default to direct for now
+    # ===========================================================================
+    # CRITICAL: Execution Mode Selection Logic
+    # ===========================================================================
+    #
+    # BUG FIX (2026-02-03): DO NOT change back to: request.force or True
+    # This ALWAYS evaluates to True due to Python's 'or' operator!
+    #
+    # Correct logic:
+    #   - If request.force is explicitly set, use that value
+    #   - Otherwise, default to orchestrator mode (if available)
+    #     which runs tests from ~/.autocoder/uat_tests.db
+    #
+    # Modes:
+    #   - Orchestrator mode: Runs 300+ pending UAT tests from global DB
+    #   - Direct mode: Runs Playwright tests from project's e2e/ directory
+    #
+    # See: /docs/projects/autocoder/uat-mode-trigger-fixes.md
+    # ===========================================================================
+
+    if request.force is not None:
+        # Explicit force setting
+        use_direct_execution = request.force
+    else:
+        # Default: use orchestrator if available, otherwise direct mode
+        use_direct_execution = not UAT_ORCHESTRATOR_AVAILABLE
 
     if use_direct_execution:
         # Direct test execution mode
