@@ -1,0 +1,37 @@
+# Git merge attributes for autocoder-custom fork
+# Protects custom directories from being overwritten during upstream merge
+
+# Custom extensions - always keep our version
+custom/ merge=ours
+docs/projects/autocoder/ merge=ours
+bin/autocoder-* merge=ours
+
+# Custom server files with local patches
+# These will conflict during merge - review manually
+server/websocket.py merge=text
+server/schemas.py merge=text
+api/database.py merge=text
+
+# Custom routers - always keep our version
+server/routers/status.py merge=ours
+server/routers/uat_gateway.py merge=ours
+server/routers/a11y_testing.py merge=ours
+server/routers/api_testing.py merge=ours
+server/routers/blocker.py merge=ours
+server/routers/msw_integration.py merge=ours
+server/routers/visual_testing.py merge=ours
+server/routers/uat_reports.py merge=ours
+server/routers/uat_websocket.py merge=ours
+
+# Custom services - always keep our version
+server/services/blocker_detector.py merge=ours
+server/services/blocker_storage.py merge=ours
+
+# Custom UI - always keep our version
+ui/src/components/blocker/ merge=ours
+ui/src/components/JourneyVisualizer.tsx merge=ours
+ui/src/components/ProgressTracker.tsx merge=ours
+ui/src/components/ResultsModal.tsx merge=ours
+ui/src/components/UAT*.tsx merge=ours
+ui/src/hooks/useBlockerDetection.ts merge=ours
+ui/src/hooks/useUATWebSocket.tsx merge=ours
