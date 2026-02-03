@@ -260,10 +260,17 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, debugActiveTab, assistantOpen, features, showSettings, showKeyboardHelp, isSpecCreating, viewMode])
 
-  // Combine WebSocket progress with feature data
-  const progress = wsState.progress.total > 0 ? wsState.progress : {
+  // Calculate progress from the correct data source based on mode
+  // In dev mode: features data comes from features.db
+  // In UAT mode: features data comes from uat_tests.db (mapped to same structure)
+  // The features object already correctly switches based on isUATMode, so always use it
+  // Only fall back to WebSocket progress if features data is completely unavailable (undefined)
+  const totalFeatures = (features?.pending.length ?? 0) + (features?.in_progress.length ?? 0) + (features?.done.length ?? 0)
+
+  const progress = {
     passing: features?.done.length ?? 0,
-    total: (features?.pending.length ?? 0) + (features?.in_progress.length ?? 0) + (features?.done.length ?? 0),
+    in_progress: features?.in_progress.length ?? 0,
+    total: totalFeatures,
     percentage: 0,
   }
 
