@@ -35,12 +35,14 @@ export const DOC_SECTIONS: DocSection[] = [
     icon: Rocket,
     subsections: [
       { id: 'what-is-autoforge', title: 'What is AutoForge?' },
+      { id: 'installation', title: 'Installation' },
       { id: 'quick-start', title: 'Quick Start' },
+      { id: 'cli-commands', title: 'CLI Commands' },
       { id: 'creating-a-project', title: 'Creating a New Project' },
       { id: 'existing-project', title: 'Adding to an Existing Project' },
       { id: 'system-requirements', title: 'System Requirements' },
     ],
-    keywords: ['install', 'setup', 'start', 'begin', 'new', 'requirements', 'prerequisites'],
+    keywords: ['install', 'setup', 'start', 'begin', 'new', 'requirements', 'prerequisites', 'npm', 'config', 'port', 'repair'],
   },
   {
     id: 'app-spec-setup',

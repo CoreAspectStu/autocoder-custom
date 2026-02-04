@@ -114,6 +114,7 @@ Desktop.ini
 ui/dist/
 ui/.vite/
 .vite/
+*.tgz
 
 # ===================
 # Environment files
