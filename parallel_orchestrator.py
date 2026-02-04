@@ -845,7 +845,7 @@ class ParallelOrchestrator:
                 "text": True,
                 "encoding": "utf-8",
                 "errors": "replace",
-                "cwd": str(AUTOCODER_ROOT),  # Run from autocoder root for proper imports
+                "cwd": str(self.project_dir),  # Run from project dir so CLI creates .claude/ in project
                 "env": {**os.environ, "PYTHONUNBUFFERED": "1"},
             }
             if sys.platform == "win32":
@@ -908,7 +908,7 @@ class ParallelOrchestrator:
                 "text": True,
                 "encoding": "utf-8",
                 "errors": "replace",
-                "cwd": str(AUTOCODER_ROOT),
+                "cwd": str(self.project_dir),  # Run from project dir so CLI creates .claude/ in project
                 "env": {**os.environ, "PYTHONUNBUFFERED": "1"},
             }
             if sys.platform == "win32":
@@ -1012,7 +1012,7 @@ class ParallelOrchestrator:
                     "text": True,
                     "encoding": "utf-8",
                     "errors": "replace",
-                    "cwd": str(AUTOCODER_ROOT),
+                    "cwd": str(self.project_dir),  # Run from project dir so CLI creates .claude/ in project
                     "env": {**os.environ, "PYTHONUNBUFFERED": "1"},
                 }
                 if sys.platform == "win32":
