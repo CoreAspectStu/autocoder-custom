@@ -34,8 +34,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
-const STORAGE_KEY = 'autocoder-selected-project'
-const VIEW_MODE_KEY = 'autocoder-view-mode'
+const STORAGE_KEY = 'autoforge-selected-project'
+const VIEW_MODE_KEY = 'autoforge-view-mode'
 
 // Bottom padding for main content when debug panel is collapsed (40px header + 8px margin)
 const COLLAPSED_DEBUG_PANEL_CLEARANCE = 48
@@ -264,7 +264,7 @@ function App() {
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
             <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
-              AutoCoder
+              AutoForge
             </h1>
 
             {/* Controls */}
@@ -376,7 +376,7 @@ function App() {
         {!selectedProject ? (
           <div className="text-center mt-12">
             <h2 className="font-display text-2xl font-bold mb-2">
-              Welcome to AutoCoder
+              Welcome to AutoForge
             </h2>
             <p className="text-muted-foreground mb-4">
               Select a project from the dropdown above or create a new one to get started.

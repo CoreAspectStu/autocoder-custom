@@ -16,7 +16,7 @@ export function Security() {
         Command Validation Overview
       </h3>
       <p className="text-muted-foreground mb-3">
-        AutoCoder uses a defense-in-depth approach for security. All three layers must pass before any
+        AutoForge uses a defense-in-depth approach for security. All three layers must pass before any
         command is executed:
       </p>
       <ol className="list-decimal space-y-2 ml-4 text-muted-foreground">
@@ -49,12 +49,12 @@ export function Security() {
         </li>
         <li>
           <strong className="text-foreground">Org Blocklist</strong>{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autocoder/config.yaml</span>{' '}
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autoforge/config.yaml</span>{' '}
           &mdash; org-wide blocks, cannot be project-overridden
         </li>
         <li>
           <strong className="text-foreground">Org Allowlist</strong>{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autocoder/config.yaml</span>{' '}
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autoforge/config.yaml</span>{' '}
           &mdash; available to all projects
         </li>
         <li>
@@ -65,7 +65,7 @@ export function Security() {
         <li>
           <strong className="text-foreground">Project Allowlist</strong>{' '}
           <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-            .autocoder/allowed_commands.yaml
+            .autoforge/allowed_commands.yaml
           </span>{' '}
           &mdash; project-specific additions
         </li>
@@ -120,12 +120,12 @@ export function Security() {
       <p className="text-muted-foreground mb-3">
         Each project can define additional allowed commands in{' '}
         <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-          .autocoder/allowed_commands.yaml
+          .autoforge/allowed_commands.yaml
         </span>
         :
       </p>
       <div className="bg-muted rounded-lg p-4 font-mono text-sm">
-        <pre><code>{`# .autocoder/allowed_commands.yaml
+        <pre><code>{`# .autoforge/allowed_commands.yaml
 version: 1
 commands:
   # Exact command name
@@ -155,10 +155,10 @@ commands:
       </h3>
       <p className="text-muted-foreground mb-3">
         System administrators can set org-wide policies in{' '}
-        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autocoder/config.yaml</span>:
+        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autoforge/config.yaml</span>:
       </p>
       <div className="bg-muted rounded-lg p-4 font-mono text-sm">
-        <pre><code>{`# ~/.autocoder/config.yaml
+        <pre><code>{`# ~/.autoforge/config.yaml
 version: 1
 
 # Commands available to ALL projects

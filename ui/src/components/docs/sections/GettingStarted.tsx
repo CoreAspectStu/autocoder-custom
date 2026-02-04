@@ -1,7 +1,7 @@
 /**
  * GettingStarted Documentation Section
  *
- * Covers what AutoCoder is, quick start commands,
+ * Covers what AutoForge is, quick start commands,
  * creating and adding projects, and system requirements.
  */
 
@@ -10,12 +10,12 @@ import { Badge } from '@/components/ui/badge'
 export function GettingStarted() {
   return (
     <div>
-      {/* What is AutoCoder? */}
-      <h3 id="what-is-autocoder" className="text-lg font-semibold text-foreground mt-8 mb-3">
-        What is AutoCoder?
+      {/* What is AutoForge? */}
+      <h3 id="what-is-autoforge" className="text-lg font-semibold text-foreground mt-8 mb-3">
+        What is AutoForge?
       </h3>
       <p className="text-muted-foreground mb-4">
-        AutoCoder is an autonomous coding agent system that builds complete applications over multiple
+        AutoForge is an autonomous coding agent system that builds complete applications over multiple
         sessions using a two-agent pattern:
       </p>
       <ol className="list-decimal space-y-2 ml-4 text-muted-foreground">
@@ -38,7 +38,7 @@ export function GettingStarted() {
         Quick Start
       </h3>
       <p className="text-muted-foreground mb-3">
-        Launch AutoCoder with a single command. The CLI menu lets you create or select a project,
+        Launch AutoForge with a single command. The CLI menu lets you create or select a project,
         while the Web UI provides a full dashboard experience.
       </p>
       <div className="bg-muted rounded-lg p-4 font-mono text-sm">
@@ -76,12 +76,12 @@ start_ui.bat       # Web UI
       <ul className="list-disc space-y-2 ml-4 text-muted-foreground">
         <li>Register the project folder via the UI project selector</li>
         <li>
-          AutoCoder creates a{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autocoder/</span>{' '}
+          AutoForge creates a{' '}
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autoforge/</span>{' '}
           directory inside your project
         </li>
         <li>
-          Existing code is preserved &mdash; AutoCoder adds its configuration alongside it
+          Existing code is preserved &mdash; AutoForge adds its configuration alongside it
         </li>
         <li>Write or generate an app spec describing what to build</li>
       </ul>

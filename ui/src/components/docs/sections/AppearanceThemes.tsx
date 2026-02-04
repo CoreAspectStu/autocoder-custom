@@ -98,7 +98,7 @@ export function AppearanceThemes() {
         Themes Overview
       </h3>
       <p className="text-muted-foreground mb-4">
-        AutoCoder comes with 6 built-in themes. Each theme provides a complete visual identity including
+        AutoForge comes with 6 built-in themes. Each theme provides a complete visual identity including
         colors, accents, and dark mode variants.
       </p>
       <div className="space-y-4">

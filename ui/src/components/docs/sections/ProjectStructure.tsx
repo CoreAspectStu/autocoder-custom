@@ -1,7 +1,7 @@
 /**
  * ProjectStructure Documentation Section
  *
- * Covers the .autocoder/ directory layout, features database,
+ * Covers the .autoforge/ directory layout, features database,
  * prompts directory, allowed commands, CLAUDE.md convention,
  * legacy migration, and Claude inheritance.
  */
@@ -9,18 +9,18 @@
 export function ProjectStructure() {
   return (
     <div>
-      {/* .autocoder/ Directory Layout */}
-      <h3 id="autocoder-directory" className="text-lg font-semibold text-foreground mt-8 mb-3">
-        .autocoder/ Directory Layout
+      {/* .autoforge/ Directory Layout */}
+      <h3 id="autoforge-directory" className="text-lg font-semibold text-foreground mt-8 mb-3">
+        .autoforge/ Directory Layout
       </h3>
       <p className="text-muted-foreground mb-3">
-        Every AutoCoder project stores its configuration and runtime files in a{' '}
-        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autocoder/</span>{' '}
+        Every AutoForge project stores its configuration and runtime files in a{' '}
+        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autoforge/</span>{' '}
         directory at the project root.
       </p>
       <div className="bg-muted rounded-lg p-4 font-mono text-sm">
         <pre><code>{`your-project/
-\u251C\u2500\u2500 .autocoder/
+\u251C\u2500\u2500 .autoforge/
 \u2502   \u251C\u2500\u2500 features.db              # SQLite feature database
 \u2502   \u251C\u2500\u2500 .agent.lock              # Lock file (prevents multiple instances)
 \u2502   \u251C\u2500\u2500 .gitignore               # Ignores runtime files
@@ -41,7 +41,7 @@ export function ProjectStructure() {
         <li>
           SQLite database managed by SQLAlchemy, stored at{' '}
           <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-            .autocoder/features.db
+            .autoforge/features.db
           </span>
         </li>
         <li>
@@ -96,7 +96,7 @@ export function ProjectStructure() {
       <p className="text-muted-foreground mb-3">
         The optional{' '}
         <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-          .autocoder/allowed_commands.yaml
+          .autoforge/allowed_commands.yaml
         </span>{' '}
         file lets you grant project-specific bash commands to the agent. This is useful when your
         project requires tools beyond the default allowlist (e.g., language-specific compilers or
@@ -138,7 +138,7 @@ export function ProjectStructure() {
       <ul className="list-disc space-y-2 ml-4 text-muted-foreground">
         <li>
           On the next agent start, these files are automatically migrated into{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autocoder/</span>
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autoforge/</span>
         </li>
         <li>Dual-path resolution ensures both old and new layouts work transparently</li>
         <li>No manual migration is needed &mdash; it happens seamlessly</li>

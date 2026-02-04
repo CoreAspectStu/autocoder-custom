@@ -15,7 +15,7 @@ export function Scheduling() {
         What Scheduling Does
       </h3>
       <p className="text-muted-foreground mb-4">
-        Scheduling automates agent runs at specific times. Set up a schedule and AutoCoder will automatically
+        Scheduling automates agent runs at specific times. Set up a schedule and AutoForge will automatically
         start agents on your project &mdash; useful for overnight builds, periodic maintenance, or continuous
         development.
       </p>

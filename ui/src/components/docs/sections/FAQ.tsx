@@ -13,7 +13,7 @@ export function FAQ() {
         Starting a New Project
       </h3>
       <p className="text-muted-foreground italic mb-2">
-        How do I use AutoCoder on a new project?
+        How do I use AutoForge on a new project?
       </p>
       <p className="text-muted-foreground">
         From the UI, select &quot;Create New Project&quot; in the project dropdown. Choose a folder and
@@ -27,12 +27,12 @@ export function FAQ() {
         Adding to Existing Project
       </h3>
       <p className="text-muted-foreground italic mb-2">
-        How do I add AutoCoder to an existing project?
+        How do I add AutoForge to an existing project?
       </p>
       <p className="text-muted-foreground">
         Register the project folder through the UI project selector using &quot;Add Existing&quot;.
-        AutoCoder creates a{' '}
-        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autocoder/</span> directory
+        AutoForge creates a{' '}
+        <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">.autoforge/</span> directory
         alongside your existing code. Write an app spec describing what to build (new features), and the
         agent works within your existing codebase.
       </p>
@@ -60,7 +60,7 @@ export function FAQ() {
       <p className="text-muted-foreground">
         Create{' '}
         <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-          .autocoder/allowed_commands.yaml
+          .autoforge/allowed_commands.yaml
         </span>{' '}
         in your project with a list of allowed commands. Supports exact names, wildcards (e.g.,{' '}
         <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">swift*</span>), and local

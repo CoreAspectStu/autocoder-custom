@@ -110,7 +110,7 @@ export function DocsPage() {
                 className="font-display text-xl font-bold tracking-tight uppercase text-foreground
                   hover:text-primary transition-colors"
               >
-                AutoCoder
+                AutoForge
               </a>
 
               <Badge variant="secondary" className="text-xs font-medium">

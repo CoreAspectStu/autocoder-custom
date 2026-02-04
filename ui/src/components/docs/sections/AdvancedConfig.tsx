@@ -129,7 +129,7 @@ ANTHROPIC_DEFAULT_SONNET_MODEL=qwen3-coder`}</code></pre>
         Environment Variables
       </h3>
       <p className="text-muted-foreground mb-3">
-        Key environment variables for configuring AutoCoder:
+        Key environment variables for configuring AutoForge:
       </p>
       <table className="w-full text-sm mt-3">
         <thead>
@@ -193,7 +193,7 @@ ANTHROPIC_DEFAULT_SONNET_MODEL=qwen3-coder`}</code></pre>
         Webhook Support
       </h3>
       <ul className="list-disc space-y-2 ml-4 text-muted-foreground">
-        <li>AutoCoder can send webhook notifications on feature completion</li>
+        <li>AutoForge can send webhook notifications on feature completion</li>
         <li>Compatible with N8N and similar automation tools</li>
         <li>Configure the webhook URL in project settings</li>
         <li>
@@ -208,7 +208,7 @@ ANTHROPIC_DEFAULT_SONNET_MODEL=qwen3-coder`}</code></pre>
       <ul className="list-disc space-y-2 ml-4 text-muted-foreground">
         <li>
           All projects are registered in{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autocoder/registry.db</span>{' '}
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autoforge/registry.db</span>{' '}
           (SQLite)
         </li>
         <li>Maps project names to filesystem paths</li>

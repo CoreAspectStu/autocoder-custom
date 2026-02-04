@@ -115,7 +115,7 @@ class DevServerProcessManager:
         self._callbacks_lock = threading.Lock()
 
         # Lock file to prevent multiple instances (stored in project directory)
-        from autocoder_paths import get_devserver_lock_path
+        from autoforge_paths import get_devserver_lock_path
         self.lock_file = get_devserver_lock_path(self.project_dir)
 
     @property
@@ -504,10 +504,10 @@ def cleanup_orphaned_devserver_locks() -> int:
                 continue
 
             # Check both legacy and new locations for lock files
-            from autocoder_paths import get_autocoder_dir
+            from autoforge_paths import get_autoforge_dir
             lock_locations = [
                 project_path / ".devserver.lock",
-                get_autocoder_dir(project_path) / ".devserver.lock",
+                get_autoforge_dir(project_path) / ".devserver.lock",
             ]
             lock_file = None
             for candidate in lock_locations:

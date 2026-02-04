@@ -140,7 +140,7 @@ Configuration in `pyproject.toml`:
 
 - `start.py` - CLI launcher with project creation/selection menu
 - `autonomous_agent_demo.py` - Entry point for running the agent (supports `--yolo`, `--parallel`, `--batch-size`, `--batch-features`)
-- `autocoder_paths.py` - Central path resolution with dual-path backward compatibility and migration
+- `autoforge_paths.py` - Central path resolution with dual-path backward compatibility and migration
 - `agent.py` - Agent session loop using Claude Agent SDK
 - `client.py` - ClaudeSDKClient configuration with security hooks, MCP servers, and Vertex AI support
 - `security.py` - Bash command allowlist validation (ALLOWED_COMMANDS whitelist)
@@ -158,7 +158,7 @@ Configuration in `pyproject.toml`:
 ### Project Registry
 
 Projects can be stored in any directory. The registry maps project names to paths using SQLite:
-- **All platforms**: `~/.autocoder/registry.db`
+- **All platforms**: `~/.autoforge/registry.db`
 
 The registry uses:
 - SQLite database with SQLAlchemy ORM
@@ -254,18 +254,18 @@ Keyboard shortcuts (press `?` for help):
 
 ### Project Structure for Generated Apps
 
-Projects can be stored in any directory (registered in `~/.autocoder/registry.db`). Each project contains:
-- `.autocoder/prompts/app_spec.txt` - Application specification (XML format)
-- `.autocoder/prompts/initializer_prompt.md` - First session prompt
-- `.autocoder/prompts/coding_prompt.md` - Continuation session prompt
-- `.autocoder/features.db` - SQLite database with feature test cases
-- `.autocoder/.agent.lock` - Lock file to prevent multiple agent instances
-- `.autocoder/allowed_commands.yaml` - Project-specific bash command allowlist (optional)
-- `.autocoder/.gitignore` - Ignores runtime files
+Projects can be stored in any directory (registered in `~/.autoforge/registry.db`). Each project contains:
+- `.autoforge/prompts/app_spec.txt` - Application specification (XML format)
+- `.autoforge/prompts/initializer_prompt.md` - First session prompt
+- `.autoforge/prompts/coding_prompt.md` - Continuation session prompt
+- `.autoforge/features.db` - SQLite database with feature test cases
+- `.autoforge/.agent.lock` - Lock file to prevent multiple agent instances
+- `.autoforge/allowed_commands.yaml` - Project-specific bash command allowlist (optional)
+- `.autoforge/.gitignore` - Ignores runtime files
 - `CLAUDE.md` - Stays at project root (SDK convention)
 - `app_spec.txt` - Root copy for agent template compatibility
 
-Legacy projects with files at root level (e.g., `features.db`, `prompts/`) are auto-migrated to `.autocoder/` on next agent start. Dual-path resolution ensures old and new layouts work transparently.
+Legacy projects with files at root level (e.g., `features.db`, `prompts/`) are auto-migrated to `.autoforge/` on next agent start. Dual-path resolution ensures old and new layouts work transparently.
 
 ### Security Model
 
@@ -311,14 +311,14 @@ The agent's bash command access is controlled through a hierarchical configurati
 
 **Command Hierarchy (highest to lowest priority):**
 1. **Hardcoded Blocklist** (`security.py`) - NEVER allowed (dd, sudo, shutdown, etc.)
-2. **Org Blocklist** (`~/.autocoder/config.yaml`) - Cannot be overridden by projects
-3. **Org Allowlist** (`~/.autocoder/config.yaml`) - Available to all projects
+2. **Org Blocklist** (`~/.autoforge/config.yaml`) - Cannot be overridden by projects
+3. **Org Allowlist** (`~/.autoforge/config.yaml`) - Available to all projects
 4. **Global Allowlist** (`security.py`) - Default commands (npm, git, curl, etc.)
-5. **Project Allowlist** (`.autocoder/allowed_commands.yaml`) - Project-specific commands
+5. **Project Allowlist** (`.autoforge/allowed_commands.yaml`) - Project-specific commands
 
 **Project Configuration:**
 
-Each project can define custom allowed commands in `.autocoder/allowed_commands.yaml`:
+Each project can define custom allowed commands in `.autoforge/allowed_commands.yaml`:
 
 ```yaml
 version: 1
@@ -338,7 +338,7 @@ commands:
 
 **Organization Configuration:**
 
-System administrators can set org-wide policies in `~/.autocoder/config.yaml`:
+System administrators can set org-wide policies in `~/.autoforge/config.yaml`:
 
 ```yaml
 version: 1
@@ -405,7 +405,7 @@ Run coding agents using local models via Ollama v0.14.0+:
    ANTHROPIC_DEFAULT_OPUS_MODEL=qwen3-coder
    ANTHROPIC_DEFAULT_HAIKU_MODEL=qwen3-coder
    ```
-5. Run autocoder normally - it will use your local Ollama models
+5. Run AutoForge normally - it will use your local Ollama models
 
 **Recommended coding models:**
 - `qwen3-coder` - Good balance of speed and capability
@@ -427,7 +427,7 @@ Run coding agents using local models via Ollama v0.14.0+:
 **Slash commands** (`.claude/commands/`):
 - `/create-spec` - Interactive spec creation for new projects
 - `/expand-project` - Expand existing project with new features
-- `/gsd-to-autocoder-spec` - Convert GSD codebase mapping to app_spec.txt
+- `/gsd-to-autoforge-spec` - Convert GSD codebase mapping to app_spec.txt
 - `/check-code` - Run lint and type-check for code quality
 - `/checkpoint` - Create comprehensive checkpoint commit
 - `/review-pr` - Review pull requests
@@ -439,7 +439,7 @@ Run coding agents using local models via Ollama v0.14.0+:
 
 **Skills** (`.claude/skills/`):
 - `frontend-design` - Distinctive, production-grade UI design
-- `gsd-to-autocoder-spec` - Convert GSD codebase mapping to Autocoder app_spec format
+- `gsd-to-autoforge-spec` - Convert GSD codebase mapping to AutoForge app_spec format
 
 **Other:**
 - `.claude/templates/` - Prompt templates copied to new projects
@@ -449,12 +449,12 @@ Run coding agents using local models via Ollama v0.14.0+:
 
 ### Prompt Loading Fallback Chain
 
-1. Project-specific: `{project_dir}/.autocoder/prompts/{name}.md` (or legacy `{project_dir}/prompts/{name}.md`)
+1. Project-specific: `{project_dir}/.autoforge/prompts/{name}.md` (or legacy `{project_dir}/prompts/{name}.md`)
 2. Base template: `.claude/templates/{name}.template.md`
 
 ### Agent Session Flow
 
-1. Check if `.autocoder/features.db` has features (determines initializer vs coding agent)
+1. Check if `.autoforge/features.db` has features (determines initializer vs coding agent)
 2. Create ClaudeSDKClient with security settings
 3. Send prompt and stream response
 4. Auto-continue with 3-second delay between sessions

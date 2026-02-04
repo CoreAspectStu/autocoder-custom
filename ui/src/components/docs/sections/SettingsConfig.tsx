@@ -177,7 +177,7 @@ export function SettingsConfig() {
       <ul className="list-disc space-y-2 ml-4 text-muted-foreground">
         <li>
           Global settings stored in SQLite registry at{' '}
-          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autocoder/registry.db</span>
+          <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">~/.autoforge/registry.db</span>
         </li>
         <li>Per-project settings (like default concurrency) stored in the project registry entry</li>
         <li>UI settings (theme, dark mode) stored in browser localStorage</li>

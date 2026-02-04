@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
-const ACTIVITY_COLLAPSED_KEY = 'autocoder-activity-collapsed'
+const ACTIVITY_COLLAPSED_KEY = 'autoforge-activity-collapsed'
 
 interface AgentMissionControlProps {
   agents: ActiveAgent[]

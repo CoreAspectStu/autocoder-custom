@@ -15,7 +15,7 @@ export function AppSpecSetup() {
       <p className="text-muted-foreground mb-3">
         The app spec is an XML document that describes the application to be built. It lives at{' '}
         <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-          .autocoder/prompts/app_spec.txt
+          .autoforge/prompts/app_spec.txt
         </span>{' '}
         and tells the initializer agent what features to create. The spec defines your app&apos;s name,
         description, tech stack, and the features that should be implemented.
@@ -56,7 +56,7 @@ export function AppSpecSetup() {
         <li>
           Create{' '}
           <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-            .autocoder/prompts/app_spec.txt
+            .autoforge/prompts/app_spec.txt
           </span>{' '}
           in your project directory
         </li>
@@ -97,7 +97,7 @@ export function AppSpecSetup() {
         <li>
           Creates the feature database at{' '}
           <span className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-            .autocoder/features.db
+            .autoforge/features.db
           </span>
         </li>
       </ul>

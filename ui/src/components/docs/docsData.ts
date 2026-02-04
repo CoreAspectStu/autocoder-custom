@@ -34,7 +34,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Getting Started',
     icon: Rocket,
     subsections: [
-      { id: 'what-is-autocoder', title: 'What is AutoCoder?' },
+      { id: 'what-is-autoforge', title: 'What is AutoForge?' },
       { id: 'quick-start', title: 'Quick Start' },
       { id: 'creating-a-project', title: 'Creating a New Project' },
       { id: 'existing-project', title: 'Adding to an Existing Project' },
@@ -60,7 +60,7 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Target Project Structure',
     icon: FolderTree,
     subsections: [
-      { id: 'autocoder-directory', title: '.autocoder/ Directory Layout' },
+      { id: 'autoforge-directory', title: '.autoforge/ Directory Layout' },
       { id: 'features-db', title: 'Features Database' },
       { id: 'prompts-directory', title: 'Prompts Directory' },
       { id: 'allowed-commands-yaml', title: 'Allowed Commands Config' },
