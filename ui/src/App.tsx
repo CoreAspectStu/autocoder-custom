@@ -263,9 +263,12 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
-            <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
-              AutoForge
-            </h1>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="AutoForge" className="h-9 w-9 rounded-full" />
+              <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
+                AutoForge
+              </h1>
+            </div>
 
             {/* Controls */}
             <div className="flex items-center gap-4">
@@ -337,7 +340,7 @@ function App() {
 
               {/* Docs link */}
               <Button
-                onClick={() => { window.location.hash = '#/docs' }}
+                onClick={() => window.open('https://autoforge.cc', '_blank')}
                 variant="outline"
                 size="sm"
                 title="Documentation"

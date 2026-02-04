@@ -17,18 +17,28 @@ This is an autonomous coding agent system with a React-based UI. It uses the Cla
 
 ## Commands
 
-### Quick Start (Recommended)
+### npm Global Install (Recommended)
 
 ```bash
-# Windows - launches CLI menu
-start.bat
+npm install -g autoforge-ai
+autoforge                    # Start server (first run sets up Python venv)
+autoforge config             # Edit ~/.autoforge/.env in $EDITOR
+autoforge config --show      # Print active configuration
+autoforge --port 9999        # Custom port
+autoforge --no-browser       # Don't auto-open browser
+autoforge --repair           # Delete and recreate ~/.autoforge/venv/
+```
 
-# macOS/Linux
-./start.sh
+### From Source (Development)
 
+```bash
 # Launch Web UI (serves pre-built React app)
 start_ui.bat      # Windows
 ./start_ui.sh     # macOS/Linux
+
+# CLI menu
+start.bat         # Windows
+./start.sh        # macOS/Linux
 ```
 
 ### Python Backend (Manual)
@@ -135,6 +145,17 @@ Configuration in `pyproject.toml`:
 - mypy: Strict return type checking, ignores missing imports
 
 ## Architecture
+
+### npm CLI (bin/, lib/)
+
+The `autoforge` command is a Node.js wrapper that manages the Python environment and server lifecycle:
+- `bin/autoforge.js` - Entry point (shebang script)
+- `lib/cli.js` - Main CLI logic: Python 3.11+ detection (cross-platform), venv management at `~/.autoforge/venv/` with composite marker (requirements hash + Python version), `.env` config loading from `~/.autoforge/.env`, uvicorn server startup with PID file, and signal handling
+- `package.json` - npm package config (`autoforge-ai` on npm), `files` whitelist with `__pycache__` exclusions, `prepublishOnly` builds the UI
+- `requirements-prod.txt` - Runtime-only Python deps (excludes ruff, mypy, pytest)
+- `.npmignore` - Excludes dev files, tests, UI source from the published tarball
+
+Publishing: `npm publish` (triggers `prepublishOnly` which builds UI, then publishes ~600KB tarball with 84 files)
 
 ### Core Python Modules
 
@@ -244,6 +265,11 @@ Key components:
 - `DevServerControl.tsx` - Dev server start/stop control
 - `ScheduleModal.tsx` - Schedule management UI
 - `SettingsModal.tsx` - Global settings panel
+
+In-app documentation (`/#/docs` route):
+- `src/components/docs/sections/` - Content for each doc section (GettingStarted.tsx, AgentSystem.tsx, etc.)
+- `src/components/docs/docsData.ts` - Sidebar structure, subsection IDs, search keywords
+- `src/components/docs/DocsPage.tsx` - Page layout; `DocsContent.tsx` - section renderer with scroll tracking
 
 Keyboard shortcuts (press `?` for help):
 - `D` - Toggle debug panel
