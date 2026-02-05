@@ -728,9 +728,7 @@ async def project_websocket(websocket: WebSocket, project_name: str):
     # Always accept WebSocket first to avoid opaque 403 errors
     await websocket.accept()
 
-    try:
-        project_name = validate_project_name(project_name)
-    except Exception:
+    if not validate_project_name(project_name):
         await websocket.send_json({"type": "error", "content": "Invalid project name"})
         await websocket.close(code=4000, reason="Invalid project name")
         return
@@ -885,8 +883,7 @@ async def project_websocket(websocket: WebSocket, project_name: str):
                 break
             except json.JSONDecodeError:
                 logger.warning(f"Invalid JSON from WebSocket: {data[:100] if data else 'empty'}")
-            except Exception as e:
-                logger.warning(f"WebSocket error: {e}")
+            except Exception:
                 break
 
     finally:

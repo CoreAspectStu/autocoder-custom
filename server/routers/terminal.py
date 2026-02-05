@@ -225,9 +225,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     await websocket.accept()
 
     # Validate project name
-    try:
-        project_name = validate_project_name(project_name)
-    except Exception:
+    if not validate_project_name(project_name):
         await websocket.send_json({"type": "error", "message": "Invalid project name"})
         await websocket.close(
             code=TerminalCloseCode.INVALID_PROJECT_NAME, reason="Invalid project name"
