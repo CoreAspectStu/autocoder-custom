@@ -263,6 +263,17 @@ def main() -> None:
             )
         else:
             # Entry point mode - always use unified orchestrator
+            # Clean up stale temp files before starting (prevents temp folder bloat)
+            from temp_cleanup import cleanup_stale_temp
+            cleanup_stats = cleanup_stale_temp()
+            if cleanup_stats["dirs_deleted"] > 0 or cleanup_stats["files_deleted"] > 0:
+                mb_freed = cleanup_stats["bytes_freed"] / (1024 * 1024)
+                print(
+                    f"[CLEANUP] Removed {cleanup_stats['dirs_deleted']} dirs, "
+                    f"{cleanup_stats['files_deleted']} files ({mb_freed:.1f} MB freed)",
+                    flush=True,
+                )
+
             from parallel_orchestrator import run_parallel_orchestrator
 
             # Clamp concurrency to valid range (1-5)
