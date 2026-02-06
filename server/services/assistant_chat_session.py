@@ -25,7 +25,7 @@ from .assistant_database import (
     create_conversation,
     get_messages,
 )
-from .chat_constants import API_ENV_VARS, ROOT_DIR
+from .chat_constants import ROOT_DIR
 
 # Load environment variables from .env file if present
 load_dotenv()

@@ -22,7 +22,7 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from dotenv import load_dotenv
 
 from ..schemas import ImageAttachment
-from .chat_constants import API_ENV_VARS, ROOT_DIR, make_multimodal_message
+from .chat_constants import ROOT_DIR, make_multimodal_message
 
 # Load environment variables from .env file if present
 load_dotenv()
