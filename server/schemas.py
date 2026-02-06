@@ -411,8 +411,8 @@ class SettingsResponse(BaseModel):
     """Response schema for global settings."""
     yolo_mode: bool = False
     model: str = DEFAULT_MODEL
-    glm_mode: bool = False  # True if GLM API is configured via .env
-    ollama_mode: bool = False  # True if Ollama API is configured via .env
+    glm_mode: bool = False  # True when api_provider is "glm"
+    ollama_mode: bool = False  # True when api_provider is "ollama"
     testing_agent_ratio: int = 1  # Regression testing agents (0-3)
     playwright_headless: bool = True
     batch_size: int = 3  # Features per coding agent batch (1-3)

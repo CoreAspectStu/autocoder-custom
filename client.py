@@ -46,8 +46,9 @@ def convert_model_for_vertex(model: str) -> str:
     """
     Convert model name format for Vertex AI compatibility.
 
-    Vertex AI uses @ to separate model name from version (e.g., claude-opus-4-5@20251101)
-    while the Anthropic API uses - (e.g., claude-opus-4-5-20251101).
+    Vertex AI uses @ to separate model name from version (e.g., claude-sonnet-4-5@20250929)
+    while the Anthropic API uses - (e.g., claude-sonnet-4-5-20250929).
+    Models without a date suffix (e.g., claude-opus-4-6) pass through unchanged.
 
     Args:
         model: Model name in Anthropic format (with hyphens)
@@ -61,7 +62,7 @@ def convert_model_for_vertex(model: str) -> str:
         return model
 
     # Pattern: claude-{name}-{version}-{date} -> claude-{name}-{version}@{date}
-    # Example: claude-opus-4-5-20251101 -> claude-opus-4-5@20251101
+    # Example: claude-sonnet-4-5-20250929 -> claude-sonnet-4-5@20250929
     # The date is always 8 digits at the end
     match = re.match(r'^(claude-.+)-(\d{8})$', model)
     if match:
