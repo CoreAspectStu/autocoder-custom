@@ -26,7 +26,7 @@ from ..services.terminal_manager import (
     stop_terminal_session,
 )
 from ..utils.project_helpers import get_project_path as _get_project_path
-from ..utils.validation import is_valid_project_name as validate_project_name
+from ..utils.validation import is_valid_project_name
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ async def list_project_terminals(project_name: str) -> list[TerminalInfoResponse
     Returns:
         List of terminal info objects
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     project_dir = _get_project_path(project_name)
@@ -122,7 +122,7 @@ async def create_project_terminal(
     Returns:
         The created terminal info
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     project_dir = _get_project_path(project_name)
@@ -148,7 +148,7 @@ async def rename_project_terminal(
     Returns:
         The updated terminal info
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     if not validate_terminal_id(terminal_id):
@@ -180,7 +180,7 @@ async def delete_project_terminal(project_name: str, terminal_id: str) -> dict:
     Returns:
         Success message
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     if not validate_terminal_id(terminal_id):
@@ -225,7 +225,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     await websocket.accept()
 
     # Validate project name
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         await websocket.send_json({"type": "error", "message": "Invalid project name"})
         await websocket.close(
             code=TerminalCloseCode.INVALID_PROJECT_NAME, reason="Invalid project name"

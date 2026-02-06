@@ -436,9 +436,18 @@ class SettingsUpdate(BaseModel):
     playwright_headless: bool | None = None
     batch_size: int | None = None  # Features per agent batch (1-3)
     api_provider: str | None = None
-    api_base_url: str | None = None
-    api_auth_token: str | None = None  # Write-only, never returned
-    api_model: str | None = None
+    api_base_url: str | None = Field(None, max_length=500)
+    api_auth_token: str | None = Field(None, max_length=500)  # Write-only, never returned
+    api_model: str | None = Field(None, max_length=200)
+
+    @field_validator('api_base_url')
+    @classmethod
+    def validate_api_base_url(cls, v: str | None) -> str | None:
+        if v is not None and v.strip():
+            v = v.strip()
+            if not v.startswith(("http://", "https://")):
+                raise ValueError("api_base_url must start with http:// or https://")
+        return v
 
     @field_validator('model')
     @classmethod
