@@ -33,6 +33,7 @@ import type { Feature } from './lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 const STORAGE_KEY = 'autoforge-selected-project'
 const VIEW_MODE_KEY = 'autoforge-view-mode'
@@ -261,17 +262,18 @@ function App() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md text-foreground border-b-2 border-border">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo and Title */}
-            <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="AutoForge" className="h-9 w-9 rounded-full" />
-              <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
-                AutoForge
-              </h1>
-            </div>
+          <TooltipProvider>
+            <div className="flex items-center justify-between">
+              {/* Logo and Title */}
+              <div className="flex items-center gap-3">
+                <img src="/logo.png" alt="AutoForge" className="h-9 w-9 rounded-full" />
+                <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
+                  AutoForge
+                </h1>
+              </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-4">
+              {/* Controls */}
+              <div className="flex items-center gap-4">
               <ProjectSelector
                 projects={projects ?? []}
                 selectedProject={selectedProject}
@@ -294,26 +296,35 @@ function App() {
                     url={wsState.devServerUrl}
                   />
 
-                  <Button
-                    onClick={() => setShowSettings(true)}
-                    variant="outline"
-                    size="sm"
-                    title="Settings (,)"
-                    aria-label="Open Settings"
-                  >
-                    <Settings size={18} />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => setShowSettings(true)}
+                        variant="outline"
+                        size="sm"
+                        title="Settings (,)"
+                        aria-label="Open Settings"
+                      >
+                        <Settings size={18} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Settings</TooltipContent>
+                  </Tooltip>
 
-                  <Button
-                    onClick={() => setShowResetModal(true)}
-                    variant="outline"
-                    size="sm"
-                    title="Reset Project (R)"
-                    aria-label="Reset Project"
-                    disabled={wsState.agentStatus === 'running'}
-                  >
-                    <RotateCcw size={18} />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => setShowResetModal(true)}
+                        variant="outline"
+                        size="sm"
+                        aria-label="Reset Project"
+                        disabled={wsState.agentStatus === 'running'}
+                      >
+                        <RotateCcw size={18} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Reset</TooltipContent>
+                  </Tooltip>
 
                   {/* Ollama Mode Indicator */}
                   {settings?.ollama_mode && (
@@ -339,15 +350,19 @@ function App() {
               )}
 
               {/* Docs link */}
-              <Button
-                onClick={() => window.open('https://autoforge.cc', '_blank')}
-                variant="outline"
-                size="sm"
-                title="Documentation"
-                aria-label="Open Documentation"
-              >
-                <BookOpen size={18} />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => window.open('https://autoforge.cc', '_blank')}
+                    variant="outline"
+                    size="sm"
+                    aria-label="Open Documentation"
+                  >
+                    <BookOpen size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Docs</TooltipContent>
+              </Tooltip>
 
               {/* Theme selector */}
               <ThemeSelector
@@ -357,17 +372,22 @@ function App() {
               />
 
               {/* Dark mode toggle - always visible */}
-              <Button
-                onClick={toggleDarkMode}
-                variant="outline"
-                size="sm"
-                title="Toggle dark mode"
-                aria-label="Toggle dark mode"
-              >
-                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={toggleDarkMode}
+                    variant="outline"
+                    size="sm"
+                    aria-label="Toggle dark mode"
+                  >
+                    {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Toggle theme</TooltipContent>
+              </Tooltip>
+              </div>
             </div>
-          </div>
+          </TooltipProvider>
         </div>
       </header>
 
