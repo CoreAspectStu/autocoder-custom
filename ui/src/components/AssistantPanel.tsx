@@ -7,24 +7,27 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Bot, FlaskConical } from 'lucide-react'
+import { X, Bot } from 'lucide-react'
 import { AssistantChat } from './AssistantChat'
 import { useConversation } from '../hooks/useConversations'
 import type { ChatMessage } from '../lib/types'
+import { Button } from '@/components/ui/button'
 
 interface AssistantPanelProps {
   projectName: string
   isOpen: boolean
   onClose: () => void
-  mode?: 'dev' | 'uat'  // Add mode prop
 }
 
 const STORAGE_KEY_PREFIX = 'assistant-conversation-'
+const WIDTH_STORAGE_KEY = 'assistant-panel-width'
+const DEFAULT_WIDTH = 400
+const MIN_WIDTH = 300
+const MAX_WIDTH_VW = 90
 
-function getStoredConversationId(projectName: string, mode: 'dev' | 'uat'): number | null {
+function getStoredConversationId(projectName: string): number | null {
   try {
-    const key = `${STORAGE_KEY_PREFIX}${projectName}-${mode}`
-    const stored = localStorage.getItem(key)
+    const stored = localStorage.getItem(`${STORAGE_KEY_PREFIX}${projectName}`)
     if (stored) {
       const data = JSON.parse(stored)
       return data.conversationId || null
@@ -35,8 +38,8 @@ function getStoredConversationId(projectName: string, mode: 'dev' | 'uat'): numb
   return null
 }
 
-function setStoredConversationId(projectName: string, mode: 'dev' | 'uat', conversationId: number | null) {
-  const key = `${STORAGE_KEY_PREFIX}${projectName}-${mode}`
+function setStoredConversationId(projectName: string, conversationId: number | null) {
+  const key = `${STORAGE_KEY_PREFIX}${projectName}`
   if (conversationId) {
     localStorage.setItem(key, JSON.stringify({ conversationId }))
   } else {
@@ -44,38 +47,47 @@ function setStoredConversationId(projectName: string, mode: 'dev' | 'uat', conve
   }
 }
 
-export function AssistantPanel({ projectName, isOpen, onClose, mode = 'dev' }: AssistantPanelProps) {
-  // Ref for the close button (used to blur focus on close)
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
-
-  // Load initial conversation ID from localStorage (mode-aware)
+export function AssistantPanel({ projectName, isOpen, onClose }: AssistantPanelProps) {
+  // Load initial conversation ID from localStorage
   const [conversationId, setConversationId] = useState<number | null>(() =>
-    getStoredConversationId(projectName, mode)
+    getStoredConversationId(projectName)
   )
 
   // Fetch conversation details when we have an ID
-  const { data: conversationDetail, isLoading: isLoadingConversation } = useConversation(
+  const { data: conversationDetail, isLoading: isLoadingConversation, error: conversationError } = useConversation(
     projectName,
     conversationId
   )
 
+  // Clear stored conversation ID if it no longer exists (404 error)
+  useEffect(() => {
+    if (conversationError && conversationId) {
+      const message = conversationError.message.toLowerCase()
+      // Only clear for 404 errors, not transient network issues
+      if (message.includes('not found') || message.includes('404')) {
+        console.warn(`Conversation ${conversationId} not found, clearing stored ID`)
+        setConversationId(null)
+      }
+    }
+  }, [conversationError, conversationId])
+
   // Convert API messages to ChatMessage format for the chat component
-  const initialMessages: ChatMessage[] | undefined = conversationDetail?.messages?.map((msg) => ({
+  const initialMessages: ChatMessage[] | undefined = conversationDetail?.messages.map((msg) => ({
     id: `db-${msg.id}`,
     role: msg.role,
     content: msg.content,
     timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
   }))
 
-  // Persist conversation ID changes to localStorage (mode-aware)
+  // Persist conversation ID changes to localStorage
   useEffect(() => {
-    setStoredConversationId(projectName, mode, conversationId)
-  }, [projectName, mode, conversationId])
+    setStoredConversationId(projectName, conversationId)
+  }, [projectName, conversationId])
 
-  // Reset conversation ID when project or mode changes
+  // Reset conversation ID when project changes
   useEffect(() => {
-    setConversationId(getStoredConversationId(projectName, mode))
-  }, [projectName, mode])
+    setConversationId(getStoredConversationId(projectName))
+  }, [projectName])
 
   // Handle starting a new chat
   const handleNewChat = useCallback(() => {
@@ -92,14 +104,48 @@ export function AssistantPanel({ projectName, isOpen, onClose, mode = 'dev' }: A
     setConversationId(id)
   }, [])
 
-  // Handle panel close with focus cleanup to avoid aria-hidden accessibility warning
-  const handleClose = useCallback(() => {
-    // Blur the close button before closing to prevent aria-hidden accessibility issue
-    // When aria-hidden is set to true on the panel, no element inside should have focus
-    closeButtonRef.current?.blur()
-    // Call the original onClose callback
-    onClose()
-  }, [onClose])
+  // Resizable panel width
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(WIDTH_STORAGE_KEY)
+      if (stored) return Math.max(MIN_WIDTH, parseInt(stored, 10))
+    } catch { /* ignore */ }
+    return DEFAULT_WIDTH
+  })
+  const isResizing = useRef(false)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    const startX = e.clientX
+    const startWidth = panelWidth
+    const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100)
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      const delta = startX - e.clientX
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, startWidth + delta))
+      setPanelWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      // Persist width
+      setPanelWidth((w) => {
+        localStorage.setItem(WIDTH_STORAGE_KEY, String(w))
+        return w
+      })
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [panelWidth])
 
   return (
     <>
@@ -116,51 +162,46 @@ export function AssistantPanel({ projectName, isOpen, onClose, mode = 'dev' }: A
       <div
         className={`
           fixed right-0 top-0 bottom-0 z-50
-          w-[400px] max-w-[90vw]
-          bg-neo-card
-          border-l-4 border-[var(--color-neo-border)]
+          bg-card
+          border-l border-border
           transform transition-transform duration-300 ease-out
-          flex flex-col
+          flex flex-col shadow-xl
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}
         `}
-        style={{ boxShadow: 'var(--shadow-neo-left-lg)' }}
+        style={{ width: `${panelWidth}px`, maxWidth: `${MAX_WIDTH_VW}vw` }}
         role="dialog"
         aria-label="Project Assistant"
         aria-hidden={!isOpen}
       >
+        {/* Resize handle */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="absolute inset-y-0 left-0 w-0.5 bg-border group-hover:bg-primary transition-colors" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b-3 border-neo-border bg-neo-progress">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-primary text-primary-foreground">
           <div className="flex items-center gap-2">
-            <div
-              className="bg-neo-card border-2 border-neo-border p-1.5"
-              style={{ boxShadow: 'var(--shadow-neo-sm)' }}
-            >
-              {mode === 'uat' ? <FlaskConical size={18} className="text-purple-600" /> : <Bot size={18} />}
+            <div className="bg-card text-foreground border border-border p-1.5 rounded">
+              <Bot size={18} />
             </div>
             <div>
-              <h2 className="font-display font-bold text-neo-text-on-bright">
-                {mode === 'uat' ? 'UAT Test Planner' : 'Project Assistant'}
-              </h2>
-              <p className="text-xs text-neo-text-on-bright opacity-80 font-mono">
-                {projectName} {mode === 'uat' && <span className="text-purple-600">(UAT Mode)</span>}
-              </p>
+              <h2 className="font-semibold">Project Assistant</h2>
+              <p className="text-xs opacity-80 font-mono">{projectName}</p>
             </div>
           </div>
-          <button
-            ref={closeButtonRef}
-            onClick={handleClose}
-            className="
-              neo-btn neo-btn-ghost
-              p-2
-              bg-[var(--color-neo-card)] border-[var(--color-neo-border)]
-              hover:bg-[var(--color-neo-bg)]
-              text-[var(--color-neo-text)]
-            "
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-primary-foreground hover:bg-primary-foreground/20"
             title="Close Assistant (Press A)"
             aria-label="Close Assistant"
           >
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         {/* Chat area */}
@@ -168,7 +209,6 @@ export function AssistantPanel({ projectName, isOpen, onClose, mode = 'dev' }: A
           {isOpen && (
             <AssistantChat
               projectName={projectName}
-              mode={mode}
               conversationId={conversationId}
               initialMessages={initialMessages}
               isLoadingConversation={isLoadingConversation}

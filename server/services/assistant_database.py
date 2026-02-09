@@ -7,20 +7,28 @@ Each project has its own assistant.db file in the project directory.
 """
 
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, create_engine, func
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 style declarative base."""
+    pass
 
 # Engine cache to avoid creating new engines for each request
 # Key: project directory path (as posix string), Value: SQLAlchemy engine
-_engine_cache: dict[str, object] = {}
+_engine_cache: dict[str, Engine] = {}
+
+# Lock for thread-safe access to the engine cache
+# Prevents race conditions when multiple threads create engines simultaneously
+_cache_lock = threading.Lock()
 
 
 def _utc_now() -> datetime:
@@ -34,7 +42,6 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_name = Column(String(100), nullable=False, index=True)
-    mode = Column(String(10), nullable=False, default='dev', index=True)  # 'dev' or 'uat'
     title = Column(String(200), nullable=True)  # Optional title, derived from first message
     created_at = Column(DateTime, default=_utc_now)
     updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
@@ -57,7 +64,8 @@ class ConversationMessage(Base):
 
 def get_db_path(project_dir: Path) -> Path:
     """Get the path to the assistant database for a project."""
-    return project_dir / "assistant.db"
+    from autoforge_paths import get_assistant_db_path
+    return get_assistant_db_path(project_dir)
 
 
 def get_engine(project_dir: Path):
@@ -66,29 +74,54 @@ def get_engine(project_dir: Path):
     Uses a cache to avoid creating new engines for each request, which improves
     performance by reusing database connections.
 
-    Automatically creates the database file with proper schema on first access.
+    Thread-safe: Uses a lock to prevent race conditions when multiple threads
+    try to create engines simultaneously for the same project.
     """
     cache_key = project_dir.as_posix()
 
-    if cache_key not in _engine_cache:
-        db_path = get_db_path(project_dir)
+    # Double-checked locking for thread safety and performance
+    if cache_key in _engine_cache:
+        return _engine_cache[cache_key]
 
-        # Feature #149: Ensure parent directory exists before creating database
-        # This prevents errors when project directory structure doesn't exist yet
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Use as_posix() for cross-platform compatibility with SQLite connection strings
-        db_url = f"sqlite:///{db_path.as_posix()}"
-        engine = create_engine(db_url, echo=False, connect_args={"check_same_thread": False})
-
-        # Create database schema if it doesn't exist
-        # This creates the database file and all tables on first access
-        Base.metadata.create_all(engine)
-
-        _engine_cache[cache_key] = engine
-        logger.info(f"Created new database engine for {cache_key} (database at {db_path})")
+    with _cache_lock:
+        # Check again inside the lock in case another thread created it
+        if cache_key not in _engine_cache:
+            db_path = get_db_path(project_dir)
+            # Use as_posix() for cross-platform compatibility with SQLite connection strings
+            db_url = f"sqlite:///{db_path.as_posix()}"
+            engine = create_engine(
+                db_url,
+                echo=False,
+                connect_args={
+                    "check_same_thread": False,
+                    "timeout": 30,  # Wait up to 30s for locks
+                }
+            )
+            Base.metadata.create_all(engine)
+            _engine_cache[cache_key] = engine
+            logger.debug(f"Created new database engine for {cache_key}")
 
     return _engine_cache[cache_key]
+
+
+def dispose_engine(project_dir: Path) -> bool:
+    """Dispose of and remove the cached engine for a project.
+
+    This closes all database connections, releasing file locks on Windows.
+    Should be called before deleting the database file.
+
+    Returns:
+        True if an engine was disposed, False if no engine was cached.
+    """
+    cache_key = project_dir.as_posix()
+
+    if cache_key in _engine_cache:
+        engine = _engine_cache.pop(cache_key)
+        engine.dispose()
+        logger.debug(f"Disposed database engine for {cache_key}")
+        return True
+
+    return False
 
 
 def get_session(project_dir: Path):
@@ -102,33 +135,27 @@ def get_session(project_dir: Path):
 # Conversation Operations
 # ============================================================================
 
-def create_conversation(project_dir: Path, project_name: str, mode: str = 'dev', title: Optional[str] = None) -> Conversation:
+def create_conversation(project_dir: Path, project_name: str, title: Optional[str] = None) -> Conversation:
     """Create a new conversation for a project."""
     session = get_session(project_dir)
     try:
         conversation = Conversation(
             project_name=project_name,
-            mode=mode,
             title=title,
         )
         session.add(conversation)
         session.commit()
         session.refresh(conversation)
-        logger.info(f"Created conversation {conversation.id} for project {project_name}, mode: {mode}")
+        logger.info(f"Created conversation {conversation.id} for project {project_name}")
         return conversation
     finally:
         session.close()
 
 
-def get_conversations(project_dir: Path, project_name: str, mode: str = 'dev') -> list[dict]:
+def get_conversations(project_dir: Path, project_name: str) -> list[dict]:
     """Get all conversations for a project with message counts.
 
     Uses a subquery for message_count to avoid N+1 query problem.
-
-    Args:
-        project_dir: Path to the project directory
-        project_name: Name of the project
-        mode: 'dev' or 'uat' - filter conversations by mode
     """
     session = get_session(project_dir)
     try:
@@ -142,7 +169,7 @@ def get_conversations(project_dir: Path, project_name: str, mode: str = 'dev') -
             .subquery()
         )
 
-        # Join conversation with message counts, filter by project_name AND mode
+        # Join conversation with message counts
         conversations = (
             session.query(
                 Conversation,
@@ -153,7 +180,6 @@ def get_conversations(project_dir: Path, project_name: str, mode: str = 'dev') -
                 Conversation.id == message_count_subquery.c.conversation_id
             )
             .filter(Conversation.project_name == project_name)
-            .filter(Conversation.mode == mode)  # CRITICAL: Separate Dev vs UAT conversations
             .order_by(Conversation.updated_at.desc())
             .all()
         )
@@ -172,21 +198,11 @@ def get_conversations(project_dir: Path, project_name: str, mode: str = 'dev') -
         session.close()
 
 
-def get_conversation(project_dir: Path, conversation_id: int, mode: str = 'dev') -> Optional[dict]:
-    """Get a conversation with all its messages.
-
-    Args:
-        project_dir: Path to the project directory
-        conversation_id: ID of the conversation
-        mode: 'dev' or 'uat' - verify conversation belongs to this mode
-    """
+def get_conversation(project_dir: Path, conversation_id: int) -> Optional[dict]:
+    """Get a conversation with all its messages."""
     session = get_session(project_dir)
     try:
-        # Filter by both ID AND mode to prevent cross-mode access
-        conversation = session.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.mode == mode
-        ).first()
+        conversation = session.query(Conversation).filter(Conversation.id == conversation_id).first()
         if not conversation:
             return None
         return {
@@ -209,26 +225,16 @@ def get_conversation(project_dir: Path, conversation_id: int, mode: str = 'dev')
         session.close()
 
 
-def delete_conversation(project_dir: Path, conversation_id: int, mode: str = 'dev') -> bool:
-    """Delete a conversation and all its messages.
-
-    Args:
-        project_dir: Path to the project directory
-        conversation_id: ID of the conversation to delete
-        mode: 'dev' or 'uat' - verify conversation belongs to this mode
-    """
+def delete_conversation(project_dir: Path, conversation_id: int) -> bool:
+    """Delete a conversation and all its messages."""
     session = get_session(project_dir)
     try:
-        # Filter by both ID AND mode to prevent cross-mode deletion
-        conversation = session.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.mode == mode
-        ).first()
+        conversation = session.query(Conversation).filter(Conversation.id == conversation_id).first()
         if not conversation:
             return False
         session.delete(conversation)
         session.commit()
-        logger.info(f"Deleted conversation {conversation_id}, mode: {mode}")
+        logger.info(f"Deleted conversation {conversation_id}")
         return True
     finally:
         session.close()

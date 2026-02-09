@@ -4,19 +4,15 @@ import { useProjects, useFeatures, useAgentStatus, useSettings } from './hooks/u
 import { useProjectWebSocket } from './hooks/useWebSocket'
 import { useFeatureSound } from './hooks/useFeatureSound'
 import { useCelebration } from './hooks/useCelebration'
-import { useUATMode } from './contexts/UATModeContext'
-import { useUATTests } from './hooks/useUATTests'
+import { useTheme } from './hooks/useTheme'
 import { ProjectSelector } from './components/ProjectSelector'
 import { KanbanBoard } from './components/KanbanBoard'
 import { AgentControl } from './components/AgentControl'
 import { ProgressDashboard } from './components/ProgressDashboard'
 import { SetupWizard } from './components/SetupWizard'
 import { AddFeatureForm } from './components/AddFeatureForm'
-import { AddUATTestForm } from './components/AddUATTestForm'
 import { FeatureModal } from './components/FeatureModal'
-import { UATTestModal } from './components/UATTestModal'
 import { DebugLogViewer, type TabType } from './components/DebugLogViewer'
-import { AgentThought } from './components/AgentThought'
 import { AgentMissionControl } from './components/AgentMissionControl'
 import { CelebrationOverlay } from './components/CelebrationOverlay'
 import { AssistantFAB } from './components/AssistantFAB'
@@ -25,19 +21,27 @@ import { ExpandProjectModal } from './components/ExpandProjectModal'
 import { SpecCreationChat } from './components/SpecCreationChat'
 import { SettingsModal } from './components/SettingsModal'
 import { DevServerControl } from './components/DevServerControl'
-import { UATModeToggle } from './components/UATModeToggle'
-import { StartUATButton } from './components/StartUATButton'
-import { UATTestPlanning } from './components/UATTestPlanning'
 import { ViewToggle, type ViewMode } from './components/ViewToggle'
 import { DependencyGraph } from './components/DependencyGraph'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
-import { getDependencyGraph } from './lib/api'
-import { Loader2, Settings, Moon, Sun } from 'lucide-react'
+import { ThemeSelector } from './components/ThemeSelector'
+import { ResetProjectModal } from './components/ResetProjectModal'
+import { ProjectSetupRequired } from './components/ProjectSetupRequired'
+import { getDependencyGraph, startAgent } from './lib/api'
+import { Loader2, Settings, Moon, Sun, RotateCcw, BookOpen } from 'lucide-react'
 import type { Feature } from './lib/types'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
-const STORAGE_KEY = 'autocoder-selected-project'
-const DARK_MODE_KEY = 'autocoder-dark-mode'
-const VIEW_MODE_KEY = 'autocoder-view-mode'
+const STORAGE_KEY = 'autoforge-selected-project'
+const VIEW_MODE_KEY = 'autoforge-view-mode'
+
+// Bottom padding for main content when debug panel is collapsed (40px header + 8px margin)
+const COLLAPSED_DEBUG_PANEL_CLEARANCE = 48
+
+type InitializerStatus = 'idle' | 'starting' | 'error'
 
 function App() {
   // Initialize selected project from localStorage
@@ -50,7 +54,6 @@ function App() {
   })
   const [showAddFeature, setShowAddFeature] = useState(false)
   const [showExpandProject, setShowExpandProject] = useState(false)
-  const [showUATTestPlanning, setShowUATTestPlanning] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
   const [setupComplete, setSetupComplete] = useState(true) // Start optimistic
   const [debugOpen, setDebugOpen] = useState(false)
@@ -60,14 +63,10 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
   const [isSpecCreating, setIsSpecCreating] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
   const [showSpecChat, setShowSpecChat] = useState(false)  // For "Create Spec" button in empty kanban
-  const [darkMode, setDarkMode] = useState(() => {
-    try {
-      return localStorage.getItem(DARK_MODE_KEY) === 'true'
-    } catch {
-      return false
-    }
-  })
+  const [specInitializerStatus, setSpecInitializerStatus] = useState<InitializerStatus>('idle')
+  const [specInitializerError, setSpecInitializerError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
       const stored = localStorage.getItem(VIEW_MODE_KEY)
@@ -79,22 +78,11 @@ function App() {
 
   const queryClient = useQueryClient()
   const { data: projects, isLoading: projectsLoading } = useProjects()
-  const { isUATMode } = useUATMode()
-
-  // Switch data source based on UAT mode
-  const { data: devFeatures } = useFeatures(selectedProject)
-  const { data: uatTests } = useUATTests(isUATMode ? selectedProject : null)
-
-  // Use the appropriate data source based on mode
-  // Provide default empty structure when UAT tests are undefined (API endpoint may not exist yet)
-  // This prevents crashes when toggling UAT mode before backend is fully implemented
-  const features = isUATMode
-    ? (uatTests ?? { pending: [], in_progress: [], done: [] })
-    : devFeatures
-
+  const { data: features } = useFeatures(selectedProject)
   const { data: settings } = useSettings()
   useAgentStatus(selectedProject) // Keep polling for status updates
   const wsState = useProjectWebSocket(selectedProject)
+  const { theme, setTheme, darkMode, toggleDarkMode, themes } = useTheme()
 
   // Get has_spec from the selected project
   const selectedProjectData = projects?.find(p => p.name === selectedProject)
@@ -107,20 +95,6 @@ function App() {
     enabled: !!selectedProject && viewMode === 'graph',
     refetchInterval: 5000, // Refresh every 5 seconds
   })
-
-  // Apply dark mode class to document
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-    try {
-      localStorage.setItem(DARK_MODE_KEY, String(darkMode))
-    } catch {
-      // localStorage not available
-    }
-  }, [darkMode])
 
   // Persist view mode to localStorage
   useEffect(() => {
@@ -205,8 +179,8 @@ function App() {
         setShowAddFeature(true)
       }
 
-      // E : Expand project with AI (when project selected and has features)
-      if ((e.key === 'e' || e.key === 'E') && selectedProject && features &&
+      // E : Expand project with AI (when project selected, has spec and has features)
+      if ((e.key === 'e' || e.key === 'E') && selectedProject && hasSpec && features &&
           (features.pending.length + features.in_progress.length + features.done.length) > 0) {
         e.preventDefault()
         setShowExpandProject(true)
@@ -236,10 +210,18 @@ function App() {
         setShowKeyboardHelp(true)
       }
 
+      // R : Open reset modal (when project selected and agent not running)
+      if ((e.key === 'r' || e.key === 'R') && selectedProject && wsState.agentStatus !== 'running') {
+        e.preventDefault()
+        setShowResetModal(true)
+      }
+
       // Escape : Close modals
       if (e.key === 'Escape') {
         if (showKeyboardHelp) {
           setShowKeyboardHelp(false)
+        } else if (showResetModal) {
+          setShowResetModal(false)
         } else if (showExpandProject) {
           setShowExpandProject(false)
         } else if (showSettings) {
@@ -258,19 +240,12 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, debugActiveTab, assistantOpen, features, showSettings, showKeyboardHelp, isSpecCreating, viewMode])
+  }, [selectedProject, showAddFeature, showExpandProject, selectedFeature, debugOpen, debugActiveTab, assistantOpen, features, showSettings, showKeyboardHelp, isSpecCreating, viewMode, showResetModal, wsState.agentStatus, hasSpec])
 
-  // Calculate progress from the correct data source based on mode
-  // In dev mode: features data comes from features.db
-  // In UAT mode: features data comes from uat_tests.db (mapped to same structure)
-  // The features object already correctly switches based on isUATMode, so always use it
-  // Only fall back to WebSocket progress if features data is completely unavailable (undefined)
-  const totalFeatures = (features?.pending.length ?? 0) + (features?.in_progress.length ?? 0) + (features?.done.length ?? 0)
-
-  const progress = {
+  // Combine WebSocket progress with feature data
+  const progress = wsState.progress.total > 0 ? wsState.progress : {
     passing: features?.done.length ?? 0,
-    in_progress: features?.in_progress.length ?? 0,
-    total: totalFeatures,
+    total: (features?.pending.length ?? 0) + (features?.in_progress.length ?? 0) + (features?.done.length ?? 0),
     percentage: 0,
   }
 
@@ -283,25 +258,22 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-neo-bg">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className={`bg-neo-card text-neo-text border-b-4 ${isUATMode ? 'border-purple-500 dark:border-purple-400' : 'border-neo-border'}`}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo and Title */}
+      <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-md text-foreground border-b-2 border-border">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <TooltipProvider>
+            {/* Row 1: Branding + Project + Utility icons */}
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-2xl font-bold tracking-tight uppercase">
-                AutoCoder
-              </h1>
-              {isUATMode && (
-                <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded border-2 border-purple-600 dark:border-purple-400">
-                  UAT Mode
-                </span>
-              )}
-            </div>
+              {/* Logo and Title */}
+              <div className="flex items-center gap-2 shrink-0">
+                <img src="/logo.png" alt="AutoForge" className="h-9 w-9 rounded-full" />
+                <h1 className="font-display text-2xl font-bold tracking-tight uppercase hidden md:block">
+                  AutoForge
+                </h1>
+              </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-4">
+              {/* Project selector */}
               <ProjectSelector
                 projects={projects ?? []}
                 selectedProject={selectedProject}
@@ -310,82 +282,141 @@ function App() {
                 onSpecCreatingChange={setIsSpecCreating}
               />
 
-              {selectedProject && (
-                <>
-                  <AgentControl
-                    projectName={selectedProject}
-                    status={wsState.agentStatus}
-                  />
+              {/* Spacer */}
+              <div className="flex-1" />
 
-                  <DevServerControl
-                    projectName={selectedProject}
-                    status={wsState.devServerStatus}
-                    url={wsState.devServerUrl}
-                  />
-
-                  <UATModeToggle
-                    projectName={selectedProject}
-                    hasFeatures={progress.total > 0}
-                  />
-
-                  <StartUATButton
-                    projectName={selectedProject}
-                    pendingTestsCount={features?.pending.length || 0}
-                    onExecutionStarted={() => {
-                      // Refresh UAT tests to show updated status
-                      queryClient.invalidateQueries({ queryKey: ['uatTests'] })
-                    }}
-                  />
-
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className="neo-btn text-sm py-2 px-3"
-                    title="Settings (,)"
-                    aria-label="Open Settings"
-                  >
-                    <Settings size={18} />
-                  </button>
-
-                  {/* GLM Mode Badge */}
-                  {settings?.glm_mode && (
-                    <span
-                      className="px-2 py-1 text-xs font-bold bg-[var(--color-neo-glm)] text-white rounded border-2 border-neo-border shadow-neo-sm"
-                      title="Using GLM API (configured via .env)"
-                    >
-                      GLM
-                    </span>
-                  )}
-                </>
+              {/* Ollama Mode Indicator */}
+              {selectedProject && settings?.ollama_mode && (
+                <div
+                  className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-card rounded border-2 border-border shadow-sm"
+                  title="Using Ollama local models"
+                >
+                  <img src="/ollama.png" alt="Ollama" className="w-5 h-5" />
+                  <span className="text-xs font-bold text-foreground">Ollama</span>
+                </div>
               )}
 
-              {/* Dark mode toggle - always visible */}
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="neo-btn text-sm py-2 px-3"
-                title="Toggle dark mode"
-                aria-label="Toggle dark mode"
-              >
-                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
+              {/* GLM Mode Badge */}
+              {selectedProject && settings?.glm_mode && (
+                <Badge
+                  className="hidden sm:inline-flex bg-purple-500 text-white hover:bg-purple-600"
+                  title="Using GLM API"
+                >
+                  GLM
+                </Badge>
+              )}
+
+              {/* Utility icons - always visible */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => window.open('https://autoforge.cc', '_blank')}
+                    variant="outline"
+                    size="sm"
+                    aria-label="Open Documentation"
+                  >
+                    <BookOpen size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Docs</TooltipContent>
+              </Tooltip>
+
+              <ThemeSelector
+                themes={themes}
+                currentTheme={theme}
+                onThemeChange={setTheme}
+              />
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={toggleDarkMode}
+                    variant="outline"
+                    size="sm"
+                    aria-label="Toggle dark mode"
+                  >
+                    {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Toggle theme</TooltipContent>
+              </Tooltip>
             </div>
-          </div>
+
+            {/* Row 2: Project controls - only when a project is selected */}
+            {selectedProject && (
+              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/50">
+                <AgentControl
+                  projectName={selectedProject}
+                  status={wsState.agentStatus}
+                  defaultConcurrency={selectedProjectData?.default_concurrency}
+                />
+
+                <DevServerControl
+                  projectName={selectedProject}
+                  status={wsState.devServerStatus}
+                  url={wsState.devServerUrl}
+                />
+
+                <div className="flex-1" />
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => setShowSettings(true)}
+                      variant="outline"
+                      size="sm"
+                      aria-label="Open Settings"
+                    >
+                      <Settings size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Settings (,)</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => setShowResetModal(true)}
+                      variant="outline"
+                      size="sm"
+                      aria-label="Reset Project"
+                      disabled={wsState.agentStatus === 'running'}
+                    >
+                      <RotateCcw size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Reset (R)</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </TooltipProvider>
         </div>
       </header>
 
       {/* Main Content */}
       <main
-        className={`max-w-7xl mx-auto px-4 py-8 ${isUATMode ? 'border-l-4 border-purple-500 dark:border-purple-400' : ''}`}
-        style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
+        className="max-w-7xl mx-auto px-4 py-8"
+        style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : COLLAPSED_DEBUG_PANEL_CLEARANCE }}
       >
         {!selectedProject ? (
-          <div className="neo-empty-state mt-12">
+          <div className="text-center mt-12">
             <h2 className="font-display text-2xl font-bold mb-2">
-              Welcome to AutoCoder
+              Welcome to AutoForge
             </h2>
-            <p className="text-neo-text-secondary mb-4">
+            <p className="text-muted-foreground mb-4">
               Select a project from the dropdown above or create a new one to get started.
             </p>
           </div>
+        ) : !hasSpec ? (
+          <ProjectSetupRequired
+            projectName={selectedProject}
+            projectPath={selectedProjectData?.path}
+            onCreateWithClaude={() => setShowSpecChat(true)}
+            onEditManually={() => {
+              // Open debug panel for the user to see the project path
+              setDebugOpen(true)
+            }}
+          />
         ) : (
           <div className="space-y-8">
             {/* Progress Dashboard */}
@@ -394,6 +425,8 @@ function App() {
               total={progress.total}
               percentage={progress.percentage}
               isConnected={wsState.isConnected}
+              logs={wsState.activeAgents.length === 0 ? wsState.logs : undefined}
+              agentStatus={wsState.activeAgents.length === 0 ? wsState.agentStatus : undefined}
             />
 
             {/* Agent Mission Control - shows orchestrator status and active agents in parallel mode */}
@@ -402,62 +435,26 @@ function App() {
               orchestratorStatus={wsState.orchestratorStatus}
               recentActivity={wsState.recentActivity}
               getAgentLogs={wsState.getAgentLogs}
-              testAgents={wsState.activeTestAgents}
             />
 
-            {/* Agent Thought - shows latest agent narrative (single agent mode) */}
-            {wsState.activeAgents.length === 0 && (
-              <AgentThought
-                logs={wsState.logs}
-                agentStatus={wsState.agentStatus}
-              />
-            )}
 
-            {/* Initializing Features State - show when agent is running but no features yet (DEV MODE ONLY) */}
-            {!isUATMode &&
-             features &&
+            {/* Initializing Features State - show when agent is running but no features yet */}
+            {features &&
              features.pending.length === 0 &&
              features.in_progress.length === 0 &&
              features.done.length === 0 &&
              wsState.agentStatus === 'running' && (
-              <div className="neo-card p-8 text-center">
-                <Loader2 size={32} className="animate-spin mx-auto mb-4 text-neo-progress" />
-                <h3 className="font-display font-bold text-xl mb-2">
-                  Initializing Features...
-                </h3>
-                <p className="text-neo-text-secondary">
-                  The agent is reading your spec and creating features. This may take a moment.
-                </p>
-              </div>
-            )}
-
-            {/* UAT Mode - No tests yet */}
-            {isUATMode &&
-             features &&
-             features.pending.length === 0 &&
-             features.in_progress.length === 0 &&
-             features.done.length === 0 && (
-              <div className="neo-card p-8 text-center border-2 border-dashed border-purple-300 dark:border-purple-700">
-                <div className="flex justify-center mb-4">
-                  <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className="font-display font-bold text-xl mb-2">
-                  Ready to Generate UAT Test Plan
-                </h3>
-                <p className="text-neo-text-secondary mb-4">
-                  Open the assistant to generate an intelligent test plan based on your PRD and completed features.
-                </p>
-                <div className="flex items-center justify-center gap-2 text-sm text-purple-600 dark:text-purple-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Click the assistant button in the bottom-right corner to begin</span>
-                </div>
-              </div>
+              <Card className="p-8 text-center">
+                <CardContent className="p-0">
+                  <Loader2 size={32} className="animate-spin mx-auto mb-4 text-primary" />
+                  <h3 className="font-display font-bold text-xl mb-2">
+                    Initializing Features...
+                  </h3>
+                  <p className="text-muted-foreground">
+                    The agent is reading your spec and creating features. This may take a moment.
+                  </p>
+                </CardContent>
+              </Card>
             )}
 
             {/* View Toggle - only show when there are features */}
@@ -473,20 +470,13 @@ function App() {
                 features={features}
                 onFeatureClick={setSelectedFeature}
                 onAddFeature={() => setShowAddFeature(true)}
-                onExpandProject={() => {
-                  if (isUATMode) {
-                    setShowUATTestPlanning(true)
-                  } else {
-                    setShowExpandProject(true)
-                  }
-                }}
+                onExpandProject={() => setShowExpandProject(true)}
                 activeAgents={wsState.activeAgents}
                 onCreateSpec={() => setShowSpecChat(true)}
                 hasSpec={hasSpec}
-                isUATMode={isUATMode}
               />
             ) : (
-              <div className="neo-card overflow-hidden" style={{ height: '600px' }}>
+              <Card className="overflow-hidden" style={{ height: '600px' }}>
                 {graphData ? (
                   <DependencyGraph
                     graphData={graphData}
@@ -495,47 +485,34 @@ function App() {
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center">
-                    <Loader2 size={32} className="animate-spin text-neo-progress" />
+                    <Loader2 size={32} className="animate-spin text-primary" />
                   </div>
                 )}
-              </div>
+              </Card>
             )}
           </div>
         )}
       </main>
 
-      {/* Add Feature Modal - Show AddFeatureForm in Dev mode, AddUATTestForm in UAT mode */}
+      {/* Add Feature Modal */}
       {showAddFeature && selectedProject && (
-        isUATMode ? (
-          <AddUATTestForm
-            onClose={() => setShowAddFeature(false)}
-          />
-        ) : (
-          <AddFeatureForm
-            projectName={selectedProject}
-            onClose={() => setShowAddFeature(false)}
-          />
-        )
+        <AddFeatureForm
+          projectName={selectedProject}
+          onClose={() => setShowAddFeature(false)}
+        />
       )}
 
-      {/* Feature Detail Modal - Different modal for UAT vs Dev mode */}
+      {/* Feature Detail Modal */}
       {selectedFeature && selectedProject && (
-        isUATMode ? (
-          <UATTestModal
-            feature={selectedFeature}
-            onClose={() => setSelectedFeature(null)}
-          />
-        ) : (
-          <FeatureModal
-            feature={selectedFeature}
-            projectName={selectedProject}
-            onClose={() => setSelectedFeature(null)}
-          />
-        )
+        <FeatureModal
+          feature={selectedFeature}
+          projectName={selectedProject}
+          onClose={() => setSelectedFeature(null)}
+        />
       )}
 
       {/* Expand Project Modal - AI-powered bulk feature creation */}
-      {showExpandProject && selectedProject && (
+      {showExpandProject && selectedProject && hasSpec && (
         <ExpandProjectModal
           isOpen={showExpandProject}
           projectName={selectedProject}
@@ -547,60 +524,36 @@ function App() {
         />
       )}
 
-      {/* UAT Test Planning Modal - conversational test planning flow */}
-      {showUATTestPlanning && selectedProject && (
-        <div className="fixed inset-0 z-50 bg-[var(--color-neo-bg)] overflow-y-auto">
-          <div className="min-h-screen p-4">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700">
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 dark:border-gray-700">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    Generate UAT Test Plan
-                  </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {selectedProject}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowUATTestPlanning(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  aria-label="Close"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Content */}
-              <UATTestPlanning
-                projectName={selectedProject}
-                onComplete={() => {
-                  setShowUATTestPlanning(false)
-                  // Refresh UAT tests to show newly created tests
-                  queryClient.invalidateQueries({ queryKey: ['uatTests'] })
-                }}
-                onCancel={() => setShowUATTestPlanning(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Spec Creation Chat - for creating spec from empty kanban */}
       {showSpecChat && selectedProject && (
-        <div className="fixed inset-0 z-50 bg-[var(--color-neo-bg)]">
+        <div className="fixed inset-0 z-50 bg-background">
           <SpecCreationChat
             projectName={selectedProject}
-            onComplete={() => {
-              setShowSpecChat(false)
-              // Refresh projects to update has_spec
-              queryClient.invalidateQueries({ queryKey: ['projects'] })
-              queryClient.invalidateQueries({ queryKey: ['features', selectedProject] })
+            onComplete={async (_specPath, yoloMode) => {
+              setSpecInitializerStatus('starting')
+              try {
+                await startAgent(selectedProject, {
+                  yoloMode: yoloMode ?? false,
+                  maxConcurrency: 3,
+                })
+                // Success — close chat and refresh
+                setShowSpecChat(false)
+                setSpecInitializerStatus('idle')
+                queryClient.invalidateQueries({ queryKey: ['projects'] })
+                queryClient.invalidateQueries({ queryKey: ['features', selectedProject] })
+              } catch (err) {
+                setSpecInitializerStatus('error')
+                setSpecInitializerError(err instanceof Error ? err.message : 'Failed to start agent')
+              }
             }}
-            onCancel={() => setShowSpecChat(false)}
-            onExitToProject={() => setShowSpecChat(false)}
+            onCancel={() => { setShowSpecChat(false); setSpecInitializerStatus('idle') }}
+            onExitToProject={() => { setShowSpecChat(false); setSpecInitializerStatus('idle') }}
+            initializerStatus={specInitializerStatus}
+            initializerError={specInitializerError}
+            onRetryInitializer={() => {
+              setSpecInitializerError(null)
+              setSpecInitializerStatus('idle')
+            }}
           />
         </div>
       )}
@@ -630,7 +583,6 @@ function App() {
           />
           <AssistantPanel
             projectName={selectedProject}
-            mode={isUATMode ? 'uat' : 'dev'}
             isOpen={assistantOpen}
             onClose={() => setAssistantOpen(false)}
           />
@@ -638,13 +590,24 @@ function App() {
       )}
 
       {/* Settings Modal */}
-      {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} />
-      )}
+      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Keyboard Shortcuts Help */}
-      {showKeyboardHelp && (
-        <KeyboardShortcutsHelp onClose={() => setShowKeyboardHelp(false)} />
+      <KeyboardShortcutsHelp isOpen={showKeyboardHelp} onClose={() => setShowKeyboardHelp(false)} />
+
+      {/* Reset Project Modal */}
+      {showResetModal && selectedProject && (
+        <ResetProjectModal
+          isOpen={showResetModal}
+          projectName={selectedProject}
+          onClose={() => setShowResetModal(false)}
+          onResetComplete={(wasFullReset) => {
+            // If full reset, the spec was deleted - show spec creation chat
+            if (wasFullReset) {
+              setShowSpecChat(true)
+            }
+          }}
+        />
       )}
 
       {/* Celebration Overlay - shows when a feature is completed by an agent */}

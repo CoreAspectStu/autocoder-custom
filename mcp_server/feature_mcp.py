@@ -30,26 +30,24 @@ orchestrator, not by agents. Agents receive pre-assigned feature IDs.
 import json
 import os
 import sys
-import threading
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 # Add parent directory to path so we can import from api module
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.database import Feature, create_database
+from api.database import Feature, atomic_transaction, create_database
 from api.dependency_resolver import (
     MAX_DEPENDENCIES_PER_FEATURE,
     compute_scheduling_scores,
     would_create_circular_dependency,
 )
 from api.migration import migrate_json_to_sqlite
-from api.database_backup import backup_features_db
 
 # Configuration from environment
 PROJECT_DIR = Path(os.environ.get("PROJECT_DIR", ".")).resolve()
@@ -98,8 +96,9 @@ class BulkCreateInput(BaseModel):
 _session_maker = None
 _engine = None
 
-# Lock for priority assignment to prevent race conditions
-_priority_lock = threading.Lock()
+# NOTE: The old threading.Lock() was removed because it only worked per-process,
+# not cross-process. In parallel mode, multiple MCP servers run in separate
+# processes, so the lock was useless. We now use atomic SQL operations instead.
 
 
 @asynccontextmanager
@@ -110,38 +109,11 @@ async def server_lifespan(server: FastMCP):
     # Create project directory if it doesn't exist
     PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Get mode from environment (default to 'dev')
-    mode = os.environ.get("AUTOCODER_MODE", "dev")
+    # Initialize database
+    _engine, _session_maker = create_database(PROJECT_DIR)
 
-    # In UAT mode, use the centralized UAT database
-    # In dev mode, use the project's features database
-    if mode == "uat":
-        # UAT mode: use centralized uat_tests.db in ~/.autocoder/
-        from pathlib import Path
-        uat_db_path = Path.home() / ".autocoder" / "uat_tests.db"
-        if not uat_db_path.exists():
-            logger.warning(f"UAT database not found at {uat_db_path}, creating new one")
-            uat_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Create engine for UAT database
-        from sqlalchemy import create_engine
-        _engine = create_engine(f"sqlite:///{uat_db_path.as_posix()}", connect_args={
-            "check_same_thread": False,
-            "timeout": 30
-        })
-        # Import and create tables using UAT database schema
-        from api.database import Base
-        Base.metadata.create_all(bind=_engine)
-
-        from sqlalchemy.orm import sessionmaker
-        _session_maker = sessionmaker(bind=_engine)
-        logger.info(f"MCP server initialized in UAT mode using {uat_db_path}")
-    else:
-        # Dev mode: use project's features.db
-        _engine, _session_maker = create_database(PROJECT_DIR)
-        # Run migration if needed (converts legacy JSON to SQLite)
-        migrate_json_to_sqlite(PROJECT_DIR, _session_maker)
-        logger.info(f"MCP server initialized in dev mode using {PROJECT_DIR}/features.db")
+    # Run migration if needed (converts legacy JSON to SQLite)
+    migrate_json_to_sqlite(PROJECT_DIR, _session_maker)
 
     yield
 
@@ -272,22 +244,25 @@ def feature_mark_passing(
     """
     session = get_session()
     try:
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
-        if feature is None:
-            return json.dumps({"error": f"Feature with ID {feature_id} not found"})
-
-        feature.passes = True
-        feature.in_progress = False
-        # Set completion timestamp if not already set
-        if feature.completed_at is None:
-            feature.completed_at = datetime.utcnow()
-
-        # Backup before marking as passing
-        backup_features_db(PROJECT_DIR, reason="before_mark_passing")
-
+        # Atomic update with state guard - prevents double-pass in parallel mode
+        result = session.execute(text("""
+            UPDATE features
+            SET passes = 1, in_progress = 0
+            WHERE id = :id AND passes = 0
+        """), {"id": feature_id})
         session.commit()
 
+        if result.rowcount == 0:
+            # Check why the update didn't match
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            if feature is None:
+                return json.dumps({"error": f"Feature with ID {feature_id} not found"})
+            if feature.passes:
+                return json.dumps({"error": f"Feature with ID {feature_id} is already passing"})
+            return json.dumps({"error": "Failed to mark feature passing for unknown reason"})
+
+        # Get the feature name for the response
+        feature = session.query(Feature).filter(Feature.id == feature_id).first()
         return json.dumps({"success": True, "feature_id": feature_id, "name": feature.name})
     except Exception as e:
         session.rollback()
@@ -320,18 +295,20 @@ def feature_mark_failing(
     """
     session = get_session()
     try:
+        # Check if feature exists first
         feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
         if feature is None:
             return json.dumps({"error": f"Feature with ID {feature_id} not found"})
 
-        feature.passes = False
-        feature.in_progress = False
-
-        # Backup before marking as failing
-        backup_features_db(PROJECT_DIR, reason="before_mark_failing")
-
+        # Atomic update for parallel safety
+        session.execute(text("""
+            UPDATE features
+            SET passes = 0, in_progress = 0
+            WHERE id = :id
+        """), {"id": feature_id})
         session.commit()
+
+        # Refresh to get updated state
         session.refresh(feature)
 
         return json.dumps({
@@ -377,25 +354,28 @@ def feature_skip(
             return json.dumps({"error": "Cannot skip a feature that is already passing"})
 
         old_priority = feature.priority
+        name = feature.name
 
-        # Use lock to prevent race condition in priority assignment
-        with _priority_lock:
-            # Get max priority and set this feature to max + 1
-            max_priority_result = session.query(Feature.priority).order_by(Feature.priority.desc()).first()
-            new_priority = (max_priority_result[0] + 1) if max_priority_result else 1
+        # Atomic update: set priority to max+1 in a single statement
+        # This prevents race conditions where two features get the same priority
+        session.execute(text("""
+            UPDATE features
+            SET priority = (SELECT COALESCE(MAX(priority), 0) + 1 FROM features),
+                in_progress = 0
+            WHERE id = :id
+        """), {"id": feature_id})
+        session.commit()
 
-            feature.priority = new_priority
-            feature.in_progress = False
-            session.commit()
-
+        # Refresh to get new priority
         session.refresh(feature)
+        new_priority = feature.priority
 
         return json.dumps({
-            "id": feature.id,
-            "name": feature.name,
+            "id": feature_id,
+            "name": name,
             "old_priority": old_priority,
             "new_priority": new_priority,
-            "message": f"Feature '{feature.name}' moved to end of queue"
+            "message": f"Feature '{name}' moved to end of queue"
         })
     except Exception as e:
         session.rollback()
@@ -421,21 +401,27 @@ def feature_mark_in_progress(
     """
     session = get_session()
     try:
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
-        if feature is None:
-            return json.dumps({"error": f"Feature with ID {feature_id} not found"})
-
-        if feature.passes:
-            return json.dumps({"error": f"Feature with ID {feature_id} is already passing"})
-
-        if feature.in_progress:
-            return json.dumps({"error": f"Feature with ID {feature_id} is already in-progress"})
-
-        feature.in_progress = True
+        # Atomic claim: only succeeds if feature is not already claimed or passing
+        result = session.execute(text("""
+            UPDATE features
+            SET in_progress = 1
+            WHERE id = :id AND passes = 0 AND in_progress = 0
+        """), {"id": feature_id})
         session.commit()
-        session.refresh(feature)
 
+        if result.rowcount == 0:
+            # Check why the claim failed
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            if feature is None:
+                return json.dumps({"error": f"Feature with ID {feature_id} not found"})
+            if feature.passes:
+                return json.dumps({"error": f"Feature with ID {feature_id} is already passing"})
+            if feature.in_progress:
+                return json.dumps({"error": f"Feature with ID {feature_id} is already in-progress"})
+            return json.dumps({"error": "Failed to mark feature in-progress for unknown reason"})
+
+        # Fetch the claimed feature
+        feature = session.query(Feature).filter(Feature.id == feature_id).first()
         return json.dumps(feature.to_dict())
     except Exception as e:
         session.rollback()
@@ -461,24 +447,35 @@ def feature_claim_and_get(
     """
     session = get_session()
     try:
+        # First check if feature exists
         feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
         if feature is None:
             return json.dumps({"error": f"Feature with ID {feature_id} not found"})
 
         if feature.passes:
             return json.dumps({"error": f"Feature with ID {feature_id} is already passing"})
 
-        # Idempotent: if already in-progress, just return details
-        already_claimed = feature.in_progress
-        if not already_claimed:
-            feature.in_progress = True
-            session.commit()
-            session.refresh(feature)
+        # Try atomic claim: only succeeds if not already claimed
+        result = session.execute(text("""
+            UPDATE features
+            SET in_progress = 1
+            WHERE id = :id AND passes = 0 AND in_progress = 0
+        """), {"id": feature_id})
+        session.commit()
 
-        result = feature.to_dict()
-        result["already_claimed"] = already_claimed
-        return json.dumps(result)
+        # Determine if we claimed it or it was already claimed
+        already_claimed = result.rowcount == 0
+        if already_claimed:
+            # Verify it's in_progress (not some other failure condition)
+            session.refresh(feature)
+            if not feature.in_progress:
+                return json.dumps({"error": f"Failed to claim feature {feature_id} for unknown reason"})
+
+        # Refresh to get current state
+        session.refresh(feature)
+        result_dict = feature.to_dict()
+        result_dict["already_claimed"] = already_claimed
+        return json.dumps(result_dict)
     except Exception as e:
         session.rollback()
         return json.dumps({"error": f"Failed to claim feature: {str(e)}"})
@@ -503,15 +500,20 @@ def feature_clear_in_progress(
     """
     session = get_session()
     try:
+        # Check if feature exists
         feature = session.query(Feature).filter(Feature.id == feature_id).first()
-
         if feature is None:
             return json.dumps({"error": f"Feature with ID {feature_id} not found"})
 
-        feature.in_progress = False
+        # Atomic update - idempotent, safe in parallel mode
+        session.execute(text("""
+            UPDATE features
+            SET in_progress = 0
+            WHERE id = :id
+        """), {"id": feature_id})
         session.commit()
-        session.refresh(feature)
 
+        session.refresh(feature)
         return json.dumps(feature.to_dict())
     except Exception as e:
         session.rollback()
@@ -546,13 +548,14 @@ def feature_create_bulk(
     Returns:
         JSON with: created (int) - number of features created, with_dependencies (int)
     """
-    session = get_session()
     try:
-        # Use lock to prevent race condition in priority assignment
-        with _priority_lock:
-            # Get the starting priority
-            max_priority_result = session.query(Feature.priority).order_by(Feature.priority.desc()).first()
-            start_priority = (max_priority_result[0] + 1) if max_priority_result else 1
+        # Use atomic transaction for bulk inserts to prevent priority conflicts
+        with atomic_transaction(_session_maker) as session:
+            # Get the starting priority atomically within the transaction
+            result = session.execute(text("""
+                SELECT COALESCE(MAX(priority), 0) FROM features
+            """)).fetchone()
+            start_priority = (result[0] or 0) + 1
 
             # First pass: validate all features and their index-based dependencies
             for i, feature_data in enumerate(features):
@@ -586,9 +589,8 @@ def feature_create_bulk(
                                 "error": f"Feature at index {i} cannot depend on feature at index {idx} (forward reference not allowed)"
                             })
 
-            # Second pass: create all features
+            # Second pass: create all features with reserved priorities
             created_features: list[Feature] = []
-            now = datetime.utcnow()
             for i, feature_data in enumerate(features):
                 db_feature = Feature(
                     priority=start_priority + i,
@@ -598,16 +600,12 @@ def feature_create_bulk(
                     steps=feature_data["steps"],
                     passes=False,
                     in_progress=False,
-                    created_at=now,
                 )
                 session.add(db_feature)
                 created_features.append(db_feature)
 
             # Flush to get IDs assigned
             session.flush()
-
-            # Backup before making changes
-            backup_features_db(PROJECT_DIR, reason="before_bulk_create")
 
             # Third pass: resolve index-based dependencies to actual IDs
             deps_count = 0
@@ -616,20 +614,16 @@ def feature_create_bulk(
                 if indices:
                     # Convert indices to actual feature IDs
                     dep_ids = [created_features[idx].id for idx in indices]
-                    created_features[i].dependencies = sorted(dep_ids)
+                    created_features[i].dependencies = sorted(dep_ids)  # type: ignore[assignment]  # SQLAlchemy JSON Column accepts list at runtime
                     deps_count += 1
 
-            session.commit()
-
-        return json.dumps({
-            "created": len(created_features),
-            "with_dependencies": deps_count
-        })
+            # Commit happens automatically on context manager exit
+            return json.dumps({
+                "created": len(created_features),
+                "with_dependencies": deps_count
+            })
     except Exception as e:
-        session.rollback()
         return json.dumps({"error": str(e)})
-    finally:
-        session.close()
 
 
 @mcp.tool()
@@ -653,13 +647,14 @@ def feature_create(
     Returns:
         JSON with the created feature details including its ID
     """
-    session = get_session()
     try:
-        # Use lock to prevent race condition in priority assignment
-        with _priority_lock:
-            # Get the next priority
-            max_priority_result = session.query(Feature.priority).order_by(Feature.priority.desc()).first()
-            next_priority = (max_priority_result[0] + 1) if max_priority_result else 1
+        # Use atomic transaction to prevent priority collisions
+        with atomic_transaction(_session_maker) as session:
+            # Get the next priority atomically within the transaction
+            result = session.execute(text("""
+                SELECT COALESCE(MAX(priority), 0) + 1 FROM features
+            """)).fetchone()
+            next_priority = result[0]
 
             db_feature = Feature(
                 priority=next_priority,
@@ -669,27 +664,20 @@ def feature_create(
                 steps=steps,
                 passes=False,
                 in_progress=False,
-                created_at=datetime.utcnow(),
             )
             session.add(db_feature)
+            session.flush()  # Get the ID
 
-            # Backup before creating new feature
-            backup_features_db(PROJECT_DIR, reason="before_feature_create")
-
-            session.commit()
-
-        session.refresh(db_feature)
+            feature_dict = db_feature.to_dict()
+            # Commit happens automatically on context manager exit
 
         return json.dumps({
             "success": True,
             "message": f"Created feature: {name}",
-            "feature": db_feature.to_dict()
+            "feature": feature_dict
         })
     except Exception as e:
-        session.rollback()
         return json.dumps({"error": str(e)})
-    finally:
-        session.close()
 
 
 @mcp.tool()
@@ -709,56 +697,49 @@ def feature_add_dependency(
     Returns:
         JSON with success status and updated dependencies list, or error message
     """
-    session = get_session()
     try:
-        # Security: Self-reference check
+        # Security: Self-reference check (can do before transaction)
         if feature_id == dependency_id:
             return json.dumps({"error": "A feature cannot depend on itself"})
 
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-        dependency = session.query(Feature).filter(Feature.id == dependency_id).first()
+        # Use atomic transaction for consistent cycle detection
+        with atomic_transaction(_session_maker) as session:
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            dependency = session.query(Feature).filter(Feature.id == dependency_id).first()
 
-        if not feature:
-            return json.dumps({"error": f"Feature {feature_id} not found"})
-        if not dependency:
-            return json.dumps({"error": f"Dependency feature {dependency_id} not found"})
+            if not feature:
+                return json.dumps({"error": f"Feature {feature_id} not found"})
+            if not dependency:
+                return json.dumps({"error": f"Dependency feature {dependency_id} not found"})
 
-        current_deps = feature.dependencies or []
+            current_deps = feature.dependencies or []
 
-        # Security: Max dependencies limit
-        if len(current_deps) >= MAX_DEPENDENCIES_PER_FEATURE:
-            return json.dumps({"error": f"Maximum {MAX_DEPENDENCIES_PER_FEATURE} dependencies allowed per feature"})
+            # Security: Max dependencies limit
+            if len(current_deps) >= MAX_DEPENDENCIES_PER_FEATURE:
+                return json.dumps({"error": f"Maximum {MAX_DEPENDENCIES_PER_FEATURE} dependencies allowed per feature"})
 
-        # Check if already exists
-        if dependency_id in current_deps:
-            return json.dumps({"error": "Dependency already exists"})
+            # Check if already exists
+            if dependency_id in current_deps:
+                return json.dumps({"error": "Dependency already exists"})
 
-        # Security: Circular dependency check
-        # would_create_circular_dependency(features, source_id, target_id)
-        # source_id = feature gaining the dependency, target_id = feature being depended upon
-        all_features = [f.to_dict() for f in session.query(Feature).all()]
-        if would_create_circular_dependency(all_features, feature_id, dependency_id):
-            return json.dumps({"error": "Cannot add: would create circular dependency"})
+            # Security: Circular dependency check
+            # Within IMMEDIATE transaction, snapshot is protected by write lock
+            all_features = [f.to_dict() for f in session.query(Feature).all()]
+            if would_create_circular_dependency(all_features, feature_id, dependency_id):
+                return json.dumps({"error": "Cannot add: would create circular dependency"})
 
-        # Add dependency
-        current_deps.append(dependency_id)
-        feature.dependencies = sorted(current_deps)
+            # Add dependency atomically
+            new_deps = sorted(current_deps + [dependency_id])
+            feature.dependencies = new_deps
+            # Commit happens automatically on context manager exit
 
-        # Backup before adding dependency
-        backup_features_db(PROJECT_DIR, reason="before_add_dependency")
-
-        session.commit()
-
-        return json.dumps({
-            "success": True,
-            "feature_id": feature_id,
-            "dependencies": feature.dependencies
-        })
+            return json.dumps({
+                "success": True,
+                "feature_id": feature_id,
+                "dependencies": new_deps
+            })
     except Exception as e:
-        session.rollback()
         return json.dumps({"error": f"Failed to add dependency: {str(e)}"})
-    finally:
-        session.close()
 
 
 @mcp.tool()
@@ -775,34 +756,29 @@ def feature_remove_dependency(
     Returns:
         JSON with success status and updated dependencies list, or error message
     """
-    session = get_session()
     try:
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-        if not feature:
-            return json.dumps({"error": f"Feature {feature_id} not found"})
+        # Use atomic transaction for consistent read-modify-write
+        with atomic_transaction(_session_maker) as session:
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            if not feature:
+                return json.dumps({"error": f"Feature {feature_id} not found"})
 
-        current_deps = feature.dependencies or []
-        if dependency_id not in current_deps:
-            return json.dumps({"error": "Dependency does not exist"})
+            current_deps = feature.dependencies or []
+            if dependency_id not in current_deps:
+                return json.dumps({"error": "Dependency does not exist"})
 
-        current_deps.remove(dependency_id)
-        feature.dependencies = current_deps if current_deps else None
+            # Remove dependency atomically
+            new_deps = [d for d in current_deps if d != dependency_id]
+            feature.dependencies = new_deps if new_deps else None
+            # Commit happens automatically on context manager exit
 
-        # Backup before removing dependency
-        backup_features_db(PROJECT_DIR, reason="before_remove_dependency")
-
-        session.commit()
-
-        return json.dumps({
-            "success": True,
-            "feature_id": feature_id,
-            "dependencies": feature.dependencies or []
-        })
+            return json.dumps({
+                "success": True,
+                "feature_id": feature_id,
+                "dependencies": new_deps
+            })
     except Exception as e:
-        session.rollback()
         return json.dumps({"error": f"Failed to remove dependency: {str(e)}"})
-    finally:
-        session.close()
 
 
 @mcp.tool()
@@ -955,9 +931,8 @@ def feature_set_dependencies(
     Returns:
         JSON with success status and updated dependencies list, or error message
     """
-    session = get_session()
     try:
-        # Security: Self-reference check
+        # Security: Self-reference check (can do before transaction)
         if feature_id in dependency_ids:
             return json.dumps({"error": "A feature cannot depend on itself"})
 
@@ -969,45 +944,74 @@ def feature_set_dependencies(
         if len(dependency_ids) != len(set(dependency_ids)):
             return json.dumps({"error": "Duplicate dependencies not allowed"})
 
-        feature = session.query(Feature).filter(Feature.id == feature_id).first()
-        if not feature:
-            return json.dumps({"error": f"Feature {feature_id} not found"})
+        # Use atomic transaction for consistent cycle detection
+        with atomic_transaction(_session_maker) as session:
+            feature = session.query(Feature).filter(Feature.id == feature_id).first()
+            if not feature:
+                return json.dumps({"error": f"Feature {feature_id} not found"})
 
-        # Validate all dependencies exist
-        all_feature_ids = {f.id for f in session.query(Feature).all()}
-        missing = [d for d in dependency_ids if d not in all_feature_ids]
-        if missing:
-            return json.dumps({"error": f"Dependencies not found: {missing}"})
+            # Validate all dependencies exist
+            all_feature_ids = {f.id for f in session.query(Feature).all()}
+            missing = [d for d in dependency_ids if d not in all_feature_ids]
+            if missing:
+                return json.dumps({"error": f"Dependencies not found: {missing}"})
 
-        # Check for circular dependencies
-        all_features = [f.to_dict() for f in session.query(Feature).all()]
-        # Temporarily update the feature's dependencies for cycle check
-        test_features = []
-        for f in all_features:
-            if f["id"] == feature_id:
-                test_features.append({**f, "dependencies": dependency_ids})
-            else:
-                test_features.append(f)
+            # Check for circular dependencies
+            # Within IMMEDIATE transaction, snapshot is protected by write lock
+            all_features = [f.to_dict() for f in session.query(Feature).all()]
+            test_features = []
+            for f in all_features:
+                if f["id"] == feature_id:
+                    test_features.append({**f, "dependencies": dependency_ids})
+                else:
+                    test_features.append(f)
 
-        for dep_id in dependency_ids:
-            # source_id = feature_id (gaining dep), target_id = dep_id (being depended upon)
-            if would_create_circular_dependency(test_features, feature_id, dep_id):
-                return json.dumps({"error": f"Cannot add dependency {dep_id}: would create circular dependency"})
+            for dep_id in dependency_ids:
+                if would_create_circular_dependency(test_features, feature_id, dep_id):
+                    return json.dumps({"error": f"Cannot add dependency {dep_id}: would create circular dependency"})
 
-        # Set dependencies
-        feature.dependencies = sorted(dependency_ids) if dependency_ids else None
-        session.commit()
+            # Set dependencies atomically
+            sorted_deps = sorted(dependency_ids) if dependency_ids else None
+            feature.dependencies = sorted_deps
+            # Commit happens automatically on context manager exit
 
-        return json.dumps({
-            "success": True,
-            "feature_id": feature_id,
-            "dependencies": feature.dependencies or []
-        })
+            return json.dumps({
+                "success": True,
+                "feature_id": feature_id,
+                "dependencies": sorted_deps or []
+            })
     except Exception as e:
-        session.rollback()
         return json.dumps({"error": f"Failed to set dependencies: {str(e)}"})
-    finally:
-        session.close()
+
+
+@mcp.tool()
+def ask_user(
+    questions: Annotated[list[dict], Field(description="List of questions to ask, each with question, header, options (list of {label, description}), and multiSelect (bool)")]
+) -> str:
+    """Ask the user structured questions with selectable options.
+
+    Use this when you need clarification or want to offer choices to the user.
+    Each question has a short header, the question text, and 2-4 clickable options.
+    The user's selections will be returned as your next message.
+
+    Args:
+        questions: List of questions, each with:
+            - question (str): The question to ask
+            - header (str): Short label (max 12 chars)
+            - options (list): Each with label (str) and description (str)
+            - multiSelect (bool): Allow multiple selections (default false)
+
+    Returns:
+        Acknowledgment that questions were presented to the user
+    """
+    # Validate input
+    for i, q in enumerate(questions):
+        if not all(key in q for key in ["question", "header", "options"]):
+            return json.dumps({"error": f"Question at index {i} missing required fields"})
+        if len(q["options"]) < 2 or len(q["options"]) > 4:
+            return json.dumps({"error": f"Question at index {i} must have 2-4 options"})
+
+    return "Questions presented to the user. Their response will arrive as your next message."
 
 
 if __name__ == "__main__":

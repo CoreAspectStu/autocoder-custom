@@ -1,11 +1,11 @@
 @echo off
 cd /d "%~dp0"
-REM AutoCoder UI Launcher for Windows
+REM AutoForge UI Launcher for Windows
 REM This script launches the web UI for the autonomous coding agent.
 
 echo.
 echo ====================================
-echo   AutoCoder UI
+echo   AutoForge UI
 echo ====================================
 echo.
 
@@ -39,5 +39,3 @@ pip install -r requirements.txt --quiet
 
 REM Run the Python launcher
 python "%~dp0start_ui.py" %*
-
-pause

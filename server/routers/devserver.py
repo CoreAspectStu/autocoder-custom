@@ -6,7 +6,8 @@ API endpoints for dev server control (start/stop) and configuration.
 Uses project registry for path lookups and project_config for command detection.
 """
 
-import re
+import logging
+import shlex
 import sys
 from pathlib import Path
 
@@ -24,39 +25,22 @@ from ..services.project_config import (
     clear_dev_command,
     get_dev_command,
     get_project_config,
-    set_assigned_port,
     set_dev_command,
 )
+from ..utils.project_helpers import get_project_path as _get_project_path
+from ..utils.validation import validate_project_name
 
-# Add root to path for registry import
+# Add root to path for security module import
 _root = Path(__file__).parent.parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from registry import get_project_path as registry_get_project_path
+from security import extract_commands, get_effective_commands, is_command_allowed
 
-
-def _get_project_path(project_name: str) -> Path | None:
-    """Get project path from registry."""
-    return registry_get_project_path(project_name)
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/projects/{project_name}/devserver", tags=["devserver"])
-
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-
-def validate_project_name(name: str) -> str:
-    """Validate and sanitize project name to prevent path traversal."""
-    if not re.match(r'^[a-zA-Z0-9_-]{1,50}$', name):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid project name"
-        )
-    return name
 
 
 def get_project_dir(project_name: str) -> Path:
@@ -89,6 +73,116 @@ def get_project_dir(project_name: str) -> Path:
 
     return project_dir
 
+ALLOWED_RUNNERS = {
+    "npm", "pnpm", "yarn", "npx",
+    "uvicorn", "python", "python3",
+    "flask", "poetry",
+    "cargo", "go",
+}
+
+ALLOWED_NPM_SCRIPTS = {"dev", "start", "serve", "develop", "server", "preview"}
+
+# Allowed Python -m modules for dev servers
+ALLOWED_PYTHON_MODULES = {"uvicorn", "flask", "gunicorn", "http.server"}
+
+BLOCKED_SHELLS = {"sh", "bash", "zsh", "cmd", "powershell", "pwsh", "cmd.exe"}
+
+
+def validate_custom_command_strict(cmd: str) -> None:
+    """
+    Strict allowlist validation for dev server commands.
+    Prevents arbitrary command execution (no sh -c, no cmd /c, no python -c, etc.)
+    """
+    if not isinstance(cmd, str) or not cmd.strip():
+        raise ValueError("custom_command cannot be empty")
+
+    argv = shlex.split(cmd, posix=(sys.platform != "win32"))
+    if not argv:
+        raise ValueError("custom_command could not be parsed")
+
+    base = Path(argv[0]).name.lower()
+
+    # Block direct shells / interpreters commonly used for command injection
+    if base in BLOCKED_SHELLS:
+        raise ValueError(f"custom_command runner not allowed: {base}")
+
+    if base not in ALLOWED_RUNNERS:
+        raise ValueError(
+            f"custom_command runner not allowed: {base}. "
+            f"Allowed: {', '.join(sorted(ALLOWED_RUNNERS))}"
+        )
+
+    # Block one-liner execution for python
+    lowered = [a.lower() for a in argv]
+    if base in {"python", "python3"}:
+        if "-c" in lowered:
+            raise ValueError("python -c is not allowed")
+        if len(argv) >= 3 and argv[1] == "-m":
+            # Allow: python -m <allowed_module> ...
+            if argv[2] not in ALLOWED_PYTHON_MODULES:
+                raise ValueError(
+                    f"python -m {argv[2]} is not allowed. "
+                    f"Allowed modules: {', '.join(sorted(ALLOWED_PYTHON_MODULES))}"
+                )
+        elif len(argv) >= 2 and argv[1].endswith(".py"):
+            # Allow: python manage.py runserver, python app.py, etc.
+            pass
+        else:
+            raise ValueError(
+                "Python commands must use 'python -m <module> ...' or 'python <script>.py ...'"
+            )
+
+    if base == "flask":
+        # Allow: flask run [--host ...] [--port ...]
+        if len(argv) < 2 or argv[1] != "run":
+            raise ValueError("flask custom_command must be 'flask run [options]'")
+
+    if base == "poetry":
+        # Allow: poetry run <subcmd> ...
+        if len(argv) < 3 or argv[1] != "run":
+            raise ValueError("poetry custom_command must be 'poetry run <command> ...'")
+
+    if base == "uvicorn":
+        if len(argv) < 2 or ":" not in argv[1]:
+            raise ValueError("uvicorn must specify an app like module:app")
+
+        allowed_flags = {"--host", "--port", "--reload", "--log-level", "--workers"}
+        for a in argv[2:]:
+            if a.startswith("-"):
+                # Handle --flag=value syntax
+                flag_key = a.split("=", 1)[0]
+                if flag_key not in allowed_flags:
+                    raise ValueError(f"uvicorn flag not allowed: {flag_key}")
+
+    if base in {"npm", "pnpm", "yarn"}:
+        # Allow only known safe scripts (no arbitrary exec)
+        if base == "npm":
+            if len(argv) < 3 or argv[1] != "run" or argv[2] not in ALLOWED_NPM_SCRIPTS:
+                raise ValueError(
+                    f"npm custom_command must be 'npm run <script>' where script is one of: "
+                    f"{', '.join(sorted(ALLOWED_NPM_SCRIPTS))}"
+                )
+        elif base == "pnpm":
+            ok = (
+                (len(argv) >= 2 and argv[1] in ALLOWED_NPM_SCRIPTS)
+                or (len(argv) >= 3 and argv[1] == "run" and argv[2] in ALLOWED_NPM_SCRIPTS)
+            )
+            if not ok:
+                raise ValueError(
+                    f"pnpm custom_command must use a known script: "
+                    f"{', '.join(sorted(ALLOWED_NPM_SCRIPTS))}"
+                )
+        elif base == "yarn":
+            ok = (
+                (len(argv) >= 2 and argv[1] in ALLOWED_NPM_SCRIPTS)
+                or (len(argv) >= 3 and argv[1] == "run" and argv[2] in ALLOWED_NPM_SCRIPTS)
+            )
+            if not ok:
+                raise ValueError(
+                    f"yarn custom_command must use a known script: "
+                    f"{', '.join(sorted(ALLOWED_NPM_SCRIPTS))}"
+                )
+
 
 def get_project_devserver_manager(project_name: str):
     """
@@ -105,6 +199,45 @@ def get_project_devserver_manager(project_name: str):
     """
     project_dir = get_project_dir(project_name)
     return get_devserver_manager(project_name, project_dir)
+
+
+def validate_dev_command(command: str, project_dir: Path) -> None:
+    """
+    Validate a dev server command against the security allowlist.
+
+    Extracts all commands from the shell string and checks each against
+    the effective allowlist (global + org + project). Raises HTTPException
+    if any command is blocked or not allowed.
+
+    Args:
+        command: The shell command string to validate
+        project_dir: Project directory for loading project-level allowlists
+
+    Raises:
+        HTTPException 400: If the command fails validation
+    """
+    commands = extract_commands(command)
+    if not commands:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not parse command for security validation"
+        )
+
+    allowed_commands, blocked_commands = get_effective_commands(project_dir)
+
+    for cmd in commands:
+        if cmd in blocked_commands:
+            logger.warning("Blocked dev server command '%s' (in blocklist) for project dir %s", cmd, project_dir)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Command '{cmd}' is blocked and cannot be used as a dev server command"
+            )
+        if not is_command_allowed(cmd, allowed_commands):
+            logger.warning("Rejected dev server command '%s' (not in allowlist) for project dir %s", cmd, project_dir)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Command '{cmd}' is not in the allowed commands list"
+            )
 
 
 # ============================================================================
@@ -130,7 +263,7 @@ async def get_devserver_status(project_name: str) -> DevServerStatus:
         pid=manager.pid,
         url=manager.detected_url,
         command=manager._command,
-        started_at=manager.started_at,
+        started_at=manager.started_at.isoformat() if manager.started_at else None,
     )
 
 
@@ -158,9 +291,12 @@ async def start_devserver(
     # Determine which command to use
     command: str | None
     if request.command:
-        command = request.command
-    else:
-        command = get_dev_command(project_dir)
+        raise HTTPException(
+            status_code=400,
+            detail="Direct command execution is disabled. Use /config to set a safe custom_command."
+        )
+
+    command = get_dev_command(project_dir)
 
     if not command:
         raise HTTPException(
@@ -168,7 +304,17 @@ async def start_devserver(
             detail="No dev command available. Configure a custom command or ensure project type can be detected."
         )
 
-    # Now command is definitely str
+    # Validate command against security allowlist before execution
+    validate_dev_command(command, project_dir)
+
+    # Defense-in-depth: also run strict structural validation at execution time
+    # (catches config file tampering that bypasses the /config endpoint)
+    try:
+        validate_custom_command_strict(command)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Now command is definitely str and validated
     success, message = await manager.start(command)
 
     return DevServerActionResponse(
@@ -227,7 +373,6 @@ async def get_devserver_config(project_name: str) -> DevServerConfigResponse:
         detected_command=config["detected_command"],
         custom_command=config["custom_command"],
         effective_command=config["effective_command"],
-        assigned_port=config["assigned_port"],
     )
 
 
@@ -243,11 +388,9 @@ async def update_devserver_config(
     Set custom_command to null/None to clear the custom command and revert
     to using the auto-detected command.
 
-    Set assigned_port to change the port number (must be 4000-4099 and not in use).
-
     Args:
         project_name: Name of the project
-        update: Configuration update containing the new custom_command and/or assigned_port
+        update: Configuration update containing the new custom_command
 
     Returns:
         Updated configuration details for the project's dev server
@@ -261,8 +404,17 @@ async def update_devserver_config(
             clear_dev_command(project_dir)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    elif update.custom_command is not None:
-        # Set the custom command (empty string check happens in set_dev_command)
+    else:
+        # Strict structural validation first (most specific errors)
+        try:
+            validate_custom_command_strict(update.custom_command)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Then validate against security allowlist
+        validate_dev_command(update.custom_command, project_dir)
+
+        # Set the custom command
         try:
             set_dev_command(project_dir, update.custom_command)
         except ValueError as e:
@@ -273,18 +425,6 @@ async def update_devserver_config(
                 detail=f"Failed to save configuration: {e}"
             )
 
-    # Update the assigned port
-    if update.assigned_port is not None:
-        try:
-            set_assigned_port(project_dir, update.assigned_port)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except OSError as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to save port configuration: {e}"
-            )
-
     # Return updated config
     config = get_project_config(project_dir)
 
@@ -293,5 +433,4 @@ async def update_devserver_config(
         detected_command=config["detected_command"],
         custom_command=config["custom_command"],
         effective_command=config["effective_command"],
-        assigned_port=config["assigned_port"],
     )

@@ -7,6 +7,7 @@ Functions for creating and configuring the Claude Agent SDK client.
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -15,71 +16,221 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from claude_agent_sdk.types import HookContext, HookInput, HookMatcher, SyncHookJSONOutput
 from dotenv import load_dotenv
 
-from security import bash_security_hook
-from api.quota_budget import get_quota_budget
-# Mission Control integration (optional)
-from custom.mission_control.integration import add_mission_control_mcp
-
+from security import SENSITIVE_DIRECTORIES, bash_security_hook
 
 # Load environment variables from .env file if present
 load_dotenv()
 
 # Default Playwright headless mode - can be overridden via PLAYWRIGHT_HEADLESS env var
-# When True, browser runs invisibly in background
-# When False, browser window is visible (default - useful for monitoring agent progress)
-DEFAULT_PLAYWRIGHT_HEADLESS = False
+# When True, browser runs invisibly in background (default - saves CPU)
+# When False, browser window is visible (useful for monitoring agent progress)
+DEFAULT_PLAYWRIGHT_HEADLESS = True
 
-# Environment variables to pass through to Claude CLI for API configuration
-# These allow using alternative API endpoints (e.g., GLM via z.ai) without
-# affecting the user's global Claude Code settings
-API_ENV_VARS = [
-    "ANTHROPIC_BASE_URL",              # Custom API endpoint (e.g., https://api.z.ai/api/anthropic)
-    "ANTHROPIC_AUTH_TOKEN",            # API authentication token
-    "API_TIMEOUT_MS",                  # Request timeout in milliseconds
-    "ANTHROPIC_DEFAULT_SONNET_MODEL",  # Model override for Sonnet
-    "ANTHROPIC_DEFAULT_OPUS_MODEL",    # Model override for Opus
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL",   # Model override for Haiku
-]
+# Default browser for Playwright - can be overridden via PLAYWRIGHT_BROWSER env var
+# Options: chrome, firefox, webkit, msedge
+# Firefox is recommended for lower CPU usage
+DEFAULT_PLAYWRIGHT_BROWSER = "firefox"
+
+# Extra read paths for cross-project file access (read-only)
+# Set EXTRA_READ_PATHS environment variable with comma-separated absolute paths
+# Example: EXTRA_READ_PATHS=/Volumes/Data/dev,/Users/shared/libs
+EXTRA_READ_PATHS_VAR = "EXTRA_READ_PATHS"
+
+# Sensitive directories that should never be allowed via EXTRA_READ_PATHS.
+# Delegates to the canonical SENSITIVE_DIRECTORIES set in security.py so that
+# this blocklist and the filesystem browser API share a single source of truth.
+EXTRA_READ_PATHS_BLOCKLIST = SENSITIVE_DIRECTORIES
+
+def convert_model_for_vertex(model: str) -> str:
+    """
+    Convert model name format for Vertex AI compatibility.
+
+    Vertex AI uses @ to separate model name from version (e.g., claude-sonnet-4-5@20250929)
+    while the Anthropic API uses - (e.g., claude-sonnet-4-5-20250929).
+    Models without a date suffix (e.g., claude-opus-4-6) pass through unchanged.
+
+    Args:
+        model: Model name in Anthropic format (with hyphens)
+
+    Returns:
+        Model name in Vertex AI format (with @ before date) if Vertex AI is enabled,
+        otherwise returns the model unchanged.
+    """
+    # Only convert if Vertex AI is enabled
+    if os.getenv("CLAUDE_CODE_USE_VERTEX") != "1":
+        return model
+
+    # Pattern: claude-{name}-{version}-{date} -> claude-{name}-{version}@{date}
+    # Example: claude-sonnet-4-5-20250929 -> claude-sonnet-4-5@20250929
+    # The date is always 8 digits at the end
+    match = re.match(r'^(claude-.+)-(\d{8})$', model)
+    if match:
+        base_name, date = match.groups()
+        return f"{base_name}@{date}"
+
+    # If already in @ format or doesn't match expected pattern, return as-is
+    return model
 
 
 def get_playwright_headless() -> bool:
     """
     Get the Playwright headless mode setting.
 
-    Reads from PLAYWRIGHT_HEADLESS environment variable, defaults to False.
+    Reads from PLAYWRIGHT_HEADLESS environment variable, defaults to True.
     Returns True for headless mode (invisible browser), False for visible browser.
     """
-    value = os.getenv("PLAYWRIGHT_HEADLESS", "false").lower()
-    # Accept various truthy/falsy values
-    return value in ("true", "1", "yes", "on")
+    value = os.getenv("PLAYWRIGHT_HEADLESS", str(DEFAULT_PLAYWRIGHT_HEADLESS).lower()).strip().lower()
+    truthy = {"true", "1", "yes", "on"}
+    falsy = {"false", "0", "no", "off"}
+    if value not in truthy | falsy:
+        print(f"   - Warning: Invalid PLAYWRIGHT_HEADLESS='{value}', defaulting to {DEFAULT_PLAYWRIGHT_HEADLESS}")
+        return DEFAULT_PLAYWRIGHT_HEADLESS
+    return value in truthy
 
 
-# Feature MCP tools for feature/test management
-FEATURE_MCP_TOOLS = [
-    # Core feature operations
+# Valid browsers supported by Playwright MCP
+VALID_PLAYWRIGHT_BROWSERS = {"chrome", "firefox", "webkit", "msedge"}
+
+
+def get_playwright_browser() -> str:
+    """
+    Get the browser to use for Playwright.
+
+    Reads from PLAYWRIGHT_BROWSER environment variable, defaults to firefox.
+    Options: chrome, firefox, webkit, msedge
+    Firefox is recommended for lower CPU usage.
+    """
+    value = os.getenv("PLAYWRIGHT_BROWSER", DEFAULT_PLAYWRIGHT_BROWSER).strip().lower()
+    if value not in VALID_PLAYWRIGHT_BROWSERS:
+        print(f"   - Warning: Invalid PLAYWRIGHT_BROWSER='{value}', "
+              f"valid options: {', '.join(sorted(VALID_PLAYWRIGHT_BROWSERS))}. "
+              f"Defaulting to {DEFAULT_PLAYWRIGHT_BROWSER}")
+        return DEFAULT_PLAYWRIGHT_BROWSER
+    return value
+
+
+def get_extra_read_paths() -> list[Path]:
+    """
+    Get extra read-only paths from EXTRA_READ_PATHS environment variable.
+
+    Parses comma-separated absolute paths and validates each one:
+    - Must be an absolute path
+    - Must exist and be a directory
+    - Cannot be or contain sensitive directories (e.g., .ssh, .aws)
+
+    Returns:
+        List of validated, canonicalized Path objects.
+    """
+    raw_value = os.getenv(EXTRA_READ_PATHS_VAR, "").strip()
+    if not raw_value:
+        return []
+
+    validated_paths: list[Path] = []
+    home_dir = Path.home()
+
+    for path_str in raw_value.split(","):
+        path_str = path_str.strip()
+        if not path_str:
+            continue
+
+        # Parse and canonicalize the path
+        try:
+            path = Path(path_str).resolve()
+        except (OSError, ValueError) as e:
+            print(f"   - Warning: Invalid EXTRA_READ_PATHS path '{path_str}': {e}")
+            continue
+
+        # Must be absolute (resolve() makes it absolute, but check original input)
+        if not Path(path_str).is_absolute():
+            print(f"   - Warning: EXTRA_READ_PATHS requires absolute paths, skipping: {path_str}")
+            continue
+
+        # Must exist
+        if not path.exists():
+            print(f"   - Warning: EXTRA_READ_PATHS path does not exist, skipping: {path_str}")
+            continue
+
+        # Must be a directory
+        if not path.is_dir():
+            print(f"   - Warning: EXTRA_READ_PATHS path is not a directory, skipping: {path_str}")
+            continue
+
+        # Check against sensitive directory blocklist
+        is_blocked = False
+        for sensitive in EXTRA_READ_PATHS_BLOCKLIST:
+            sensitive_path = (home_dir / sensitive).resolve()
+            try:
+                # Block if path IS the sensitive dir or is INSIDE it
+                if path == sensitive_path or path.is_relative_to(sensitive_path):
+                    print(f"   - Warning: EXTRA_READ_PATHS blocked sensitive path: {path_str}")
+                    is_blocked = True
+                    break
+                # Also block if sensitive dir is INSIDE the requested path
+                if sensitive_path.is_relative_to(path):
+                    print(f"   - Warning: EXTRA_READ_PATHS path contains sensitive directory ({sensitive}): {path_str}")
+                    is_blocked = True
+                    break
+            except (OSError, ValueError):
+                # is_relative_to can raise on some edge cases
+                continue
+
+        if is_blocked:
+            continue
+
+        validated_paths.append(path)
+
+    return validated_paths
+
+
+# Per-agent-type MCP tool lists.
+# Only expose the tools each agent type actually needs, reducing tool schema
+# overhead and preventing agents from calling tools meant for other roles.
+#
+# Tools intentionally omitted from ALL agent lists (UI/orchestrator only):
+#   feature_get_ready, feature_get_blocked, feature_get_graph,
+#   feature_remove_dependency
+#
+# The ghost tool "feature_release_testing" was removed entirely -- it was
+# listed here but never implemented in mcp_server/feature_mcp.py.
+
+CODING_AGENT_TOOLS = [
     "mcp__features__feature_get_stats",
-    "mcp__features__feature_get_by_id",  # Get assigned feature details
-    "mcp__features__feature_get_summary",  # Lightweight: id, name, status, deps only
+    "mcp__features__feature_get_by_id",
+    "mcp__features__feature_get_summary",
+    "mcp__features__feature_claim_and_get",
     "mcp__features__feature_mark_in_progress",
-    "mcp__features__feature_claim_and_get",  # Atomic claim + get details
     "mcp__features__feature_mark_passing",
-    "mcp__features__feature_mark_failing",  # Mark regression detected
+    "mcp__features__feature_mark_failing",
     "mcp__features__feature_skip",
-    "mcp__features__feature_create_bulk",
-    "mcp__features__feature_create",
     "mcp__features__feature_clear_in_progress",
-    "mcp__features__feature_release_testing",  # Release testing claim
-    # Dependency management
-    "mcp__features__feature_add_dependency",
-    "mcp__features__feature_remove_dependency",
-    "mcp__features__feature_set_dependencies",
-    # Query tools
-    "mcp__features__feature_get_ready",
-    "mcp__features__feature_get_blocked",
-    "mcp__features__feature_get_graph",
 ]
 
-# Playwright MCP tools for browser automation
+TESTING_AGENT_TOOLS = [
+    "mcp__features__feature_get_stats",
+    "mcp__features__feature_get_by_id",
+    "mcp__features__feature_get_summary",
+    "mcp__features__feature_mark_passing",
+    "mcp__features__feature_mark_failing",
+]
+
+INITIALIZER_AGENT_TOOLS = [
+    "mcp__features__feature_get_stats",
+    "mcp__features__feature_create_bulk",
+    "mcp__features__feature_create",
+    "mcp__features__feature_add_dependency",
+    "mcp__features__feature_set_dependencies",
+]
+
+# Union of all agent tool lists -- used for permissions (all tools remain
+# *permitted* so the MCP server can respond, but only the agent-type-specific
+# list is included in allowed_tools, which controls what the LLM sees).
+ALL_FEATURE_MCP_TOOLS = sorted(
+    set(CODING_AGENT_TOOLS) | set(TESTING_AGENT_TOOLS) | set(INITIALIZER_AGENT_TOOLS)
+)
+
+# Playwright MCP tools for browser automation.
+# Full set of tools for comprehensive UI testing including drag-and-drop,
+# hover menus, file uploads, tab management, etc.
 PLAYWRIGHT_TOOLS = [
     # Core navigation & screenshots
     "mcp__playwright__browser_navigate",
@@ -92,9 +243,10 @@ PLAYWRIGHT_TOOLS = [
     "mcp__playwright__browser_type",
     "mcp__playwright__browser_fill_form",
     "mcp__playwright__browser_select_option",
-    "mcp__playwright__browser_hover",
-    "mcp__playwright__browser_drag",
     "mcp__playwright__browser_press_key",
+    "mcp__playwright__browser_drag",
+    "mcp__playwright__browser_hover",
+    "mcp__playwright__browser_file_upload",
 
     # JavaScript & debugging
     "mcp__playwright__browser_evaluate",
@@ -103,16 +255,17 @@ PLAYWRIGHT_TOOLS = [
     "mcp__playwright__browser_network_requests",
 
     # Browser management
-    "mcp__playwright__browser_close",
     "mcp__playwright__browser_resize",
-    "mcp__playwright__browser_tabs",
     "mcp__playwright__browser_wait_for",
     "mcp__playwright__browser_handle_dialog",
-    "mcp__playwright__browser_file_upload",
     "mcp__playwright__browser_install",
+    "mcp__playwright__browser_close",
+    "mcp__playwright__browser_tabs",
 ]
 
-# Built-in tools
+# Built-in tools available to agents.
+# WebFetch and WebSearch are included so coding agents can look up current
+# documentation for frameworks and libraries they are implementing.
 BUILTIN_TOOLS = [
     "Read",
     "Write",
@@ -125,67 +278,12 @@ BUILTIN_TOOLS = [
 ]
 
 
-class QuotaTrackingClient:
-    """
-    Wrapper for ClaudeSDKClient that tracks API quota usage.
-
-    Transparently logs every API call to the quota budget tracker.
-    """
-
-    def __init__(self, wrapped_client: ClaudeSDKClient, model: str, project_name: str):
-        """
-        Initialize quota tracking wrapper.
-
-        Args:
-            wrapped_client: The ClaudeSDKClient to wrap
-            model: Model being used (for quota tracking)
-            project_name: Project name (for quota tracking)
-        """
-        self._client = wrapped_client
-        self._model = model
-        self._project_name = project_name
-        self._quota_budget = get_quota_budget()
-
-    async def query(self, message: str):
-        """
-        Send query and track quota usage.
-
-        Args:
-            message: The prompt to send
-        """
-        # Track quota BEFORE sending (preventive tracking)
-        self._quota_budget.track_usage(
-            model=self._model,
-            prompts_used=1,
-            project_name=self._project_name,
-        )
-
-        # Delegate to wrapped client
-        return await self._client.query(message)
-
-    def receive_response(self):
-        """Delegate receive_response to wrapped client."""
-        return self._client.receive_response()
-
-    async def __aenter__(self):
-        """Support async context manager protocol."""
-        await self._client.__aenter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Support async context manager protocol."""
-        return await self._client.__aexit__(exc_type, exc_val, exc_tb)
-
-    def __getattr__(self, name):
-        """Delegate all other attributes to wrapped client."""
-        return getattr(self._client, name)
-
-
 def create_client(
     project_dir: Path,
     model: str,
     yolo_mode: bool = False,
     agent_id: str | None = None,
+    agent_type: str = "coding",
 ):
     """
     Create a Claude Agent SDK client with multi-layered security.
@@ -196,6 +294,8 @@ def create_client(
         yolo_mode: If True, skip Playwright MCP server for rapid prototyping
         agent_id: Optional unique identifier for browser isolation in parallel mode.
                   When provided, each agent gets its own browser profile.
+        agent_type: One of "coding", "testing", or "initializer". Controls which
+                    MCP tools are exposed and the max_turns limit.
 
     Returns:
         Configured ClaudeSDKClient (from claude_agent_sdk)
@@ -209,13 +309,34 @@ def create_client(
     Note: Authentication is handled by start.bat/start.sh before this runs.
     The Claude SDK auto-detects credentials from the Claude CLI configuration
     """
-    # Build allowed tools list based on mode
-    # In YOLO mode, exclude Playwright tools for faster prototyping
-    allowed_tools = [*BUILTIN_TOOLS, *FEATURE_MCP_TOOLS]
+    # Select the feature MCP tools appropriate for this agent type
+    feature_tools_map = {
+        "coding": CODING_AGENT_TOOLS,
+        "testing": TESTING_AGENT_TOOLS,
+        "initializer": INITIALIZER_AGENT_TOOLS,
+    }
+    feature_tools = feature_tools_map.get(agent_type, CODING_AGENT_TOOLS)
+
+    # Select max_turns based on agent type:
+    #   - coding/initializer: 300 turns (complex multi-step implementation)
+    #   - testing: 100 turns (focused verification of a single feature)
+    max_turns_map = {
+        "coding": 300,
+        "testing": 100,
+        "initializer": 300,
+    }
+    max_turns = max_turns_map.get(agent_type, 300)
+
+    # Build allowed tools list based on mode and agent type.
+    # In YOLO mode, exclude Playwright tools for faster prototyping.
+    allowed_tools = [*BUILTIN_TOOLS, *feature_tools]
     if not yolo_mode:
         allowed_tools.extend(PLAYWRIGHT_TOOLS)
 
-    # Build permissions list
+    # Build permissions list.
+    # We permit ALL feature MCP tools at the security layer (so the MCP server
+    # can respond if called), but the LLM only *sees* the agent-type-specific
+    # subset via allowed_tools above.
     permissions_list = [
         # Allow all file operations within the project directory
         "Read(./**)",
@@ -226,12 +347,22 @@ def create_client(
         # Bash permission granted here, but actual commands are validated
         # by the bash_security_hook (see security.py for allowed commands)
         "Bash(*)",
-        # Allow web tools for documentation lookup
-        "WebFetch",
-        "WebSearch",
+        # Allow web tools for looking up framework/library documentation
+        "WebFetch(*)",
+        "WebSearch(*)",
         # Allow Feature MCP tools for feature management
-        *FEATURE_MCP_TOOLS,
+        *ALL_FEATURE_MCP_TOOLS,
     ]
+
+    # Add extra read paths from environment variable (read-only access)
+    # Paths are validated, canonicalized, and checked against sensitive blocklist
+    extra_read_paths = get_extra_read_paths()
+    for path in extra_read_paths:
+        # Add read-only permissions for each validated path
+        permissions_list.append(f"Read({path}/**)")
+        permissions_list.append(f"Glob({path}/**)")
+        permissions_list.append(f"Grep({path}/**)")
+
     if not yolo_mode:
         # Allow Playwright MCP tools for browser automation (standard mode only)
         permissions_list.extend(PLAYWRIGHT_TOOLS)
@@ -251,13 +382,17 @@ def create_client(
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # Write settings to a file in the project directory
-    settings_file = project_dir / ".claude_settings.json"
+    from autoforge_paths import get_claude_settings_path
+    settings_file = get_claude_settings_path(project_dir)
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
     with open(settings_file, "w") as f:
         json.dump(security_settings, f, indent=2)
 
     print(f"Created security settings at {settings_file}")
     print("   - Sandbox enabled (OS-level bash isolation)")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
+    if extra_read_paths:
+        print(f"   - Extra read paths (validated): {', '.join(str(p) for p in extra_read_paths)}")
     print("   - Bash commands restricted to allowlist (see security.py)")
     if yolo_mode:
         print("   - MCP servers: features (database) - YOLO MODE (no Playwright)")
@@ -288,10 +423,16 @@ def create_client(
     }
     if not yolo_mode:
         # Include Playwright MCP server for browser automation (standard mode only)
-        # Headless mode is configurable via PLAYWRIGHT_HEADLESS environment variable
-        playwright_args = ["@playwright/mcp@latest", "--viewport-size", "1280x720"]
+        # Browser and headless mode configurable via environment variables
+        browser = get_playwright_browser()
+        playwright_args = [
+            "@playwright/mcp@latest",
+            "--viewport-size", "1280x720",
+            "--browser", browser,
+        ]
         if get_playwright_headless():
             playwright_args.append("--headless")
+        print(f"   - Browser: {browser} (headless={get_playwright_headless()})")
 
         # Browser isolation for parallel execution
         # Each agent gets its own isolated browser context to prevent tab conflicts
@@ -305,24 +446,33 @@ def create_client(
         mcp_servers["playwright"] = {
             "command": "npx",
             "args": playwright_args,
+            "env": {
+                "NODE_COMPILE_CACHE": "",  # Disable V8 compile caching to prevent .node file accumulation in %TEMP%
+            },
         }
 
-    # Add Mission Control MCP server (if enabled via MISSION_CONTROL_ENABLED=true)
-    mcp_servers = add_mission_control_mcp(mcp_servers, project_dir)
-
     # Build environment overrides for API endpoint configuration
-    # These override system env vars for the Claude CLI subprocess,
-    # allowing AutoCoder to use alternative APIs (e.g., GLM) without
-    # affecting the user's global Claude Code settings
-    sdk_env = {}
-    for var in API_ENV_VARS:
-        value = os.getenv(var)
-        if value:
-            sdk_env[var] = value
+    # Uses get_effective_sdk_env() which reads provider settings from the database,
+    # ensuring UI-configured alternative providers (GLM, Ollama, Kimi, Custom) propagate
+    # correctly to the Claude CLI subprocess
+    from registry import get_effective_sdk_env
+    sdk_env = get_effective_sdk_env()
 
+    # Detect alternative API mode (Ollama, GLM, or Vertex AI)
+    base_url = sdk_env.get("ANTHROPIC_BASE_URL", "")
+    is_vertex = sdk_env.get("CLAUDE_CODE_USE_VERTEX") == "1"
+    is_alternative_api = bool(base_url) or is_vertex
+    is_ollama = "localhost:11434" in base_url or "127.0.0.1:11434" in base_url
+    model = convert_model_for_vertex(model)
     if sdk_env:
         print(f"   - API overrides: {', '.join(sdk_env.keys())}")
-        if "ANTHROPIC_BASE_URL" in sdk_env:
+        if is_vertex:
+            project_id = sdk_env.get("ANTHROPIC_VERTEX_PROJECT_ID", "unknown")
+            region = sdk_env.get("CLOUD_ML_REGION", "unknown")
+            print(f"   - Vertex AI Mode: Using GCP project '{project_id}' with model '{model}' in region '{region}'")
+        elif is_ollama:
+            print("   - Ollama Mode: Using local models")
+        elif "ANTHROPIC_BASE_URL" in sdk_env:
             print(f"   - GLM Mode: Using {sdk_env['ANTHROPIC_BASE_URL']}")
 
     # Create a wrapper for bash_security_hook that passes project_dir via context
@@ -333,9 +483,10 @@ def create_client(
         context["project_dir"] = str(project_dir.resolve())
         return await bash_security_hook(input_data, tool_use_id, context)
 
-    # PreCompact hook for logging and customizing context compaction
+    # PreCompact hook for logging and customizing context compaction.
     # Compaction is handled automatically by Claude Code CLI when context approaches limits.
-    # This hook allows us to log when compaction occurs and optionally provide custom instructions.
+    # This hook provides custom instructions that guide the summarizer to preserve
+    # critical workflow state while discarding verbose/redundant content.
     async def pre_compact_hook(
         input_data: HookInput,
         tool_use_id: str | None,
@@ -348,8 +499,9 @@ def create_client(
         - "auto": Automatic compaction when context approaches token limits
         - "manual": User-initiated compaction via /compact command
 
-        The hook can customize compaction via hookSpecificOutput:
-        - customInstructions: String with focus areas for summarization
+        Returns custom instructions that guide the compaction summarizer to:
+        1. Preserve critical workflow state (feature ID, modified files, test results)
+        2. Discard verbose content (screenshots, long grep outputs, repeated reads)
         """
         trigger = input_data.get("trigger", "auto")
         custom_instructions = input_data.get("custom_instructions")
@@ -360,20 +512,54 @@ def create_client(
             print("[Context] Manual compaction requested")
 
         if custom_instructions:
-            print(f"[Context] Custom instructions: {custom_instructions}")
+            print(f"[Context] Custom instructions provided: {custom_instructions}")
 
-        # Return empty dict to allow compaction to proceed with default behavior
-        # To customize, return:
-        # {
-        #     "hookSpecificOutput": {
-        #         "hookEventName": "PreCompact",
-        #         "customInstructions": "Focus on preserving file paths and test results"
-        #     }
-        # }
-        return SyncHookJSONOutput()
+        # Build compaction instructions that preserve workflow-critical context
+        # while discarding verbose content that inflates token usage.
+        #
+        # The summarizer receives these instructions and uses them to decide
+        # what to keep vs. discard during context compaction.
+        compaction_guidance = "\n".join([
+            "## PRESERVE (critical workflow state)",
+            "- Current feature ID, feature name, and feature status (pending/in_progress/passing/failing)",
+            "- List of all files created or modified during this session, with their paths",
+            "- Last test/lint/type-check results: command run, pass/fail status, and key error messages",
+            "- Current step in the workflow (e.g., implementing, testing, fixing lint errors)",
+            "- Any dependency information (which features block this one)",
+            "- Git operations performed (commits, branches created)",
+            "- MCP tool call results (feature_claim_and_get, feature_mark_passing, etc.)",
+            "- Key architectural decisions made during this session",
+            "",
+            "## DISCARD (verbose content safe to drop)",
+            "- Full screenshot base64 data (just note that a screenshot was taken and what it showed)",
+            "- Long grep/find/glob output listings (summarize to: searched for X, found Y relevant files)",
+            "- Repeated file reads of the same file (keep only the latest read or a summary of changes)",
+            "- Full file contents from Read tool (summarize to: read file X, key sections were Y)",
+            "- Verbose npm/pip install output (just note: dependencies installed successfully/failed)",
+            "- Full lint/type-check output when passing (just note: lint passed with no errors)",
+            "- Browser console message dumps (summarize to: N errors found, key error was X)",
+            "- Redundant tool result confirmations ([Done] markers)",
+        ])
 
-    # Create the base Claude SDK client
-    base_client = ClaudeSDKClient(
+        print("[Context] Applying custom compaction instructions (preserve workflow state, discard verbose content)")
+
+        # The SDK's HookSpecificOutput union type does not yet include a
+        # PreCompactHookSpecificOutput variant, but the CLI protocol accepts
+        # {"hookEventName": "PreCompact", "customInstructions": "..."}.
+        # The dict is serialized to JSON and sent to the CLI process directly,
+        # so the runtime behavior is correct despite the type mismatch.
+        return SyncHookJSONOutput(
+            hookSpecificOutput={  # type: ignore[typeddict-item]
+                "hookEventName": "PreCompact",
+                "customInstructions": compaction_guidance,
+            }
+        )
+
+    # PROMPT CACHING: The Claude Code CLI applies cache_control breakpoints internally.
+    # Our system_prompt benefits from automatic caching without explicit configuration.
+    # If explicit cache_control is needed, the SDK would need to accept content blocks
+    # with cache_control fields (not currently supported in v0.1.x).
+    return ClaudeSDKClient(
         options=ClaudeAgentOptions(
             model=model,
             cli_path=system_cli,  # Use system CLI to avoid bundled Bun crash (exit code 3)
@@ -381,7 +567,7 @@ def create_client(
             setting_sources=["project"],  # Enable skills, commands, and CLAUDE.md from project dir
             max_buffer_size=10 * 1024 * 1024,  # 10MB for large Playwright screenshots
             allowed_tools=allowed_tools,
-            mcp_servers=mcp_servers,
+            mcp_servers=mcp_servers,  # type: ignore[arg-type]  # SDK accepts dict config at runtime
             hooks={
                 "PreToolUse": [
                     HookMatcher(matcher="Bash", hooks=[bash_hook_with_context]),
@@ -393,14 +579,15 @@ def create_client(
                     HookMatcher(hooks=[pre_compact_hook]),
                 ],
             },
-            max_turns=1000,
+            max_turns=max_turns,
             cwd=str(project_dir.resolve()),
             settings=str(settings_file.resolve()),  # Use absolute path
             env=sdk_env,  # Pass API configuration overrides to CLI subprocess
             # Enable extended context beta for better handling of long sessions.
             # This provides up to 1M tokens of context with automatic compaction.
             # See: https://docs.anthropic.com/en/api/beta-headers
-            betas=["context-1m-2025-08-07"],
+            # Disabled for alternative APIs (Ollama, GLM, Vertex AI) as they don't support this beta.
+            betas=[] if is_alternative_api else ["context-1m-2025-08-07"],
             # Note on context management:
             # The Claude Agent SDK handles context management automatically through the
             # underlying Claude Code CLI. When context approaches limits, the CLI
@@ -410,7 +597,7 @@ def create_client(
             # parameters. Instead, context is managed via:
             # 1. betas=["context-1m-2025-08-07"] - Extended context window
             # 2. PreCompact hook - Intercept and customize compaction behavior
-            # 3. max_turns - Limit conversation turns (set to 1000 for long sessions)
+            # 3. max_turns - Limit conversation turns (per agent type: coding=300, testing=100)
             #
             # Future SDK versions may add explicit compaction controls. When available,
             # consider adding:
@@ -418,8 +605,3 @@ def create_client(
             # - context_management={"edits": [...]} for tool use clearing
         )
     )
-
-    # Wrap with quota tracking
-    project_name = project_dir.name
-    print(f"   - Quota tracking enabled: {project_name}")
-    return QuotaTrackingClient(base_client, model, project_name)

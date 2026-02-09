@@ -25,24 +25,12 @@ from .assistant_database import (
     create_conversation,
     get_messages,
 )
+from .chat_constants import ROOT_DIR
 
 # Load environment variables from .env file if present
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-# Root directory of the project
-ROOT_DIR = Path(__file__).parent.parent.parent
-
-# Environment variables to pass through to Claude CLI for API configuration
-API_ENV_VARS = [
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_AUTH_TOKEN",
-    "API_TIMEOUT_MS",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-]
 
 # Read-only feature MCP tools
 READONLY_FEATURE_MCP_TOOLS = [
@@ -59,8 +47,13 @@ FEATURE_MANAGEMENT_TOOLS = [
     "mcp__features__feature_skip",
 ]
 
+# Interactive tools
+INTERACTIVE_TOOLS = [
+    "mcp__features__ask_user",
+]
+
 # Combined list for assistant
-ASSISTANT_FEATURE_TOOLS = READONLY_FEATURE_MCP_TOOLS + FEATURE_MANAGEMENT_TOOLS
+ASSISTANT_FEATURE_TOOLS = READONLY_FEATURE_MCP_TOOLS + FEATURE_MANAGEMENT_TOOLS + INTERACTIVE_TOOLS
 
 # Read-only built-in tools (no Write, Edit, Bash)
 READONLY_BUILTIN_TOOLS = [
@@ -72,17 +65,12 @@ READONLY_BUILTIN_TOOLS = [
 ]
 
 
-def get_system_prompt(project_name: str, project_dir: Path, mode: str = 'dev') -> str:
-    """Generate the system prompt for the assistant with project context.
-
-    Args:
-        project_name: Name of the project
-        project_dir: Absolute path to the project directory
-        mode: 'dev' or 'uat' - adjusts the assistant's role and context
-    """
+def get_system_prompt(project_name: str, project_dir: Path) -> str:
+    """Generate the system prompt for the assistant with project context."""
     # Try to load app_spec.txt for context
     app_spec_content = ""
-    app_spec_path = project_dir / "prompts" / "app_spec.txt"
+    from autoforge_paths import get_prompts_dir
+    app_spec_path = get_prompts_dir(project_dir) / "app_spec.txt"
     if app_spec_path.exists():
         try:
             app_spec_content = app_spec_path.read_text(encoding="utf-8")
@@ -92,27 +80,11 @@ def get_system_prompt(project_name: str, project_dir: Path, mode: str = 'dev') -
         except Exception as e:
             logger.warning(f"Failed to read app_spec.txt: {e}")
 
-    # Adjust role and context based on mode
-    if mode == 'uat':
-        role = f"UAT Test Planner for the \"{project_name}\" project"
-        context = """You are currently in **UAT Mode** (User Acceptance Testing).
-- You help with UAT test planning, test execution, and blocker resolution
-- Test scenarios are managed in uat_tests.db, separate from development features
-- When creating test plans, identify untested user journeys and propose test frameworks
-- Ask about blockers upfront (email verification, SMS, payment gateways - wait/skip/mock options)
-- Provide UAT-specific guidance on test phases (smoke, functional, regression, UAT)"""
-    else:
-        role = f"helpful project assistant and backlog manager for the \"{project_name}\" project"
-        context = """You are currently in **Dev Mode** (Development).
-- You help with codebase understanding, feature planning, and backlog management
-- Features are managed in features.db
-- Provide development-focused guidance on implementation and architecture"""
-
-    return f"""You are a {role}.
-
-{context}
+    return f"""You are a helpful project assistant and backlog manager for the "{project_name}" project.
 
 Your role is to help users understand the codebase, answer questions about features, and manage the project backlog. You can READ files and CREATE/MANAGE features, but you cannot modify source code.
+
+You have MCP tools available for feature management. Use them directly by calling the tool -- do not suggest CLI commands, bash commands, or curl commands to the user. You can create features yourself using the feature_create and feature_create_bulk tools.
 
 ## What You CAN Do
 
@@ -156,19 +128,26 @@ If the user asks you to modify code, explain that you're a project assistant and
 - **feature_create_bulk**: Create multiple features at once
 - **feature_skip**: Move a feature to the end of the queue
 
+**Interactive:**
+- **ask_user**: Present structured multiple-choice questions to the user. Use this when you need to clarify requirements, offer design choices, or guide a decision. The user sees clickable option buttons and their selection is returned as your next message.
+
 ## Creating Features
 
-When a user asks to add a feature, gather the following information:
-1. **Category**: A grouping like "Authentication", "API", "UI", "Database"
-2. **Name**: A concise, descriptive name
-3. **Description**: What the feature should do
-4. **Steps**: How to verify/implement the feature (as a list)
+When a user asks to add a feature, use the `feature_create` or `feature_create_bulk` MCP tools directly:
+
+For a **single feature**, call `feature_create` with:
+- category: A grouping like "Authentication", "API", "UI", "Database"
+- name: A concise, descriptive name
+- description: What the feature should do
+- steps: List of verification/implementation steps
+
+For **multiple features**, call `feature_create_bulk` with an array of feature objects.
 
 You can ask clarifying questions if the user's request is vague, or make reasonable assumptions for simple requests.
 
 **Example interaction:**
 User: "Add a feature for S3 sync"
-You: I'll create that feature. Let me add it to the backlog...
+You: I'll create that feature now.
 [calls feature_create with appropriate parameters]
 You: Done! I've added "S3 Sync Integration" to your backlog. It's now visible on the kanban board.
 
@@ -186,11 +165,11 @@ class AssistantChatSession:
     """
     Manages a read-only assistant conversation for a project.
 
-    Uses Claude Opus 4.5 with only read-only tools enabled.
+    Uses Claude Opus with only read-only tools enabled.
     Persists conversation history to SQLite.
     """
 
-    def __init__(self, project_name: str, project_dir: Path, conversation_id: Optional[int] = None, mode: str = 'dev'):
+    def __init__(self, project_name: str, project_dir: Path, conversation_id: Optional[int] = None):
         """
         Initialize the session.
 
@@ -198,12 +177,10 @@ class AssistantChatSession:
             project_name: Name of the project
             project_dir: Absolute path to the project directory
             conversation_id: Optional existing conversation ID to resume
-            mode: 'dev' or 'uat' - separates Dev vs UAT conversation contexts
         """
         self.project_name = project_name
         self.project_dir = project_dir
         self.conversation_id = conversation_id
-        self.mode = mode  # Store mode for context-aware system prompt
         self.client: Optional[ClaudeSDKClient] = None
         self._client_entered: bool = False
         self.created_at = datetime.now()
@@ -233,8 +210,8 @@ class AssistantChatSession:
 
         # Create a new conversation if we don't have one
         if is_new_conversation:
-            conv = create_conversation(self.project_dir, self.project_name, self.mode)
-            self.conversation_id = conv.id
+            conv = create_conversation(self.project_dir, self.project_name)
+            self.conversation_id = int(conv.id)  # type coercion: Column[int] -> int
             yield {"type": "conversation_created", "conversation_id": self.conversation_id}
 
         # Build permissions list for assistant access (read + feature management)
@@ -255,7 +232,9 @@ class AssistantChatSession:
                 "allow": permissions_list,
             },
         }
-        settings_file = self.project_dir / ".claude_assistant_settings.json"
+        from autoforge_paths import get_claude_assistant_settings_path
+        settings_file = get_claude_assistant_settings_path(self.project_dir)
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
         with open(settings_file, "w") as f:
             json.dump(security_settings, f, indent=2)
 
@@ -269,14 +248,12 @@ class AssistantChatSession:
                     # (subprocess inherits parent environment automatically)
                     "PROJECT_DIR": str(self.project_dir.resolve()),
                     "PYTHONPATH": str(ROOT_DIR.resolve()),
-                    # Pass mode to MCP server so it queries the correct database
-                    "AUTOCODER_MODE": self.mode,
                 },
             },
         }
 
-        # Get system prompt with project context and mode
-        system_prompt = get_system_prompt(self.project_name, self.project_dir, self.mode)
+        # Get system prompt with project context
+        system_prompt = get_system_prompt(self.project_name, self.project_dir)
 
         # Write system prompt to CLAUDE.md file to avoid Windows command line length limit
         # The SDK will read this via setting_sources=["project"]
@@ -289,11 +266,11 @@ class AssistantChatSession:
         system_cli = shutil.which("claude")
 
         # Build environment overrides for API configuration
-        sdk_env = {var: os.getenv(var) for var in API_ENV_VARS if os.getenv(var)}
+        from registry import DEFAULT_MODEL, get_effective_sdk_env
+        sdk_env = get_effective_sdk_env()
 
-        # Determine model from environment or use default
-        # This allows using alternative APIs (e.g., GLM via z.ai) that may not support Claude model names
-        model = os.getenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "claude-opus-4-5-20251101")
+        # Determine model from SDK env (provider-aware) or fallback to env/default
+        model = sdk_env.get("ANTHROPIC_DEFAULT_OPUS_MODEL") or os.getenv("ANTHROPIC_DEFAULT_OPUS_MODEL", DEFAULT_MODEL)
 
         try:
             logger.info("Creating ClaudeSDKClient...")
@@ -305,7 +282,7 @@ class AssistantChatSession:
                     # This avoids Windows command line length limit (~8191 chars)
                     setting_sources=["project"],
                     allowed_tools=[*READONLY_BUILTIN_TOOLS, *ASSISTANT_FEATURE_TOOLS],
-                    mcp_servers=mcp_servers,
+                    mcp_servers=mcp_servers,  # type: ignore[arg-type]  # SDK accepts dict config at runtime
                     permission_mode="bypassPermissions",
                     max_turns=100,
                     cwd=str(self.project_dir.resolve()),
@@ -331,6 +308,8 @@ class AssistantChatSession:
                 greeting = f"Hello! I'm your project assistant for **{self.project_name}**. I can help you understand the codebase, explain features, and answer questions about the project. What would you like to know?"
 
                 # Store the greeting in the database
+                # conversation_id is guaranteed non-None here (set on line 206 above)
+                assert self.conversation_id is not None
                 add_message(self.project_dir, self.conversation_id, "assistant", greeting)
 
                 yield {"type": "text", "content": greeting}
@@ -431,6 +410,17 @@ class AssistantChatSession:
                     elif block_type == "ToolUseBlock" and hasattr(block, "name"):
                         tool_name = block.name
                         tool_input = getattr(block, "input", {})
+
+                        # Intercept ask_user tool calls -> yield as question message
+                        if tool_name == "mcp__features__ask_user":
+                            questions = tool_input.get("questions", [])
+                            if questions:
+                                yield {
+                                    "type": "question",
+                                    "questions": questions,
+                                }
+                                continue
+
                         yield {
                             "type": "tool_call",
                             "tool": tool_name,
@@ -447,27 +437,20 @@ class AssistantChatSession:
 
 
 # Session registry with thread safety
-# Key format: "{project_name}:{mode}" to separate Dev and UAT sessions
 _sessions: dict[str, AssistantChatSession] = {}
 _sessions_lock = threading.Lock()
 
 
-def _make_session_key(project_name: str, mode: str) -> str:
-    """Create a composite session key from project name and mode."""
-    return f"{project_name}:{mode}"
-
-
-def get_session(project_name: str, mode: str = 'dev') -> Optional[AssistantChatSession]:
-    """Get an existing session for a project in a specific mode."""
+def get_session(project_name: str) -> Optional[AssistantChatSession]:
+    """Get an existing session for a project."""
     with _sessions_lock:
-        return _sessions.get(_make_session_key(project_name, mode))
+        return _sessions.get(project_name)
 
 
 async def create_session(
     project_name: str,
     project_dir: Path,
-    conversation_id: Optional[int] = None,
-    mode: str = 'dev'
+    conversation_id: Optional[int] = None
 ) -> AssistantChatSession:
     """
     Create a new session for a project, closing any existing one.
@@ -476,42 +459,39 @@ async def create_session(
         project_name: Name of the project
         project_dir: Absolute path to the project directory
         conversation_id: Optional conversation ID to resume
-        mode: 'dev' or 'uat' - separates Dev vs UAT session contexts
     """
     old_session: Optional[AssistantChatSession] = None
-    session_key = _make_session_key(project_name, mode)
 
     with _sessions_lock:
-        old_session = _sessions.pop(session_key, None)
-        session = AssistantChatSession(project_name, project_dir, conversation_id, mode)
-        _sessions[session_key] = session
+        old_session = _sessions.pop(project_name, None)
+        session = AssistantChatSession(project_name, project_dir, conversation_id)
+        _sessions[project_name] = session
 
     if old_session:
         try:
             await old_session.close()
         except Exception as e:
-            logger.warning(f"Error closing old session for {project_name} ({mode}): {e}")
+            logger.warning(f"Error closing old session for {project_name}: {e}")
 
     return session
 
 
-async def remove_session(project_name: str, mode: str = 'dev') -> None:
-    """Remove and close a session for a specific mode."""
+async def remove_session(project_name: str) -> None:
+    """Remove and close a session."""
     session: Optional[AssistantChatSession] = None
-    session_key = _make_session_key(project_name, mode)
 
     with _sessions_lock:
-        session = _sessions.pop(session_key, None)
+        session = _sessions.pop(project_name, None)
 
     if session:
         try:
             await session.close()
         except Exception as e:
-            logger.warning(f"Error closing session for {project_name} ({mode}): {e}")
+            logger.warning(f"Error closing session for {project_name}: {e}")
 
 
 def list_sessions() -> list[str]:
-    """List all active session keys in 'project:mode' format."""
+    """List all active session project names."""
     with _sessions_lock:
         return list(_sessions.keys())
 

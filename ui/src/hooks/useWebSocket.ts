@@ -219,6 +219,7 @@ export function useProjectWebSocket(projectName: string | null) {
                     agentName: message.agentName,
                     agentType: message.agentType || 'coding',  // Default to coding for backwards compat
                     featureId: message.featureId,
+                    featureIds: message.featureIds || [message.featureId],
                     featureName: message.featureName,
                     state: message.state,
                     thought: message.thought,
@@ -234,6 +235,7 @@ export function useProjectWebSocket(projectName: string | null) {
                       agentName: message.agentName,
                       agentType: message.agentType || 'coding',  // Default to coding for backwards compat
                       featureId: message.featureId,
+                      featureIds: message.featureIds || [message.featureId],
                       featureName: message.featureName,
                       state: message.state,
                       thought: message.thought,
@@ -461,9 +463,13 @@ export function useProjectWebSocket(projectName: string | null) {
         }
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setState(prev => ({ ...prev, isConnected: false }))
         wsRef.current = null
+
+        // Don't retry on application-level errors (4xxx codes won't resolve on retry)
+        const isAppError = event.code >= 4000 && event.code <= 4999
+        if (isAppError) return
 
         // Exponential backoff reconnection
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)

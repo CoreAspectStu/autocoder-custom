@@ -49,51 +49,21 @@ Otherwise, start servers manually and document the process.
 
 #### TEST-DRIVEN DEVELOPMENT MINDSET (CRITICAL)
 
-Features are **test cases** that drive development. This is test-driven development:
+Features are **test cases** that drive development. If functionality doesn't exist, **BUILD IT** -- you are responsible for implementing ALL required functionality. Missing pages, endpoints, database tables, or components are NOT blockers; they are your job to create.
 
-- **If you can't test a feature because functionality doesn't exist → BUILD IT**
-- You are responsible for implementing ALL required functionality
-- Never assume another process will build it later
-- "Missing functionality" is NOT a blocker - it's your job to create it
-
-**Example:** Feature says "User can filter flashcards by difficulty level"
-- WRONG: "Flashcard page doesn't exist yet" → skip feature
-- RIGHT: "Flashcard page doesn't exist yet" → build flashcard page → implement filter → test feature
-
-**Note:** Your feature has been pre-assigned by the orchestrator. Use `feature_get_by_id` with your assigned feature ID to get the details.
-
-Once you've retrieved the feature, **mark it as in-progress** (if not already):
+**Note:** Your feature has been pre-assigned by the orchestrator. Use `feature_get_by_id` with your assigned feature ID to get the details. Then mark it as in-progress:
 
 ```
-# Mark feature as in-progress
 Use the feature_mark_in_progress tool with feature_id={your_assigned_id}
 ```
 
 If you get "already in-progress" error, that's OK - continue with implementation.
 
-Focus on completing one feature perfectly and completing its testing steps in this session before moving on to other features.
-It's ok if you only complete one feature in this session, as there will be more sessions later that continue to make progress.
+Focus on completing one feature perfectly in this session. It's ok if you only complete one feature, as more sessions will follow.
 
 #### When to Skip a Feature (EXTREMELY RARE)
 
-**Skipping should almost NEVER happen.** Only skip for truly external blockers you cannot control:
-
-- **External API not configured**: Third-party service credentials missing (e.g., Stripe keys, OAuth secrets)
-- **External service unavailable**: Dependency on service that's down or inaccessible
-- **Environment limitation**: Hardware or system requirement you cannot fulfill
-
-**NEVER skip because:**
-
-| Situation | Wrong Action | Correct Action |
-|-----------|--------------|----------------|
-| "Page doesn't exist" | Skip | Create the page |
-| "API endpoint missing" | Skip | Implement the endpoint |
-| "Database table not ready" | Skip | Create the migration |
-| "Component not built" | Skip | Build the component |
-| "No data to test with" | Skip | Create test data or build data entry flow |
-| "Feature X needs to be done first" | Skip | Build feature X as part of this feature |
-
-If a feature requires building other functionality first, **build that functionality**. You are the coding agent - your job is to make the feature work, not to defer it.
+Only skip for truly external blockers: missing third-party credentials (Stripe keys, OAuth secrets), unavailable external services, or unfulfillable environment requirements. **NEVER** skip because a page, endpoint, component, or data doesn't exist yet -- build it. If a feature requires other functionality first, build that functionality as part of this feature.
 
 If you must skip (truly external blocker only):
 
@@ -120,13 +90,13 @@ Use browser automation tools:
 
 - Navigate to the app in a real browser
 - Interact like a human user (click, type, scroll)
-- Take screenshots at each step
+- Take screenshots at each step (use inline screenshots only -- do NOT save screenshot files to disk)
 - Verify both functionality AND visual appearance
 
 **DO:**
 
 - Test through the UI with clicks and keyboard input
-- Take screenshots to verify visual appearance
+- Take screenshots to verify visual appearance (inline only, never save to disk)
 - Check for console errors in browser
 - Verify complete user workflows end-to-end
 
@@ -139,45 +109,22 @@ Use browser automation tools:
 
 ### STEP 5.5: MANDATORY VERIFICATION CHECKLIST (BEFORE MARKING ANY TEST PASSING)
 
-**You MUST complete ALL of these checks before marking any feature as "passes": true**
+**Complete ALL applicable checks before marking any feature as passing:**
 
-#### Security Verification (for protected features)
-
-- [ ] Feature respects user role permissions
-- [ ] Unauthenticated access is blocked (redirects to login)
-- [ ] API endpoint checks authorization (returns 401/403 appropriately)
-- [ ] Cannot access other users' data by manipulating URLs
-
-#### Real Data Verification (CRITICAL - NO MOCK DATA)
-
-- [ ] Created unique test data via UI (e.g., "TEST_12345_VERIFY_ME")
-- [ ] Verified the EXACT data I created appears in UI
-- [ ] Refreshed page - data persists (proves database storage)
-- [ ] Deleted the test data - verified it's gone everywhere
-- [ ] NO unexplained data appeared (would indicate mock data)
-- [ ] Dashboard/counts reflect real numbers after my changes
-
-#### Navigation Verification
-
-- [ ] All buttons on this page link to existing routes
-- [ ] No 404 errors when clicking any interactive element
-- [ ] Back button returns to correct previous page
-- [ ] Related links (edit, view, delete) have correct IDs in URLs
-
-#### Integration Verification
-
-- [ ] Console shows ZERO JavaScript errors
-- [ ] Network tab shows successful API calls (no 500s)
-- [ ] Data returned from API matches what UI displays
-- [ ] Loading states appeared during API calls
-- [ ] Error states handle failures gracefully
+- **Security:** Feature respects role permissions; unauthenticated access blocked; API checks auth (401/403); no cross-user data leaks via URL manipulation
+- **Real Data:** Create unique test data via UI, verify it appears, refresh to confirm persistence, delete and verify removal. No unexplained data (indicates mocks). Dashboard counts reflect real numbers
+- **Mock Data Grep:** Run STEP 5.6 grep checks - no hits in src/ (excluding tests). No globalThis, devStore, or dev-store patterns
+- **Server Restart:** For data features, run STEP 5.7 - data persists across server restart
+- **Navigation:** All buttons link to existing routes, no 404s, back button works, edit/view/delete links have correct IDs
+- **Integration:** Zero JS console errors, no 500s in network tab, API data matches UI, loading/error states work
 
 ### STEP 5.6: MOCK DATA DETECTION (Before marking passing)
 
-1. **Search code:** `grep -r "mockData\|fakeData\|TODO\|STUB" --include="*.ts" --include="*.tsx"`
-2. **Runtime test:** Create unique data (e.g., "TEST_12345") → verify in UI → delete → verify gone
-3. **Check database:** All displayed data must come from real DB queries
-4. If unexplained data appears, it's mock data - fix before marking passing.
+Before marking a feature passing, grep for mock/placeholder data patterns in src/ (excluding test files): `globalThis`, `devStore`, `dev-store`, `mockDb`, `mockData`, `fakeData`, `sampleData`, `dummyData`, `testData`, `TODO.*real`, `TODO.*database`, `STUB`, `MOCK`, `isDevelopment`, `isDev`. Any hits in production code must be investigated and fixed. Also create unique test data (e.g., "TEST_12345"), verify it appears in UI, then delete and confirm removal - unexplained data indicates mock implementations.
+
+### STEP 5.7: SERVER RESTART PERSISTENCE TEST (MANDATORY for data features)
+
+For any feature involving CRUD or data persistence: create unique test data (e.g., "RESTART_TEST_12345"), verify it exists, then fully stop and restart the dev server. After restart, verify the test data still exists. If data is gone, the implementation uses in-memory storage -- run STEP 5.6 greps, find the mock pattern, and replace with real database queries. Clean up test data after verification. This test catches in-memory stores like `globalThis.devStore` that pass all other tests but lose data on restart.
 
 ### STEP 6: UPDATE FEATURE STATUS (CAREFULLY!)
 
@@ -202,17 +149,23 @@ Use the feature_mark_passing tool with feature_id=42
 
 ### STEP 7: COMMIT YOUR PROGRESS
 
-Make a descriptive git commit:
+Make a descriptive git commit.
+
+**Git Commit Rules:**
+- ALWAYS use simple `-m` flag for commit messages
+- NEVER use heredocs (`cat <<EOF` or `<<'EOF'`) - they fail in sandbox mode with "can't create temp file for here document: operation not permitted"
+- For multi-line messages, use multiple `-m` flags:
 
 ```bash
 git add .
-git commit -m "Implement [feature name] - verified end-to-end
+git commit -m "Implement [feature name] - verified end-to-end" -m "- Added [specific changes]" -m "- Tested with browser automation" -m "- Marked feature #X as passing"
+```
 
-- Added [specific changes]
-- Tested with browser automation
-- Marked feature #X as passing
-- Screenshots in verification/ directory
-"
+Or use a single descriptive message:
+
+```bash
+git add .
+git commit -m "feat: implement [feature name] with browser verification"
 ```
 
 ### STEP 8: UPDATE PROGRESS NOTES
@@ -240,6 +193,8 @@ Before context fills up:
 ## BROWSER AUTOMATION
 
 Use Playwright MCP tools (`browser_*`) for UI verification. Key tools: `navigate`, `click`, `type`, `fill_form`, `take_screenshot`, `console_messages`, `network_requests`. All tools have auto-wait built in.
+
+**Screenshot rule:** Always use inline mode (base64). NEVER save screenshots as files to disk.
 
 Test like a human user with mouse and keyboard. Use `browser_console_messages` to detect errors. Don't bypass UI with JavaScript evaluation.
 

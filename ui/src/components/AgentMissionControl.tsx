@@ -1,12 +1,14 @@
 import { Rocket, ChevronDown, ChevronUp, Activity } from 'lucide-react'
 import { useState } from 'react'
 import { AgentCard, AgentLogModal } from './AgentCard'
-import { TestAgentCard } from './TestAgentCard'
 import { ActivityFeed } from './ActivityFeed'
 import { OrchestratorStatusCard } from './OrchestratorStatusCard'
-import type { ActiveAgent, AgentLogEntry, OrchestratorStatus, ActiveTestAgent } from '../lib/types'
+import type { ActiveAgent, AgentLogEntry, OrchestratorStatus } from '../lib/types'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
-const ACTIVITY_COLLAPSED_KEY = 'autocoder-activity-collapsed'
+const ACTIVITY_COLLAPSED_KEY = 'autoforge-activity-collapsed'
 
 interface AgentMissionControlProps {
   agents: ActiveAgent[]
@@ -19,8 +21,6 @@ interface AgentMissionControlProps {
   }>
   isExpanded?: boolean
   getAgentLogs?: (agentIndex: number) => AgentLogEntry[]
-  // UAT Test agents
-  testAgents?: ActiveTestAgent[]
 }
 
 export function AgentMissionControl({
@@ -29,7 +29,6 @@ export function AgentMissionControl({
   recentActivity,
   isExpanded: defaultExpanded = true,
   getAgentLogs,
-  testAgents = [],
 }: AgentMissionControlProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [activityCollapsed, setActivityCollapsed] = useState(() => {
@@ -39,7 +38,6 @@ export function AgentMissionControl({
       return false
     }
   })
-  // State for log modal
   const [selectedAgentForLogs, setSelectedAgentForLogs] = useState<ActiveAgent | null>(null)
 
   const toggleActivityCollapsed = () => {
@@ -52,51 +50,49 @@ export function AgentMissionControl({
     }
   }
 
-  // Don't render if no orchestrator status, no agents, and no test agents
-  if (!orchestratorStatus && agents.length === 0 && testAgents.length === 0) {
+  // Don't render if no orchestrator status and no agents
+  if (!orchestratorStatus && agents.length === 0) {
     return null
   }
 
   return (
-    <div className="neo-card mb-6 overflow-hidden">
+    <Card className="mb-6 overflow-hidden py-0">
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-[var(--color-neo-progress)] hover:brightness-105 transition-all"
+        className="w-full flex items-center justify-between px-4 py-3 bg-primary hover:bg-primary/90 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Rocket size={20} className="text-neo-text-on-bright" />
-          <span className="font-display font-bold text-neo-text-on-bright uppercase tracking-wide">
+          <Rocket size={20} className="text-primary-foreground" />
+          <span className="font-semibold text-primary-foreground uppercase tracking-wide">
             Mission Control
           </span>
-          <span className="neo-badge neo-badge-sm bg-white text-neo-text ml-2">
-            {testAgents.length > 0
-              ? `${testAgents.length} ${testAgents.length === 1 ? 'test' : 'tests'} running`
-              : agents.length > 0
-                ? `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} active`
-                : orchestratorStatus?.state === 'initializing'
-                  ? 'Initializing'
-                  : orchestratorStatus?.state === 'complete'
-                    ? 'Complete'
-                    : 'Orchestrating'
+          <Badge variant="secondary" className="ml-2">
+            {agents.length > 0
+              ? `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} active`
+              : orchestratorStatus?.state === 'initializing'
+                ? 'Initializing'
+                : orchestratorStatus?.state === 'complete'
+                  ? 'Complete'
+                  : 'Orchestrating'
             }
-          </span>
+          </Badge>
         </div>
         {isExpanded ? (
-          <ChevronUp size={20} className="text-neo-text-on-bright" />
+          <ChevronUp size={20} className="text-primary-foreground" />
         ) : (
-          <ChevronDown size={20} className="text-neo-text-on-bright" />
+          <ChevronDown size={20} className="text-primary-foreground" />
         )}
       </button>
 
       {/* Content */}
       <div
         className={`
-          transition-all duration-300 ease-out overflow-hidden
-          ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}
+          transition-all duration-300 ease-out
+          ${isExpanded ? 'max-h-[600px] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}
         `}
       >
-        <div className="p-4">
+        <CardContent className="p-4">
           {/* Orchestrator Status Card */}
           {orchestratorStatus && (
             <OrchestratorStatusCard status={orchestratorStatus} />
@@ -104,7 +100,7 @@ export function AgentMissionControl({
 
           {/* Agent Cards Row */}
           {agents.length > 0 && (
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+            <div className="flex gap-4 overflow-x-auto pb-4">
               {agents.map((agent) => (
                 <AgentCard
                   key={`agent-${agent.agentIndex}`}
@@ -120,49 +116,28 @@ export function AgentMissionControl({
             </div>
           )}
 
-          {/* Test Agent Cards Row */}
-          {testAgents.length > 0 && (
-            <>
-              {agents.length > 0 && (
-                <div className="border-t-2 border-neo-border/30 my-4"></div>
-              )}
-              <div className="mb-2">
-                <h3 className="text-xs font-bold text-neo-text-secondary uppercase tracking-wide flex items-center gap-2">
-                  <Activity size={14} />
-                  UAT Test Execution
-                </h3>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
-                {testAgents.map((agent) => (
-                  <TestAgentCard
-                    key={`test-agent-${agent.agentId}`}
-                    agent={agent}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
           {/* Collapsible Activity Feed */}
           {recentActivity.length > 0 && (
-            <div className="mt-4 pt-4 border-t-2 border-neo-border/30">
-              <button
+            <div className="mt-4 pt-4 border-t">
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={toggleActivityCollapsed}
-                className="flex items-center gap-2 mb-2 hover:opacity-80 transition-opacity"
+                className="gap-2 mb-2 h-auto p-1"
               >
-                <Activity size={14} className="text-neo-text-secondary" />
-                <span className="text-xs font-bold text-neo-text-secondary uppercase tracking-wide">
+                <Activity size={14} className="text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Recent Activity
                 </span>
-                <span className="text-xs text-neo-muted">
+                <span className="text-xs text-muted-foreground">
                   ({recentActivity.length})
                 </span>
                 {activityCollapsed ? (
-                  <ChevronDown size={14} className="text-neo-text-secondary" />
+                  <ChevronDown size={14} className="text-muted-foreground" />
                 ) : (
-                  <ChevronUp size={14} className="text-neo-text-secondary" />
+                  <ChevronUp size={14} className="text-muted-foreground" />
                 )}
-              </button>
+              </Button>
               <div
                 className={`
                   transition-all duration-200 ease-out overflow-hidden
@@ -173,7 +148,7 @@ export function AgentMissionControl({
               </div>
             </div>
           )}
-        </div>
+        </CardContent>
       </div>
 
       {/* Log Modal */}
@@ -184,6 +159,6 @@ export function AgentMissionControl({
           onClose={() => setSelectedAgentForLogs(null)}
         />
       )}
-    </div>
+    </Card>
   )
 }

@@ -8,7 +8,7 @@ SQLite database schema for feature storage using SQLAlchemy.
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 
 def _utc_now() -> datetime:
@@ -26,13 +26,16 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    event,
     text,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship, sessionmaker
-from sqlalchemy.types import JSON, DateTime
+from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
+from sqlalchemy.types import JSON
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 style declarative base."""
+    pass
 
 
 class Feature(Base):
@@ -51,18 +54,12 @@ class Feature(Base):
     category = Column(String(100), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
-    steps = Column(JSON, nullable=False, default=list)  # Stored as JSON array, NOT NULL
+    steps = Column(JSON, nullable=False)  # Stored as JSON array
     passes = Column(Boolean, nullable=False, default=False, index=True)
     in_progress = Column(Boolean, nullable=False, default=False, index=True)
     # Dependencies: list of feature IDs that must be completed before this feature
-    # Default to empty list for new features (NULL only for legacy data)
-    dependencies = Column(JSON, nullable=False, default=list)
-    # Complexity score for model routing (1=simple/Haiku, 2=medium/Sonnet, 3=complex/Sonnet)
-    # Default 2 (medium) for backwards compatibility
-    complexity_score = Column(Integer, nullable=False, default=2, index=True)
-    # Timestamps for analytics and activity tracking
-    created_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    # NULL/empty = no dependencies (backwards compatible)
+    dependencies = Column(JSON, nullable=True, default=None)
 
     def to_dict(self) -> dict:
         """Convert feature to dictionary for JSON serialization."""
@@ -78,11 +75,6 @@ class Feature(Base):
             "in_progress": self.in_progress if self.in_progress is not None else False,
             # Dependencies: NULL/empty treated as empty list for backwards compat
             "dependencies": self.dependencies if self.dependencies else [],
-            # Complexity score: default 2 (medium) if not set
-            "complexity_score": self.complexity_score if self.complexity_score is not None else 2,
-            # Timestamps for analytics
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 
     def get_dependencies_safe(self) -> list[int]:
@@ -191,7 +183,8 @@ class ScheduleOverride(Base):
 
 def get_database_path(project_dir: Path) -> Path:
     """Return the path to the SQLite database for a project."""
-    return project_dir / "features.db"
+    from autoforge_paths import get_features_db_path
+    return get_features_db_path(project_dir)
 
 
 def get_database_url(project_dir: Path) -> str:
@@ -240,61 +233,6 @@ def _migrate_add_dependencies_column(engine) -> None:
         if "dependencies" not in columns:
             # Use TEXT for SQLite JSON storage, NULL default for backwards compat
             conn.execute(text("ALTER TABLE features ADD COLUMN dependencies TEXT DEFAULT NULL"))
-            conn.commit()
-
-
-def _migrate_fix_null_dependencies(engine) -> None:
-    """Fix NULL values in dependencies column.
-
-    Converts NULL values to empty JSON arrays '[]' to ensure all features
-    have valid dependency lists. This is needed because the schema now
-    requires NOT NULL with default [].
-    """
-    with engine.connect() as conn:
-        # Check if column exists and has NULL values
-        result = conn.execute(text("PRAGMA table_info(features)"))
-        columns = [row[1] for row in result.fetchall()]
-
-        if "dependencies" in columns:
-            # Fix NULL dependencies values
-            conn.execute(text("UPDATE features SET dependencies = '[]' WHERE dependencies IS NULL"))
-            conn.commit()
-
-
-def _migrate_add_complexity_score_column(engine) -> None:
-    """Add complexity_score column to existing databases that don't have it.
-
-    Complexity scores:
-    - 1 = Simple (UI, docs, simple tests) → Haiku
-    - 2 = Medium (API, database, standard features) → Sonnet (default)
-    - 3 = Complex (algorithms, architecture, complex logic) → Sonnet
-
-    Auto-assigns scores based on category for existing features.
-    """
-    with engine.connect() as conn:
-        # Check if column exists
-        result = conn.execute(text("PRAGMA table_info(features)"))
-        columns = [row[1] for row in result.fetchall()]
-
-        if "complexity_score" not in columns:
-            # Add column with default value 2 (medium)
-            conn.execute(text("ALTER TABLE features ADD COLUMN complexity_score INTEGER DEFAULT 2"))
-
-            # Auto-assign complexity scores based on category patterns
-            # Simple (1): UI, styling, docs, simple tests
-            simple_patterns = ['ui', 'style', 'css', 'doc', 'readme', 'comment', 'typo', 'formatting']
-            for pattern in simple_patterns:
-                conn.execute(
-                    text(f"UPDATE features SET complexity_score = 1 WHERE LOWER(category) LIKE '%{pattern}%' AND complexity_score = 2")
-                )
-
-            # Complex (3): algorithms, architecture, security, performance
-            complex_patterns = ['algorithm', 'architect', 'security', 'auth', 'performance', 'optimiz', 'complex']
-            for pattern in complex_patterns:
-                conn.execute(
-                    text(f"UPDATE features SET complexity_score = 3 WHERE LOWER(category) LIKE '%{pattern}%' AND complexity_score = 2")
-                )
-
             conn.commit()
 
 
@@ -373,11 +311,11 @@ def _migrate_add_schedules_tables(engine) -> None:
 
     # Create schedules table if missing
     if "schedules" not in existing_tables:
-        Schedule.__table__.create(bind=engine)
+        Schedule.__table__.create(bind=engine)  # type: ignore[attr-defined]
 
     # Create schedule_overrides table if missing
     if "schedule_overrides" not in existing_tables:
-        ScheduleOverride.__table__.create(bind=engine)
+        ScheduleOverride.__table__.create(bind=engine)  # type: ignore[attr-defined]
 
     # Add crash_count column if missing (for upgrades)
     if "schedules" in existing_tables:
@@ -398,9 +336,41 @@ def _migrate_add_schedules_tables(engine) -> None:
                 conn.commit()
 
 
+def _configure_sqlite_immediate_transactions(engine) -> None:
+    """Configure engine for IMMEDIATE transactions via event hooks.
+
+    Per SQLAlchemy docs: https://docs.sqlalchemy.org/en/20/dialects/sqlite.html
+
+    This replaces fragile pysqlite implicit transaction handling with explicit
+    BEGIN IMMEDIATE at transaction start. Benefits:
+    - Acquires write lock immediately, preventing stale reads
+    - Works correctly regardless of prior ORM operations
+    - Future-proof: won't break when pysqlite legacy mode is removed in Python 3.16
+    """
+    @event.listens_for(engine, "connect")
+    def do_connect(dbapi_connection, connection_record):
+        # Disable pysqlite's implicit transaction handling
+        dbapi_connection.isolation_level = None
+
+        # Set busy_timeout on raw connection before any transactions
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout=30000")
+        finally:
+            cursor.close()
+
+    @event.listens_for(engine, "begin")
+    def do_begin(conn):
+        # Use IMMEDIATE for all transactions to prevent stale reads
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def create_database(project_dir: Path) -> tuple:
     """
     Create database and return engine + session maker.
+
+    Uses a cache to avoid creating new engines for each request, which improves
+    performance by reusing database connections.
 
     Args:
         project_dir: Directory containing the project
@@ -408,40 +378,90 @@ def create_database(project_dir: Path) -> tuple:
     Returns:
         Tuple of (engine, SessionLocal)
     """
+    cache_key = project_dir.as_posix()
+
+    if cache_key in _engine_cache:
+        return _engine_cache[cache_key]
+
     db_url = get_database_url(project_dir)
-    engine = create_engine(db_url, connect_args={
-        "check_same_thread": False,
-        "timeout": 30  # Wait up to 30s for locks
-    })
-    Base.metadata.create_all(bind=engine)
+
+    # Ensure parent directory exists (for .autoforge/ layout)
+    db_path = get_database_path(project_dir)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Choose journal mode based on filesystem type
     # WAL mode doesn't work reliably on network filesystems and can cause corruption
     is_network = _is_network_path(project_dir)
     journal_mode = "DELETE" if is_network else "WAL"
 
+    engine = create_engine(db_url, connect_args={
+        "check_same_thread": False,
+        "timeout": 30  # Wait up to 30s for locks
+    })
+
+    # Set journal mode BEFORE configuring event hooks
+    # PRAGMA journal_mode must run outside of a transaction, and our event hooks
+    # start a transaction with BEGIN IMMEDIATE on every operation
     with engine.connect() as conn:
-        conn.execute(text(f"PRAGMA journal_mode={journal_mode}"))
-        conn.execute(text("PRAGMA busy_timeout=30000"))
-        conn.commit()
+        # Get raw DBAPI connection to execute PRAGMA outside transaction
+        raw_conn = conn.connection.dbapi_connection
+        if raw_conn is None:
+            raise RuntimeError("Failed to get raw DBAPI connection")
+        cursor = raw_conn.cursor()
+        try:
+            cursor.execute(f"PRAGMA journal_mode={journal_mode}")
+            cursor.execute("PRAGMA busy_timeout=30000")
+        finally:
+            cursor.close()
+
+    # Configure IMMEDIATE transactions via event hooks AFTER setting PRAGMAs
+    # This must happen before create_all() and migrations run
+    _configure_sqlite_immediate_transactions(engine)
+
+    Base.metadata.create_all(bind=engine)
 
     # Migrate existing databases
     _migrate_add_in_progress_column(engine)
     _migrate_fix_null_boolean_fields(engine)
     _migrate_add_dependencies_column(engine)
-    _migrate_fix_null_dependencies(engine)  # Fix NULL dependencies to empty arrays
-    _migrate_add_complexity_score_column(engine)
     _migrate_add_testing_columns(engine)
 
     # Migrate to add schedules tables
     _migrate_add_schedules_tables(engine)
 
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    # Cache the engine and session maker
+    _engine_cache[cache_key] = (engine, SessionLocal)
+
     return engine, SessionLocal
+
+
+def dispose_engine(project_dir: Path) -> bool:
+    """Dispose of and remove the cached engine for a project.
+
+    This closes all database connections, releasing file locks on Windows.
+    Should be called before deleting the database file.
+
+    Returns:
+        True if an engine was disposed, False if no engine was cached.
+    """
+    cache_key = project_dir.as_posix()
+
+    if cache_key in _engine_cache:
+        engine, _ = _engine_cache.pop(cache_key)
+        engine.dispose()
+        return True
+
+    return False
 
 
 # Global session maker - will be set when server starts
 _session_maker: Optional[sessionmaker] = None
+
+# Engine cache to avoid creating new engines for each request
+# Key: project directory path (as posix string), Value: (engine, SessionLocal)
+_engine_cache: dict[str, tuple] = {}
 
 
 def set_session_maker(session_maker: sessionmaker) -> None:
@@ -450,7 +470,7 @@ def set_session_maker(session_maker: sessionmaker) -> None:
     _session_maker = session_maker
 
 
-def get_db() -> Session:
+def get_db() -> Generator[Session, None, None]:
     """
     Dependency for FastAPI to get database session.
 
@@ -462,5 +482,55 @@ def get_db() -> Session:
     db = _session_maker()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
+
+
+# =============================================================================
+# Atomic Transaction Helpers for Parallel Mode
+# =============================================================================
+# These helpers prevent database corruption when multiple processes access the
+# same SQLite database concurrently. They use IMMEDIATE transactions which
+# acquire write locks at the start (preventing stale reads) and atomic
+# UPDATE ... WHERE clauses (preventing check-then-modify races).
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def atomic_transaction(session_maker):
+    """Context manager for atomic SQLite transactions.
+
+    Acquires a write lock immediately via BEGIN IMMEDIATE (configured by
+    engine event hooks), preventing stale reads in read-modify-write patterns.
+    This is essential for preventing race conditions in parallel mode.
+
+    Args:
+        session_maker: SQLAlchemy sessionmaker
+
+    Yields:
+        SQLAlchemy session with automatic commit/rollback
+
+    Example:
+        with atomic_transaction(session_maker) as session:
+            # All reads in this block are protected by write lock
+            feature = session.query(Feature).filter(...).first()
+            feature.priority = new_priority
+            # Commit happens automatically on exit
+    """
+    session = session_maker()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass  # Don't let rollback failure mask original error
+        raise
+    finally:
+        session.close()

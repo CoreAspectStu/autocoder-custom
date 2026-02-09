@@ -7,6 +7,7 @@ Provides REST API, WebSocket, and static file serving.
 """
 
 import asyncio
+import logging
 import os
 import shutil
 import sys
@@ -52,6 +53,7 @@ from .routers import (
 )
 from .schemas import SetupStatus
 from .services.assistant_chat_session import cleanup_all_sessions as cleanup_assistant_sessions
+from .services.chat_constants import ROOT_DIR
 from .services.dev_server_manager import (
     cleanup_all_devservers,
     cleanup_orphaned_devserver_locks,
@@ -63,13 +65,23 @@ from .services.terminal_manager import cleanup_all_terminals
 from .websocket import project_websocket
 
 # Paths
-ROOT_DIR = Path(__file__).parent.parent
 UI_DIST_DIR = ROOT_DIR / "ui" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown."""
+    # Startup - clean up stale temp files (Playwright profiles, .node cache, etc.)
+    try:
+        from temp_cleanup import cleanup_stale_temp
+        stats = cleanup_stale_temp()
+        if stats["dirs_deleted"] > 0 or stats["files_deleted"] > 0:
+            mb_freed = stats["bytes_freed"] / (1024 * 1024)
+            logger.info("Startup temp cleanup: %d dirs, %d files, %.1f MB freed",
+                        stats["dirs_deleted"], stats["files_deleted"], mb_freed)
+    except Exception as e:
+        logger.warning("Startup temp cleanup failed (non-fatal): %s", e)
+
     # Startup - clean up orphaned lock files from previous runs
     cleanup_orphaned_locks()
     cleanup_orphaned_devserver_locks()
@@ -117,35 +129,58 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS - allow only localhost origins for security
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",      # Vite dev server
-        "http://127.0.0.1:5173",
-        "http://localhost:8888",      # Production
-        "http://127.0.0.1:8888",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Module logger
+logger = logging.getLogger(__name__)
+
+# Check if remote access is enabled via environment variable
+# Set by start_ui.py when --host is not 127.0.0.1
+ALLOW_REMOTE = os.environ.get("AUTOFORGE_ALLOW_REMOTE", "").lower() in ("1", "true", "yes")
+
+if ALLOW_REMOTE:
+    logger.warning(
+        "ALLOW_REMOTE is enabled. Terminal WebSocket is exposed without sandboxing. "
+        "Only use this in trusted network environments."
+    )
+
+# CORS - allow all origins when remote access is enabled, otherwise localhost only
+if ALLOW_REMOTE:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins for remote access
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",      # Vite dev server
+            "http://127.0.0.1:5173",
+            "http://localhost:8888",      # Production
+            "http://127.0.0.1:8888",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # ============================================================================
 # Security Middleware
 # ============================================================================
 
-@app.middleware("http")
-async def require_localhost(request: Request, call_next):
-    """Only allow requests from localhost."""
-    client_host = request.client.host if request.client else None
+if not ALLOW_REMOTE:
+    @app.middleware("http")
+    async def require_localhost(request: Request, call_next):
+        """Only allow requests from localhost (disabled when AUTOFORGE_ALLOW_REMOTE=1)."""
+        client_host = request.client.host if request.client else None
 
-    # Allow localhost connections
-    if client_host not in ("127.0.0.1", "::1", "localhost", None):
-        raise HTTPException(status_code=403, detail="Localhost access only")
+        # Allow localhost connections
+        if client_host not in ("127.0.0.1", "::1", "localhost", None):
+            raise HTTPException(status_code=403, detail="Localhost access only")
 
-    return await call_next(request)
+        return await call_next(request)
 
 
 # ============================================================================
@@ -247,7 +282,14 @@ if UI_DIST_DIR.exists():
             raise HTTPException(status_code=404)
 
         # Try to serve the file directly
-        file_path = UI_DIST_DIR / path
+        file_path = (UI_DIST_DIR / path).resolve()
+
+        # Ensure resolved path is within UI_DIST_DIR (prevent path traversal)
+        try:
+            file_path.relative_to(UI_DIST_DIR.resolve())
+        except ValueError:
+            raise HTTPException(status_code=404)
+
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
 

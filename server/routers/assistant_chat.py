@@ -7,8 +7,6 @@ WebSocket and REST endpoints for the read-only project assistant.
 
 import json
 import logging
-import re
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -27,29 +25,12 @@ from ..services.assistant_database import (
     get_conversation,
     get_conversations,
 )
+from ..utils.project_helpers import get_project_path as _get_project_path
+from ..utils.validation import validate_project_name
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant-chat"])
-
-# Root directory
-ROOT_DIR = Path(__file__).parent.parent.parent
-
-
-def _get_project_path(project_name: str) -> Optional[Path]:
-    """Get project path from registry."""
-    import sys
-    root = Path(__file__).parent.parent.parent
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-    from registry import get_project_path
-    return get_project_path(project_name)
-
-
-def validate_project_name(name: str) -> bool:
-    """Validate project name to prevent path traversal."""
-    return bool(re.match(r'^[a-zA-Z0-9_-]{1,50}$', name))
 
 
 # ============================================================================
@@ -96,52 +77,30 @@ class SessionInfo(BaseModel):
 # ============================================================================
 
 @router.get("/conversations/{project_name}", response_model=list[ConversationSummary])
-async def list_project_conversations(project_name: str, mode: str = 'dev'):
-    """
-    List all conversations for a project.
-
-    Args:
-        project_name: Name of the project
-        mode: 'dev' or 'uat' - filter conversations by mode
-
-    Returns an empty array [] when no conversations exist, not a 404 error.
-    This ensures the frontend can distinguish between "no conversations" (200 with [])
-    and "project not found" (404).
-    """
+async def list_project_conversations(project_name: str):
+    """List all conversations for a project."""
     if not validate_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
-
-    if mode not in ['dev', 'uat']:
-        raise HTTPException(status_code=400, detail="Invalid mode, must be 'dev' or 'uat'")
 
     project_dir = _get_project_path(project_name)
     if not project_dir or not project_dir.exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    conversations = get_conversations(project_dir, project_name, mode)
-
-    # Explicitly return empty array when no conversations exist (Feature #150)
-    # This prevents treating "no conversations" as an error condition
-    if not conversations:
-        return []
-
+    conversations = get_conversations(project_dir, project_name)
     return [ConversationSummary(**c) for c in conversations]
 
 
 @router.get("/conversations/{project_name}/{conversation_id}", response_model=ConversationDetail)
-async def get_project_conversation(project_name: str, conversation_id: int, mode: str = 'dev'):
+async def get_project_conversation(project_name: str, conversation_id: int):
     """Get a specific conversation with all messages."""
     if not validate_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
-
-    if mode not in ['dev', 'uat']:
-        raise HTTPException(status_code=400, detail="Invalid mode, must be 'dev' or 'uat'")
 
     project_dir = _get_project_path(project_name)
     if not project_dir or not project_dir.exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    conversation = get_conversation(project_dir, conversation_id, mode)
+    conversation = get_conversation(project_dir, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -156,23 +115,20 @@ async def get_project_conversation(project_name: str, conversation_id: int, mode
 
 
 @router.post("/conversations/{project_name}", response_model=ConversationSummary)
-async def create_project_conversation(project_name: str, mode: str = 'dev'):
+async def create_project_conversation(project_name: str):
     """Create a new conversation for a project."""
     if not validate_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
-
-    if mode not in ['dev', 'uat']:
-        raise HTTPException(status_code=400, detail="Invalid mode, must be 'dev' or 'uat'")
 
     project_dir = _get_project_path(project_name)
     if not project_dir or not project_dir.exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    conversation = create_conversation(project_dir, project_name, mode)
+    conversation = create_conversation(project_dir, project_name)
     return ConversationSummary(
-        id=conversation.id,
-        project_name=conversation.project_name,
-        title=conversation.title,
+        id=int(conversation.id),
+        project_name=str(conversation.project_name),
+        title=str(conversation.title) if conversation.title else None,
         created_at=conversation.created_at.isoformat() if conversation.created_at else None,
         updated_at=conversation.updated_at.isoformat() if conversation.updated_at else None,
         message_count=0,
@@ -180,19 +136,16 @@ async def create_project_conversation(project_name: str, mode: str = 'dev'):
 
 
 @router.delete("/conversations/{project_name}/{conversation_id}")
-async def delete_project_conversation(project_name: str, conversation_id: int, mode: str = 'dev'):
+async def delete_project_conversation(project_name: str, conversation_id: int):
     """Delete a conversation."""
     if not validate_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
-
-    if mode not in ['dev', 'uat']:
-        raise HTTPException(status_code=400, detail="Invalid mode, must be 'dev' or 'uat'")
 
     project_dir = _get_project_path(project_name)
     if not project_dir or not project_dir.exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    success = delete_conversation(project_dir, conversation_id, mode)
+    success = delete_conversation(project_dir, conversation_id)
     if not success:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -249,61 +202,44 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
     """
     WebSocket endpoint for assistant chat.
 
-    Query Parameters:
-    - mode: 'dev' or 'uat' - separate conversation contexts for Dev vs UAT mode
-
     Message protocol:
 
     Client -> Server:
     - {"type": "start", "conversation_id": int | null} - Start/resume session
     - {"type": "message", "content": "..."} - Send user message
+    - {"type": "answer", "answers": {...}} - Answer to structured questions
     - {"type": "ping"} - Keep-alive ping
 
     Server -> Client:
     - {"type": "conversation_created", "conversation_id": int} - New conversation created
     - {"type": "text", "content": "..."} - Text chunk from Claude
     - {"type": "tool_call", "tool": "...", "input": {...}} - Tool being called
+    - {"type": "question", "questions": [...]} - Structured questions for user
     - {"type": "response_done"} - Response complete
     - {"type": "error", "content": "..."} - Error message
     - {"type": "pong"} - Keep-alive pong
     """
-    # Accept the WebSocket connection FIRST (required by Starlette)
-    # This allows us to send proper error codes to the client
+    # Always accept WebSocket first to avoid opaque 403 errors
     await websocket.accept()
 
-    # Security: Only allow connections from localhost
-    client_host = websocket.client.host if websocket.client else None
-    if client_host not in ("127.0.0.1", "::1", "localhost", None):
-        await websocket.close(code=4003, reason="Localhost access only")
-        return
-
-    # Validate project name
-    if not validate_project_name(project_name):
+    try:
+        project_name = validate_project_name(project_name)
+    except HTTPException:
+        await websocket.send_json({"type": "error", "content": "Invalid project name"})
         await websocket.close(code=4000, reason="Invalid project name")
         return
 
-    # Extract mode from query parameters
-    mode = 'dev'  # Default
-    try:
-        query_params = dict(websocket.query_params)
-        mode = query_params.get('mode', 'dev')
-        if mode not in ['dev', 'uat']:
-            await websocket.close(code=4002, reason="Invalid mode, must be 'dev' or 'uat'")
-            return
-    except Exception as e:
-        logger.warning(f"Failed to parse query params: {e}")
-
-    # Get project directory
     project_dir = _get_project_path(project_name)
     if not project_dir:
+        await websocket.send_json({"type": "error", "content": "Project not found in registry"})
         await websocket.close(code=4004, reason="Project not found in registry")
         return
 
     if not project_dir.exists():
+        await websocket.send_json({"type": "error", "content": "Project directory not found"})
         await websocket.close(code=4004, reason="Project directory not found")
         return
-
-    logger.info(f"Assistant WebSocket connected for project: {project_name}, mode: {mode}")
+    logger.info(f"Assistant WebSocket connected for project: {project_name}")
 
     session: Optional[AssistantChatSession] = None
 
@@ -325,13 +261,12 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
                     logger.debug(f"Processing start message with conversation_id={conversation_id}")
 
                     try:
-                        # Create a new session with mode context
-                        logger.debug(f"Creating session for {project_name}, mode: {mode}")
+                        # Create a new session
+                        logger.debug(f"Creating session for {project_name}")
                         session = await create_session(
                             project_name,
                             project_dir,
                             conversation_id=conversation_id,
-                            mode=mode,
                         )
                         logger.debug("Session created, starting...")
 
@@ -368,6 +303,34 @@ async def assistant_chat_websocket(websocket: WebSocket, project_name: str):
 
                     # Stream Claude's response
                     async for chunk in session.send_message(user_content):
+                        await websocket.send_json(chunk)
+
+                elif msg_type == "answer":
+                    # User answered a structured question
+                    if not session:
+                        session = get_session(project_name)
+                        if not session:
+                            await websocket.send_json({
+                                "type": "error",
+                                "content": "No active session. Send 'start' first."
+                            })
+                            continue
+
+                    # Format the answers as a natural response
+                    answers = message.get("answers", {})
+                    if isinstance(answers, dict):
+                        response_parts = []
+                        for question_idx, answer_value in answers.items():
+                            if isinstance(answer_value, list):
+                                response_parts.append(", ".join(answer_value))
+                            else:
+                                response_parts.append(str(answer_value))
+                        user_response = "; ".join(response_parts) if response_parts else "OK"
+                    else:
+                        user_response = str(answers)
+
+                    # Stream Claude's response
+                    async for chunk in session.send_message(user_response):
                         await websocket.send_json(chunk)
 
                 else:

@@ -2,6 +2,7 @@
 generations/
 automaker/
 temp/
+temp-docs/
 
 nul
 issues/
@@ -76,6 +77,13 @@ ui/playwright-report/
 .dmypy.json
 dmypy.json
 
+.ruff_cache/
+
+# ===================
+# Claude Code
+# ===================
+.claude/settings.local.json
+
 # ===================
 # IDE / Editors
 # ===================
@@ -107,6 +115,7 @@ Desktop.ini
 ui/dist/
 ui/.vite/
 .vite/
+*.tgz
 
 # ===================
 # Environment files

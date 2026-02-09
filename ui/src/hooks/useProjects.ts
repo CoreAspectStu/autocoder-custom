@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../lib/api'
-import type { FeatureCreate, FeatureUpdate, ModelsResponse, Settings, SettingsUpdate } from '../lib/types'
+import type { DevServerConfig, FeatureCreate, FeatureUpdate, ModelsResponse, ProjectSettingsUpdate, ProvidersResponse, Settings, SettingsUpdate } from '../lib/types'
 
 // ============================================================================
 // Projects
@@ -44,6 +44,33 @@ export function useDeleteProject() {
     mutationFn: (name: string) => api.deleteProject(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useResetProject(projectName: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (fullReset: boolean) => api.resetProject(projectName, fullReset),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['project', projectName] })
+      queryClient.invalidateQueries({ queryKey: ['features', projectName] })
+      queryClient.invalidateQueries({ queryKey: ['agent-status', projectName] })
+    },
+  })
+}
+
+export function useUpdateProjectSettings(projectName: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (settings: ProjectSettingsUpdate) =>
+      api.updateProjectSettings(projectName, settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['project', projectName] })
     },
   })
 }
@@ -227,17 +254,41 @@ export function useValidatePath() {
 // Default models response for placeholder (until API responds)
 const DEFAULT_MODELS: ModelsResponse = {
   models: [
-    { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5' },
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5' },
+    { id: 'claude-opus-4-6', name: 'Claude Opus' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet' },
   ],
-  default: 'claude-opus-4-5-20251101',
+  default: 'claude-opus-4-6',
 }
 
 const DEFAULT_SETTINGS: Settings = {
   yolo_mode: false,
-  model: 'claude-opus-4-5-20251101',
+  model: 'claude-opus-4-6',
   glm_mode: false,
+  ollama_mode: false,
   testing_agent_ratio: 1,
+  playwright_headless: true,
+  batch_size: 3,
+  api_provider: 'claude',
+  api_base_url: null,
+  api_has_auth_token: false,
+  api_model: null,
+}
+
+const DEFAULT_PROVIDERS: ProvidersResponse = {
+  providers: [
+    { id: 'claude', name: 'Claude (Anthropic)', base_url: null, models: DEFAULT_MODELS.models, default_model: 'claude-opus-4-6', requires_auth: false },
+  ],
+  current: 'claude',
+}
+
+export function useAvailableProviders() {
+  return useQuery({
+    queryKey: ['available-providers'],
+    queryFn: api.getAvailableProviders,
+    staleTime: 300000,
+    retry: 1,
+    placeholderData: DEFAULT_PROVIDERS,
+  })
 }
 
 export function useAvailableModels() {
@@ -289,6 +340,41 @@ export function useUpdateSettings() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+      queryClient.invalidateQueries({ queryKey: ['available-models'] })
+      queryClient.invalidateQueries({ queryKey: ['available-providers'] })
+    },
+  })
+}
+
+// ============================================================================
+// Dev Server Config
+// ============================================================================
+
+// Default config for placeholder (until API responds)
+const DEFAULT_DEV_SERVER_CONFIG: DevServerConfig = {
+  detected_type: null,
+  detected_command: null,
+  custom_command: null,
+  effective_command: null,
+}
+
+export function useDevServerConfig(projectName: string | null) {
+  return useQuery({
+    queryKey: ['dev-server-config', projectName],
+    queryFn: () => api.getDevServerConfig(projectName!),
+    enabled: !!projectName,
+    staleTime: 30_000,
+    placeholderData: DEFAULT_DEV_SERVER_CONFIG,
+  })
+}
+
+export function useUpdateDevServerConfig(projectName: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (customCommand: string | null) =>
+      api.updateDevServerConfig(projectName, customCommand),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dev-server-config', projectName] })
     },
   })
 }

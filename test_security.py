@@ -18,11 +18,13 @@ from security import (
     bash_security_hook,
     extract_commands,
     get_effective_commands,
+    get_effective_pkill_processes,
     load_org_config,
     load_project_commands,
     matches_pattern,
     validate_chmod_command,
     validate_init_script,
+    validate_pkill_command,
     validate_project_command,
 )
 
@@ -105,6 +107,8 @@ def test_extract_commands():
         ("/usr/bin/node script.js", ["node"]),
         ("VAR=value ls", ["ls"]),
         ("git status || git init", ["git", "git"]),
+        # Fallback parser test: complex nested quotes that break shlex
+        ('docker exec container php -r "echo \\"test\\";"', ["docker"]),
     ]
 
     for cmd, expected in test_cases:
@@ -269,11 +273,11 @@ def test_yaml_loading():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
-        autocoder_dir = project_dir / ".autocoder"
-        autocoder_dir.mkdir()
+        autoforge_dir = project_dir / ".autoforge"
+        autoforge_dir.mkdir()
 
         # Test 1: Valid YAML
-        config_path = autocoder_dir / "allowed_commands.yaml"
+        config_path = autoforge_dir / "allowed_commands.yaml"
         config_path.write_text("""version: 1
 commands:
   - name: swift
@@ -293,7 +297,7 @@ commands:
             failed += 1
 
         # Test 2: Missing file returns None
-        (project_dir / ".autocoder" / "allowed_commands.yaml").unlink()
+        (project_dir / ".autoforge" / "allowed_commands.yaml").unlink()
         config = load_project_commands(project_dir)
         if config is None:
             print("  PASS: Missing file returns None")
@@ -403,11 +407,11 @@ def test_project_commands():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
-        autocoder_dir = project_dir / ".autocoder"
-        autocoder_dir.mkdir()
+        autoforge_dir = project_dir / ".autoforge"
+        autoforge_dir.mkdir()
 
         # Create a config with Swift commands
-        config_path = autocoder_dir / "allowed_commands.yaml"
+        config_path = autoforge_dir / "allowed_commands.yaml"
         config_path.write_text("""version: 1
 commands:
   - name: swift
@@ -451,6 +455,21 @@ commands:
             print("  FAIL: Non-allowed command 'rustc' should be blocked")
             failed += 1
 
+        # Test 4: Empty command name is rejected
+        config_path.write_text("""version: 1
+commands:
+  - name: ""
+    description: Empty name should be rejected
+""")
+        result = load_project_commands(project_dir)
+        if result is None:
+            print("  PASS: Empty command name rejected in project config")
+            passed += 1
+        else:
+            print("  FAIL: Empty command name should be rejected in project config")
+            print(f"         Got: {result}")
+            failed += 1
+
     return passed, failed
 
 
@@ -463,7 +482,7 @@ def test_org_config_loading():
     with tempfile.TemporaryDirectory() as tmpdir:
         # Use temporary_home for cross-platform compatibility
         with temporary_home(tmpdir):
-            org_dir = Path(tmpdir) / ".autocoder"
+            org_dir = Path(tmpdir) / ".autoforge"
             org_dir.mkdir()
             org_config_path = org_dir / "config.yaml"
 
@@ -557,7 +576,7 @@ def test_hierarchy_resolution():
         with tempfile.TemporaryDirectory() as tmpproject:
             # Use temporary_home for cross-platform compatibility
             with temporary_home(tmphome):
-                org_dir = Path(tmphome) / ".autocoder"
+                org_dir = Path(tmphome) / ".autoforge"
                 org_dir.mkdir()
                 org_config_path = org_dir / "config.yaml"
 
@@ -574,9 +593,9 @@ blocked_commands:
 """)
 
                 project_dir = Path(tmpproject)
-                project_autocoder = project_dir / ".autocoder"
-                project_autocoder.mkdir()
-                project_config = project_autocoder / "allowed_commands.yaml"
+                project_autoforge = project_dir / ".autoforge"
+                project_autoforge.mkdir()
+                project_config = project_autoforge / "allowed_commands.yaml"
 
                 # Create project config
                 project_config.write_text("""version: 1
@@ -641,7 +660,7 @@ def test_org_blocklist_enforcement():
         with tempfile.TemporaryDirectory() as tmpproject:
             # Use temporary_home for cross-platform compatibility
             with temporary_home(tmphome):
-                org_dir = Path(tmphome) / ".autocoder"
+                org_dir = Path(tmphome) / ".autoforge"
                 org_dir.mkdir()
                 org_config_path = org_dir / "config.yaml"
 
@@ -652,8 +671,8 @@ blocked_commands:
 """)
 
                 project_dir = Path(tmpproject)
-                project_autocoder = project_dir / ".autocoder"
-                project_autocoder.mkdir()
+                project_autoforge = project_dir / ".autoforge"
+                project_autoforge.mkdir()
 
                 # Try to use terraform (should be blocked)
                 input_data = {"tool_name": "Bash", "tool_input": {"command": "terraform apply"}}
@@ -666,6 +685,240 @@ blocked_commands:
                 else:
                     print("  FAIL: Org blocked command 'terraform' should be rejected")
                     failed += 1
+
+    return passed, failed
+
+
+def test_pkill_extensibility():
+    """Test that pkill processes can be extended via config."""
+    print("\nTesting pkill process extensibility:\n")
+    passed = 0
+    failed = 0
+
+    # Test 1: Default processes work without config
+    allowed, reason = validate_pkill_command("pkill node")
+    if allowed:
+        print("  PASS: Default process 'node' allowed")
+        passed += 1
+    else:
+        print(f"  FAIL: Default process 'node' should be allowed: {reason}")
+        failed += 1
+
+    # Test 2: Non-default process blocked without config
+    allowed, reason = validate_pkill_command("pkill python")
+    if not allowed:
+        print("  PASS: Non-default process 'python' blocked without config")
+        passed += 1
+    else:
+        print("  FAIL: Non-default process 'python' should be blocked without config")
+        failed += 1
+
+    # Test 3: Extra processes allowed when passed
+    allowed, reason = validate_pkill_command("pkill python", extra_processes={"python"})
+    if allowed:
+        print("  PASS: Extra process 'python' allowed when configured")
+        passed += 1
+    else:
+        print(f"  FAIL: Extra process 'python' should be allowed when configured: {reason}")
+        failed += 1
+
+    # Test 4: Default processes still work with extra processes
+    allowed, reason = validate_pkill_command("pkill npm", extra_processes={"python"})
+    if allowed:
+        print("  PASS: Default process 'npm' still works with extra processes")
+        passed += 1
+    else:
+        print(f"  FAIL: Default process should still work: {reason}")
+        failed += 1
+
+    # Test 5: Test get_effective_pkill_processes with org config
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autoforge"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                # Create org config with extra pkill processes
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - python
+  - uvicorn
+""")
+
+                project_dir = Path(tmpproject)
+                processes = get_effective_pkill_processes(project_dir)
+
+                # Should include defaults + org processes
+                if "node" in processes and "python" in processes and "uvicorn" in processes:
+                    print("  PASS: Org pkill_processes merged with defaults")
+                    passed += 1
+                else:
+                    print(f"  FAIL: Expected node, python, uvicorn in {processes}")
+                    failed += 1
+
+    # Test 6: Test get_effective_pkill_processes with project config
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                project_dir = Path(tmpproject)
+                project_autoforge = project_dir / ".autoforge"
+                project_autoforge.mkdir()
+                project_config = project_autoforge / "allowed_commands.yaml"
+
+                # Create project config with extra pkill processes
+                project_config.write_text("""version: 1
+commands: []
+pkill_processes:
+  - gunicorn
+  - flask
+""")
+
+                processes = get_effective_pkill_processes(project_dir)
+
+                # Should include defaults + project processes
+                if "node" in processes and "gunicorn" in processes and "flask" in processes:
+                    print("  PASS: Project pkill_processes merged with defaults")
+                    passed += 1
+                else:
+                    print(f"  FAIL: Expected node, gunicorn, flask in {processes}")
+                    failed += 1
+
+    # Test 7: Integration test - pkill python blocked by default
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                project_dir = Path(tmpproject)
+                input_data = {"tool_name": "Bash", "tool_input": {"command": "pkill python"}}
+                context = {"project_dir": str(project_dir)}
+                result = asyncio.run(bash_security_hook(input_data, context=context))
+
+                if result.get("decision") == "block":
+                    print("  PASS: pkill python blocked without config")
+                    passed += 1
+                else:
+                    print("  FAIL: pkill python should be blocked without config")
+                    failed += 1
+
+    # Test 8: Integration test - pkill python allowed with org config
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autoforge"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - python
+""")
+
+                project_dir = Path(tmpproject)
+                input_data = {"tool_name": "Bash", "tool_input": {"command": "pkill python"}}
+                context = {"project_dir": str(project_dir)}
+                result = asyncio.run(bash_security_hook(input_data, context=context))
+
+                if result.get("decision") != "block":
+                    print("  PASS: pkill python allowed with org config")
+                    passed += 1
+                else:
+                    print(f"  FAIL: pkill python should be allowed with org config: {result}")
+                    failed += 1
+
+    # Test 9: Regex metacharacters should be rejected in pkill_processes
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autoforge"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                # Try to register a regex pattern (should be rejected)
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - ".*"
+""")
+
+                config = load_org_config()
+                if config is None:
+                    print("  PASS: Regex pattern '.*' rejected in pkill_processes")
+                    passed += 1
+                else:
+                    print("  FAIL: Regex pattern '.*' should be rejected")
+                    failed += 1
+
+    # Test 10: Valid process names with dots/underscores/hyphens should be accepted
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autoforge"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                # Valid names with special chars
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - my-app
+  - app_server
+  - node.js
+""")
+
+                config = load_org_config()
+                if config is not None and config.get("pkill_processes") == ["my-app", "app_server", "node.js"]:
+                    print("  PASS: Valid process names with dots/underscores/hyphens accepted")
+                    passed += 1
+                else:
+                    print(f"  FAIL: Valid process names should be accepted: {config}")
+                    failed += 1
+
+    # Test 11: Names with spaces should be rejected
+    with tempfile.TemporaryDirectory() as tmphome:
+        with tempfile.TemporaryDirectory() as tmpproject:
+            with temporary_home(tmphome):
+                org_dir = Path(tmphome) / ".autoforge"
+                org_dir.mkdir()
+                org_config_path = org_dir / "config.yaml"
+
+                org_config_path.write_text("""version: 1
+pkill_processes:
+  - "my app"
+""")
+
+                config = load_org_config()
+                if config is None:
+                    print("  PASS: Process name with space rejected")
+                    passed += 1
+                else:
+                    print("  FAIL: Process name with space should be rejected")
+                    failed += 1
+
+    # Test 12: Multiple patterns - all must be allowed (BSD behavior)
+    # On BSD, "pkill node sshd" would kill both, so we must validate all patterns
+    allowed, reason = validate_pkill_command("pkill node npm")
+    if allowed:
+        print("  PASS: Multiple allowed patterns accepted")
+        passed += 1
+    else:
+        print(f"  FAIL: Multiple allowed patterns should be accepted: {reason}")
+        failed += 1
+
+    # Test 13: Multiple patterns - block if any is disallowed
+    allowed, reason = validate_pkill_command("pkill node sshd")
+    if not allowed:
+        print("  PASS: Multiple patterns blocked when one is disallowed")
+        passed += 1
+    else:
+        print("  FAIL: Should block when any pattern is disallowed")
+        failed += 1
+
+    # Test 14: Multiple patterns - only first allowed, second disallowed
+    allowed, reason = validate_pkill_command("pkill npm python")
+    if not allowed:
+        print("  PASS: Multiple patterns blocked (first allowed, second not)")
+        passed += 1
+    else:
+        print("  FAIL: Should block when second pattern is disallowed")
+        failed += 1
 
     return passed, failed
 
@@ -733,32 +986,32 @@ def main():
     passed += org_block_passed
     failed += org_block_failed
 
+    # Test pkill process extensibility
+    pkill_passed, pkill_failed = test_pkill_extensibility()
+    passed += pkill_passed
+    failed += pkill_failed
+
     # Commands that SHOULD be blocked
+    # Note: blocklisted commands (sudo, shutdown, dd, aws) are tested in
+    # test_blocklist_enforcement(). chmod validation is tested in
+    # test_validate_chmod(). init.sh validation is tested in
+    # test_validate_init_script(). pkill validation is tested in
+    # test_pkill_extensibility(). The entries below focus on scenarios
+    # NOT covered by those dedicated tests.
     print("\nCommands that should be BLOCKED:\n")
     dangerous = [
         # Not in allowlist - dangerous system commands
-        "shutdown now",
         "reboot",
-        "dd if=/dev/zero of=/dev/sda",
         # Not in allowlist - common commands excluded from minimal set
         "wget https://example.com",
         "python app.py",
         "killall node",
-        # pkill with non-dev processes
+        # pkill with non-dev processes (pkill python tested in test_pkill_extensibility)
         "pkill bash",
         "pkill chrome",
-        "pkill python",
         # Shell injection attempts
         "$(echo pkill) node",
         'eval "pkill node"',
-        # chmod with disallowed modes
-        "chmod 777 file.sh",
-        "chmod 755 file.sh",
-        "chmod +w file.sh",
-        "chmod -R +x dir/",
-        # Non-init.sh scripts
-        "./setup.sh",
-        "./malicious.sh",
     ]
 
     for cmd in dangerous:
@@ -768,6 +1021,10 @@ def main():
             failed += 1
 
     # Commands that SHOULD be allowed
+    # Note: chmod +x variants are tested in test_validate_chmod().
+    # init.sh variants are tested in test_validate_init_script().
+    # The combined "chmod +x init.sh && ./init.sh" below serves as the
+    # integration test verifying the hook routes to both validators correctly.
     print("\nCommands that should be ALLOWED:\n")
     safe = [
         # File inspection
@@ -818,16 +1075,7 @@ def main():
         "ls | grep test",
         # Full paths
         "/usr/local/bin/node app.js",
-        # chmod +x (allowed)
-        "chmod +x init.sh",
-        "chmod +x script.sh",
-        "chmod u+x init.sh",
-        "chmod a+x init.sh",
-        # init.sh execution (allowed)
-        "./init.sh",
-        "./init.sh --production",
-        "/path/to/init.sh",
-        # Combined chmod and init.sh
+        # Combined chmod and init.sh (integration test for both validators)
         "chmod +x init.sh && ./init.sh",
     ]
 

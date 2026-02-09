@@ -6,12 +6,21 @@ Pre-tool-use hooks that validate bash commands for security.
 Uses an allowlist approach - only explicitly permitted commands can run.
 """
 
+import logging
 import os
+import re
 import shlex
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+# Logger for security-related events (fallback parsing, validation failures, etc.)
+logger = logging.getLogger(__name__)
+
+# Regex pattern for valid pkill process names (no regex metacharacters allowed)
+# Matches alphanumeric names with dots, underscores, and hyphens
+VALID_PROCESS_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
 # Allowed commands for development tasks
 # Minimal set needed for the autonomous coding demo
@@ -88,6 +97,31 @@ BLOCKED_COMMANDS = {
     "ufw",
 }
 
+# Sensitive directories (relative to home) that should never be exposed.
+# Used by both the EXTRA_READ_PATHS validator (client.py) and the filesystem
+# browser API (server/routers/filesystem.py) to block credential/key directories.
+# This is the single source of truth -- import from here in both places.
+#
+# SENSITIVE_DIRECTORIES is the union of the previous filesystem browser blocklist
+# (filesystem.py) and the previous EXTRA_READ_PATHS blocklist (client.py).
+# Some entries are new to each consumer -- this is intentional for defense-in-depth.
+SENSITIVE_DIRECTORIES = {
+    ".ssh",
+    ".aws",
+    ".azure",
+    ".kube",
+    ".gnupg",
+    ".gpg",
+    ".password-store",
+    ".docker",
+    ".config/gcloud",
+    ".config/gh",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    ".terraform",
+}
+
 # Commands that trigger emphatic warnings but CAN be approved (Phase 3)
 # For now, these are blocked like BLOCKED_COMMANDS until Phase 3 implements approval
 DANGEROUS_COMMANDS = {
@@ -135,6 +169,45 @@ def split_command_segments(command_string: str) -> list[str]:
     return result
 
 
+def _extract_primary_command(segment: str) -> str | None:
+    """
+    Fallback command extraction when shlex fails.
+
+    Extracts the first word that looks like a command, handling cases
+    like complex docker exec commands with nested quotes.
+
+    Args:
+        segment: The command segment to parse
+
+    Returns:
+        The primary command name, or None if extraction fails
+    """
+    # Remove leading whitespace
+    segment = segment.lstrip()
+
+    if not segment:
+        return None
+
+    # Skip env var assignments at start (VAR=value cmd)
+    words = segment.split()
+    while words and "=" in words[0] and not words[0].startswith("="):
+        words = words[1:]
+
+    if not words:
+        return None
+
+    # Extract first token (the command)
+    first_word = words[0]
+
+    # Match valid command characters (alphanumeric, dots, underscores, hyphens, slashes)
+    match = re.match(r"^([a-zA-Z0-9_./-]+)", first_word)
+    if match:
+        cmd = match.group(1)
+        return os.path.basename(cmd)
+
+    return None
+
+
 def extract_commands(command_string: str) -> list[str]:
     """
     Extract command names from a shell command string.
@@ -151,7 +224,6 @@ def extract_commands(command_string: str) -> list[str]:
     commands = []
 
     # shlex doesn't treat ; as a separator, so we need to pre-process
-    import re
 
     # Split on semicolons that aren't inside quotes (simple heuristic)
     # This handles common cases like "echo hello; ls"
@@ -166,8 +238,21 @@ def extract_commands(command_string: str) -> list[str]:
             tokens = shlex.split(segment)
         except ValueError:
             # Malformed command (unclosed quotes, etc.)
-            # Return empty to trigger block (fail-safe)
-            return []
+            # Try fallback extraction instead of blocking entirely
+            fallback_cmd = _extract_primary_command(segment)
+            if fallback_cmd:
+                logger.debug(
+                    "shlex fallback used: segment=%r -> command=%r",
+                    segment,
+                    fallback_cmd,
+                )
+                commands.append(fallback_cmd)
+            else:
+                logger.debug(
+                    "shlex fallback failed: segment=%r (no command extracted)",
+                    segment,
+                )
+            continue
 
         if not tokens:
             continue
@@ -219,23 +304,37 @@ def extract_commands(command_string: str) -> list[str]:
     return commands
 
 
-def validate_pkill_command(command_string: str) -> tuple[bool, str]:
+# Default pkill process names (hardcoded baseline, always available)
+DEFAULT_PKILL_PROCESSES = {
+    "node",
+    "npm",
+    "npx",
+    "vite",
+    "next",
+}
+
+
+def validate_pkill_command(
+    command_string: str,
+    extra_processes: Optional[set[str]] = None
+) -> tuple[bool, str]:
     """
     Validate pkill commands - only allow killing dev-related processes.
 
     Uses shlex to parse the command, avoiding regex bypass vulnerabilities.
 
+    Args:
+        command_string: The pkill command to validate
+        extra_processes: Optional set of additional process names to allow
+                        (from org/project config pkill_processes)
+
     Returns:
         Tuple of (is_allowed, reason_if_blocked)
     """
-    # Allowed process names for pkill
-    allowed_process_names = {
-        "node",
-        "npm",
-        "npx",
-        "vite",
-        "next",
-    }
+    # Merge default processes with any extra configured processes
+    allowed_process_names = DEFAULT_PKILL_PROCESSES.copy()
+    if extra_processes:
+        allowed_process_names |= extra_processes
 
     try:
         tokens = shlex.split(command_string)
@@ -254,17 +353,19 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
     if not args:
         return False, "pkill requires a process name"
 
-    # The target is typically the last non-flag argument
-    target = args[-1]
+    # Validate every non-flag argument (pkill accepts multiple patterns on BSD)
+    # This defensively ensures no disallowed process can be targeted
+    targets = []
+    for arg in args:
+        # For -f flag (full command line match), take the first word as process name
+        # e.g., "pkill -f 'node server.js'" -> target is "node server.js", process is "node"
+        t = arg.split()[0] if " " in arg else arg
+        targets.append(t)
 
-    # For -f flag (full command line match), extract the first word as process name
-    # e.g., "pkill -f 'node server.js'" -> target is "node server.js", process is "node"
-    if " " in target:
-        target = target.split()[0]
-
-    if target in allowed_process_names:
+    disallowed = [t for t in targets if t not in allowed_process_names]
+    if not disallowed:
         return True, ""
-    return False, f"pkill only allowed for dev processes: {allowed_process_names}"
+    return False, f"pkill only allowed for processes: {sorted(allowed_process_names)}"
 
 
 def validate_chmod_command(command_string: str) -> tuple[bool, str]:
@@ -337,24 +438,6 @@ def validate_init_script(command_string: str) -> tuple[bool, str]:
     return False, f"Only ./init.sh is allowed, got: {script}"
 
 
-def get_command_for_validation(cmd: str, segments: list[str]) -> str:
-    """
-    Find the specific command segment that contains the given command.
-
-    Args:
-        cmd: The command name to find
-        segments: List of command segments
-
-    Returns:
-        The segment containing the command, or empty string if not found
-    """
-    for segment in segments:
-        segment_commands = extract_commands(segment)
-        if cmd in segment_commands:
-            return segment
-    return ""
-
-
 def matches_pattern(command: str, pattern: str) -> bool:
     """
     Check if a command matches a pattern.
@@ -396,19 +479,97 @@ def matches_pattern(command: str, pattern: str) -> bool:
     return False
 
 
+def _validate_command_list(commands: list, config_path: Path, field_name: str) -> bool:
+    """
+    Validate a list of command entries from a YAML config.
+
+    Each entry must be a dict with a non-empty string 'name' field.
+    Used by both load_org_config() and load_project_commands() to avoid
+    duplicating the same validation logic.
+
+    Args:
+        commands: List of command entries to validate
+        config_path: Path to the config file (for log messages)
+        field_name: Name of the YAML field being validated (e.g., 'allowed_commands', 'commands')
+
+    Returns:
+        True if all entries are valid, False otherwise
+    """
+    if not isinstance(commands, list):
+        logger.warning(f"Config at {config_path}: '{field_name}' must be a list")
+        return False
+    for i, cmd in enumerate(commands):
+        if not isinstance(cmd, dict):
+            logger.warning(f"Config at {config_path}: {field_name}[{i}] must be a dict")
+            return False
+        if "name" not in cmd:
+            logger.warning(f"Config at {config_path}: {field_name}[{i}] missing 'name'")
+            return False
+        if not isinstance(cmd["name"], str) or cmd["name"].strip() == "":
+            logger.warning(f"Config at {config_path}: {field_name}[{i}] has invalid 'name'")
+            return False
+    return True
+
+
+def _validate_pkill_processes(config: dict, config_path: Path) -> Optional[list[str]]:
+    """
+    Validate and normalize pkill_processes from a YAML config.
+
+    Each entry must be a non-empty string matching VALID_PROCESS_NAME_PATTERN
+    (alphanumeric, dots, underscores, hyphens only -- no regex metacharacters).
+    Used by both load_org_config() and load_project_commands().
+
+    Args:
+        config: Parsed YAML config dict that may contain 'pkill_processes'
+        config_path: Path to the config file (for log messages)
+
+    Returns:
+        Normalized list of process names, or None if validation fails.
+        Returns an empty list if 'pkill_processes' is not present.
+    """
+    if "pkill_processes" not in config:
+        return []
+
+    processes = config["pkill_processes"]
+    if not isinstance(processes, list):
+        logger.warning(f"Config at {config_path}: 'pkill_processes' must be a list")
+        return None
+
+    normalized = []
+    for i, proc in enumerate(processes):
+        if not isinstance(proc, str):
+            logger.warning(f"Config at {config_path}: pkill_processes[{i}] must be a string")
+            return None
+        proc = proc.strip()
+        if not proc or not VALID_PROCESS_NAME_PATTERN.fullmatch(proc):
+            logger.warning(f"Config at {config_path}: pkill_processes[{i}] has invalid value '{proc}'")
+            return None
+        normalized.append(proc)
+    return normalized
+
+
 def get_org_config_path() -> Path:
     """
     Get the organization-level config file path.
 
     Returns:
-        Path to ~/.autocoder/config.yaml
+        Path to ~/.autoforge/config.yaml (falls back to ~/.autocoder/config.yaml)
     """
-    return Path.home() / ".autocoder" / "config.yaml"
+    new_path = Path.home() / ".autoforge" / "config.yaml"
+    if new_path.exists():
+        return new_path
+    # Backward compatibility: check old location
+    old_path = Path.home() / ".autocoder" / "config.yaml"
+    if old_path.exists():
+        return old_path
+    return new_path
 
 
 def load_org_config() -> Optional[dict]:
     """
-    Load organization-level config from ~/.autocoder/config.yaml.
+    Load organization-level config from ~/.autoforge/config.yaml.
+
+    Falls back to ~/.autocoder/config.yaml for backward compatibility.
 
     Returns:
         Dict with parsed org config, or None if file doesn't exist or is invalid
@@ -423,41 +584,48 @@ def load_org_config() -> Optional[dict]:
             config = yaml.safe_load(f)
 
         if not config:
+            logger.warning(f"Org config at {config_path} is empty")
             return None
 
         # Validate structure
         if not isinstance(config, dict):
+            logger.warning(f"Org config at {config_path} must be a YAML dictionary")
             return None
 
         if "version" not in config:
+            logger.warning(f"Org config at {config_path} missing required 'version' field")
             return None
 
         # Validate allowed_commands if present
         if "allowed_commands" in config:
-            allowed = config["allowed_commands"]
-            if not isinstance(allowed, list):
+            if not _validate_command_list(config["allowed_commands"], config_path, "allowed_commands"):
                 return None
-            for cmd in allowed:
-                if not isinstance(cmd, dict):
-                    return None
-                if "name" not in cmd:
-                    return None
-                # Validate that name is a non-empty string
-                if not isinstance(cmd["name"], str) or cmd["name"].strip() == "":
-                    return None
 
         # Validate blocked_commands if present
         if "blocked_commands" in config:
             blocked = config["blocked_commands"]
             if not isinstance(blocked, list):
+                logger.warning(f"Org config at {config_path}: 'blocked_commands' must be a list")
                 return None
-            for cmd in blocked:
+            for i, cmd in enumerate(blocked):
                 if not isinstance(cmd, str):
+                    logger.warning(f"Org config at {config_path}: blocked_commands[{i}] must be a string")
                     return None
+
+        # Validate pkill_processes if present
+        normalized = _validate_pkill_processes(config, config_path)
+        if normalized is None:
+            return None
+        if normalized:
+            config["pkill_processes"] = normalized
 
         return config
 
-    except (yaml.YAMLError, IOError, OSError):
+    except yaml.YAMLError as e:
+        logger.warning(f"Failed to parse org config at {config_path}: {e}")
+        return None
+    except (IOError, OSError) as e:
+        logger.warning(f"Failed to read org config at {config_path}: {e}")
         return None
 
 
@@ -471,7 +639,10 @@ def load_project_commands(project_dir: Path) -> Optional[dict]:
     Returns:
         Dict with parsed YAML config, or None if file doesn't exist or is invalid
     """
-    config_path = project_dir / ".autocoder" / "allowed_commands.yaml"
+    # Check new location first, fall back to old for backward compatibility
+    config_path = project_dir.resolve() / ".autoforge" / "allowed_commands.yaml"
+    if not config_path.exists():
+        config_path = project_dir.resolve() / ".autocoder" / "allowed_commands.yaml"
 
     if not config_path.exists():
         return None
@@ -481,36 +652,43 @@ def load_project_commands(project_dir: Path) -> Optional[dict]:
             config = yaml.safe_load(f)
 
         if not config:
+            logger.warning(f"Project config at {config_path} is empty")
             return None
 
         # Validate structure
         if not isinstance(config, dict):
+            logger.warning(f"Project config at {config_path} must be a YAML dictionary")
             return None
 
         if "version" not in config:
+            logger.warning(f"Project config at {config_path} missing required 'version' field")
             return None
 
         commands = config.get("commands", [])
-        if not isinstance(commands, list):
-            return None
 
         # Enforce 100 command limit
-        if len(commands) > 100:
+        if isinstance(commands, list) and len(commands) > 100:
+            logger.warning(f"Project config at {config_path} exceeds 100 command limit ({len(commands)} commands)")
             return None
 
-        # Validate each command entry
-        for cmd in commands:
-            if not isinstance(cmd, dict):
-                return None
-            if "name" not in cmd:
-                return None
-            # Validate name is a string
-            if not isinstance(cmd["name"], str):
-                return None
+        # Validate each command entry using shared helper
+        if not _validate_command_list(commands, config_path, "commands"):
+            return None
+
+        # Validate pkill_processes if present
+        normalized = _validate_pkill_processes(config, config_path)
+        if normalized is None:
+            return None
+        if normalized:
+            config["pkill_processes"] = normalized
 
         return config
 
-    except (yaml.YAMLError, IOError, OSError):
+    except yaml.YAMLError as e:
+        logger.warning(f"Failed to parse project config at {config_path}: {e}")
+        return None
+    except (IOError, OSError) as e:
+        logger.warning(f"Failed to read project config at {config_path}: {e}")
         return None
 
 
@@ -518,8 +696,12 @@ def validate_project_command(cmd_config: dict) -> tuple[bool, str]:
     """
     Validate a single command entry from project config.
 
+    Checks that the command has a valid name and is not in any blocklist.
+    Called during hierarchy resolution to gate each project command before
+    it is added to the effective allowed set.
+
     Args:
-        cmd_config: Dict with command configuration (name, description, args)
+        cmd_config: Dict with command configuration (name, description)
 
     Returns:
         Tuple of (is_valid, error_message)
@@ -548,15 +730,6 @@ def validate_project_command(cmd_config: dict) -> tuple[bool, str]:
     # Description is optional
     if "description" in cmd_config and not isinstance(cmd_config["description"], str):
         return False, "Description must be a string"
-
-    # Args validation (Phase 1 - just check structure)
-    if "args" in cmd_config:
-        args = cmd_config["args"]
-        if not isinstance(args, list):
-            return False, "Args must be a list"
-        for arg in args:
-            if not isinstance(arg, str):
-                return False, "Each arg must be a string"
 
     return True, ""
 
@@ -628,6 +801,42 @@ def get_project_allowed_commands(project_dir: Optional[Path]) -> set[str]:
     return allowed
 
 
+def get_effective_pkill_processes(project_dir: Optional[Path]) -> set[str]:
+    """
+    Get effective pkill process names after hierarchy resolution.
+
+    Merges processes from:
+    1. DEFAULT_PKILL_PROCESSES (hardcoded baseline)
+    2. Org config pkill_processes
+    3. Project config pkill_processes
+
+    Args:
+        project_dir: Path to the project directory, or None
+
+    Returns:
+        Set of allowed process names for pkill
+    """
+    # Start with default processes
+    processes = DEFAULT_PKILL_PROCESSES.copy()
+
+    # Add org-level pkill_processes
+    org_config = load_org_config()
+    if org_config:
+        org_processes = org_config.get("pkill_processes", [])
+        if isinstance(org_processes, list):
+            processes |= {p for p in org_processes if isinstance(p, str) and p.strip()}
+
+    # Add project-level pkill_processes
+    if project_dir:
+        project_config = load_project_commands(project_dir)
+        if project_config:
+            proj_processes = project_config.get("pkill_processes", [])
+            if isinstance(proj_processes, list):
+                processes |= {p for p in proj_processes if isinstance(p, str) and p.strip()}
+
+    return processes
+
+
 def is_command_allowed(command: str, allowed_commands: set[str]) -> bool:
     """
     Check if a command is allowed (supports patterns).
@@ -692,6 +901,9 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
     # Get effective commands using hierarchy resolution
     allowed_commands, blocked_commands = get_effective_commands(project_dir)
 
+    # Get effective pkill processes (includes org/project config)
+    pkill_processes = get_effective_pkill_processes(project_dir)
+
     # Split into segments for per-command validation
     segments = split_command_segments(command)
 
@@ -709,7 +921,7 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
             # Provide helpful error message with config hint
             error_msg = f"Command '{cmd}' is not allowed.\n"
             error_msg += "To allow this command:\n"
-            error_msg += "  1. Add to .autocoder/allowed_commands.yaml for this project, OR\n"
+            error_msg += "  1. Add to .autoforge/allowed_commands.yaml for this project, OR\n"
             error_msg += "  2. Request mid-session approval (the agent can ask)\n"
             error_msg += "Note: Some commands are blocked at org-level and cannot be overridden."
             return {
@@ -719,13 +931,20 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
 
         # Additional validation for sensitive commands
         if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
-            # Find the specific segment containing this command
-            cmd_segment = get_command_for_validation(cmd, segments)
+            # Find the specific segment containing this command by searching
+            # each segment's extracted commands for a match
+            cmd_segment = ""
+            for segment in segments:
+                if cmd in extract_commands(segment):
+                    cmd_segment = segment
+                    break
             if not cmd_segment:
                 cmd_segment = command  # Fallback to full command
 
             if cmd == "pkill":
-                allowed, reason = validate_pkill_command(cmd_segment)
+                # Pass configured extra processes (beyond defaults)
+                extra_procs = pkill_processes - DEFAULT_PKILL_PROCESSES
+                allowed, reason = validate_pkill_command(cmd_segment, extra_procs if extra_procs else None)
                 if not allowed:
                     return {"decision": "block", "reason": reason}
             elif cmd == "chmod":

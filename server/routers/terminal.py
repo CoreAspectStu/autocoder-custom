@@ -12,8 +12,6 @@ import base64
 import json
 import logging
 import re
-import sys
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -27,13 +25,8 @@ from ..services.terminal_manager import (
     rename_terminal,
     stop_terminal_session,
 )
-
-# Add project root to path for registry import
-_root = Path(__file__).parent.parent.parent
-if str(_root) not in sys.path:
-    sys.path.insert(0, str(_root))
-
-from registry import get_project_path as registry_get_project_path
+from ..utils.project_helpers import get_project_path as _get_project_path
+from ..utils.validation import is_valid_project_name
 
 logger = logging.getLogger(__name__)
 
@@ -46,27 +39,6 @@ class TerminalCloseCode:
     INVALID_PROJECT_NAME = 4000
     PROJECT_NOT_FOUND = 4004
     FAILED_TO_START = 4500
-
-
-def _get_project_path(project_name: str) -> Path | None:
-    """Get project path from registry."""
-    return registry_get_project_path(project_name)
-
-
-def validate_project_name(name: str) -> bool:
-    """
-    Validate project name to prevent path traversal attacks.
-
-    Allows only alphanumeric characters, underscores, and hyphens.
-    Maximum length of 50 characters.
-
-    Args:
-        name: The project name to validate
-
-    Returns:
-        True if valid, False otherwise
-    """
-    return bool(re.match(r"^[a-zA-Z0-9_-]{1,50}$", name))
 
 
 def validate_terminal_id(terminal_id: str) -> bool:
@@ -117,7 +89,7 @@ async def list_project_terminals(project_name: str) -> list[TerminalInfoResponse
     Returns:
         List of terminal info objects
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     project_dir = _get_project_path(project_name)
@@ -150,7 +122,7 @@ async def create_project_terminal(
     Returns:
         The created terminal info
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     project_dir = _get_project_path(project_name)
@@ -176,7 +148,7 @@ async def rename_project_terminal(
     Returns:
         The updated terminal info
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     if not validate_terminal_id(terminal_id):
@@ -208,7 +180,7 @@ async def delete_project_terminal(project_name: str, terminal_id: str) -> dict:
     Returns:
         Success message
     """
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
         raise HTTPException(status_code=400, detail="Invalid project name")
 
     if not validate_terminal_id(terminal_id):
@@ -249,18 +221,12 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     - {"type": "pong"} - Keep-alive response
     - {"type": "error", "message": "..."} - Error message
     """
-    # Accept the WebSocket connection FIRST (required by Starlette)
-    # This allows us to send proper error codes to the client
+    # Always accept WebSocket first to avoid opaque 403 errors
     await websocket.accept()
 
-    # Security: Only allow connections from localhost
-    client_host = websocket.client.host if websocket.client else None
-    if client_host not in ("127.0.0.1", "::1", "localhost", None):
-        await websocket.close(code=4003, reason="Localhost access only")
-        return
-
     # Validate project name
-    if not validate_project_name(project_name):
+    if not is_valid_project_name(project_name):
+        await websocket.send_json({"type": "error", "message": "Invalid project name"})
         await websocket.close(
             code=TerminalCloseCode.INVALID_PROJECT_NAME, reason="Invalid project name"
         )
@@ -268,6 +234,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
 
     # Validate terminal ID
     if not validate_terminal_id(terminal_id):
+        await websocket.send_json({"type": "error", "message": "Invalid terminal ID"})
         await websocket.close(
             code=TerminalCloseCode.INVALID_PROJECT_NAME, reason="Invalid terminal ID"
         )
@@ -276,6 +243,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     # Look up project directory from registry
     project_dir = _get_project_path(project_name)
     if not project_dir:
+        await websocket.send_json({"type": "error", "message": "Project not found in registry"})
         await websocket.close(
             code=TerminalCloseCode.PROJECT_NOT_FOUND,
             reason="Project not found in registry",
@@ -283,6 +251,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
         return
 
     if not project_dir.exists():
+        await websocket.send_json({"type": "error", "message": "Project directory not found"})
         await websocket.close(
             code=TerminalCloseCode.PROJECT_NOT_FOUND,
             reason="Project directory not found",
@@ -292,6 +261,7 @@ async def terminal_websocket(websocket: WebSocket, project_name: str, terminal_i
     # Verify terminal exists in metadata
     terminal_info = get_terminal_info(project_name, terminal_id)
     if not terminal_info:
+        await websocket.send_json({"type": "error", "message": "Terminal not found"})
         await websocket.close(
             code=TerminalCloseCode.PROJECT_NOT_FOUND,
             reason="Terminal not found",

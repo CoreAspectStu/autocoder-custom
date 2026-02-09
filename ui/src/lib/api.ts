@@ -6,6 +6,7 @@ import type {
   ProjectSummary,
   ProjectDetail,
   ProjectPrompts,
+  ProjectSettingsUpdate,
   FeatureListResponse,
   Feature,
   FeatureCreate,
@@ -23,6 +24,7 @@ import type {
   Settings,
   SettingsUpdate,
   ModelsResponse,
+  ProvidersResponse,
   DevServerStatusResponse,
   DevServerConfig,
   TerminalInfo,
@@ -97,6 +99,33 @@ export async function updateProjectPrompts(
   await fetchJSON(`/projects/${encodeURIComponent(name)}/prompts`, {
     method: 'PUT',
     body: JSON.stringify(prompts),
+  })
+}
+
+export async function updateProjectSettings(
+  name: string,
+  settings: ProjectSettingsUpdate
+): Promise<ProjectDetail> {
+  return fetchJSON(`/projects/${encodeURIComponent(name)}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  })
+}
+
+export interface ResetProjectResponse {
+  success: boolean
+  reset_type: 'quick' | 'full'
+  deleted_files: string[]
+  message: string
+}
+
+export async function resetProject(
+  name: string,
+  fullReset: boolean = false
+): Promise<ResetProjectResponse> {
+  const params = fullReset ? '?full_reset=true' : ''
+  return fetchJSON(`/projects/${encodeURIComponent(name)}/reset${params}`, {
+    method: 'POST',
   })
 }
 
@@ -375,6 +404,10 @@ export async function getAvailableModels(): Promise<ModelsResponse> {
   return fetchJSON('/settings/models')
 }
 
+export async function getAvailableProviders(): Promise<ProvidersResponse> {
+  return fetchJSON('/settings/providers')
+}
+
 export async function getSettings(): Promise<Settings> {
   return fetchJSON('/settings')
 }
@@ -414,6 +447,16 @@ export async function stopDevServer(
 
 export async function getDevServerConfig(projectName: string): Promise<DevServerConfig> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/devserver/config`)
+}
+
+export async function updateDevServerConfig(
+  projectName: string,
+  customCommand: string | null
+): Promise<DevServerConfig> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/devserver/config`, {
+    method: 'PATCH',
+    body: JSON.stringify({ custom_command: customCommand }),
+  })
 }
 
 // ============================================================================
