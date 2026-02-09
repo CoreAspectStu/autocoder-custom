@@ -1,3 +1,7 @@
+# Core dumps
+core
+ui/core
+
 # Agent-generated output directories
 generations/
 automaker/
