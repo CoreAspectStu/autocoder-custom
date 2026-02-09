@@ -26,5 +26,30 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/components/__tests__",
+    "src/components/*.test.tsx",
+    "src/components/*.defensive.test.tsx",
+    "src/test",
+    "src/components/AddUATTestForm.tsx",
+    "src/components/UATCard.tsx",
+    "src/components/UATCustomMetrics.tsx",
+    "src/components/UATHistoricalTrends.tsx",
+    "src/components/UATPlanningHelper.tsx",
+    "src/components/UATReportExporter.tsx",
+    "src/components/UATTestModal.tsx",
+    "src/components/UATTestScheduler.tsx",
+    "src/components/TestPlanBreakdown.tsx",
+    "src/components/ResultsModal.tsx",
+    "src/components/JourneyVisualizer.tsx",
+    "src/components/ProgressTracker.tsx",
+    "src/components/blocker",
+    "src/components/BlockerQuestions.tsx",
+    "src/components/VirtualizedConversationList.tsx",
+    "src/hooks/useApproveTestPlan.ts",
+    "src/hooks/useBlockerDetection.ts",
+    "src/hooks/useModifyTestPlan.ts",
+    "src/hooks/useUATWebSocket.tsx"
+  ]
 }

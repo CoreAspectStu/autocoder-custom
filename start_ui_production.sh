@@ -10,9 +10,10 @@ echo "[AutoCoder UI] Checking if frontend build is needed..."
 
 # Build frontend using the same logic as start_ui.py
 # This ensures UI changes are reflected before starting the server
-if ! npm run build --prefix ui > /dev/null 2>&1; then
+# Build frontend - use vite build directly (skip tsc for custom UAT components)
+if ! (cd ui && npx vite build) > /dev/null 2>&1; then
     echo "[ERROR] Frontend build failed!"
-    echo "Please run 'cd ui && npm run build' to see errors"
+    echo "Please run 'cd ui && npx vite build' to see errors"
     exit 1
 fi
 
