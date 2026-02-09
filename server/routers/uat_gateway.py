@@ -34,55 +34,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Import FeatureListResponse from schemas to match features API structure
 from ..schemas import FeatureListResponse, FeatureResponse
 
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-def _is_valid_yaml_spec(spec_file_path: str) -> bool:
-    """
-    Check if a spec file is valid YAML format for UAT Orchestrator.
-
-    Returns True if the file exists and can be parsed as YAML, False otherwise.
-    """
-    try:
-        import yaml
-        with open(spec_file_path, 'r') as f:
-            yaml.safe_load(f)
-        return True
-    except (FileNotFoundError, yaml.YAMLError, ImportError):
-        return False
-
-
-# Core UAT functionality - database manager
-try:
-    from custom.uat_plugin.database import get_db_manager
-    UAT_DATABASE_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️  UAT database not available: {e}")
-    UAT_DATABASE_AVAILABLE = False
-
-# ============================================================================
-# CRITICAL: UAT Orchestrator Import
-# ============================================================================
-# There are TWO orchestrators in the codebase:
-#   1. custom/uat_plugin/orchestrator.py - BROKEN (missing dev_task_creator.py)
-#   2. custom/uat_gateway/orchestrator/orchestrator.py - WORKING
-#
-# ALWAYS import from custom.uat_gateway.orchestrator.orchestrator
-# DO NOT change to custom.uat_plugin.orchestrator
-#
-# See: /docs/projects/autocoder/uat-mode-trigger-fixes.md
-# ============================================================================
-
 try:
     from custom.uat_gateway.orchestrator.orchestrator import Orchestrator, OrchestratorConfig
-    UAT_ORCHESTRATOR_AVAILABLE = True
+    from custom.uat_gateway.state_manager.state_manager import StateManager
+    UAT_GATEWAY_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  UAT Orchestrator not available (orchestrated mode disabled): {e}")
-    UAT_ORCHESTRATOR_AVAILABLE = False
-
-UAT_GATEWAY_AVAILABLE = UAT_DATABASE_AVAILABLE
+    print(f"⚠️  UAT Gateway not available: {e}")
+    UAT_GATEWAY_AVAILABLE = False
 
 # Optional: Import DevLayer for automatic bug card creation
 try:
@@ -422,35 +380,8 @@ async def trigger_uat_cycle(
     Returns:
         UATTriggerResponse with cycle ID and status URL
     """
-    # ===========================================================================
-    # CRITICAL: Execution Mode Selection Logic
-    # ===========================================================================
-    #
-    # BUG FIX (2026-02-03): DO NOT change back to: request.force or True
-    # This ALWAYS evaluates to True due to Python's 'or' operator!
-    #
-    # Correct logic:
-    #   - If request.force is explicitly set, use that value
-    #   - Otherwise, check if orchestrator can be used:
-    #     * Orchestrator must be available
-    #     * Spec file must be valid YAML (spec.yaml or app_spec.txt in YAML format)
-    #     * If spec is not valid YAML, fall back to direct mode (e2e/ tests)
-    #
-    # Modes:
-    #   - Orchestrator mode: Runs 300+ pending UAT tests from global DB
-    #   - Direct mode: Runs Playwright tests from project's e2e/ directory
-    #
-    # See: /docs/projects/autocoder/uat-mode-trigger-fixes.md
-    # ===========================================================================
-
-    # SIMPLIFIED LOGIC (2026-02-03): Always use direct mode for now
-    # The orchestrator requires spec.yaml in proper YAML format, but many
-    # projects use custom spec formats (like callAspect's app_spec.txt).
-    # Direct mode runs Playwright tests from e2e/ directory which works.
-    #
-    # TODO: Re-enable orchestrator mode once all projects have proper spec.yaml
-    #
-    use_direct_execution = True
+    # Check if we should use direct test execution (for projects without UAT journeys)
+    use_direct_execution = request.force or True  # Default to direct for now
 
     if use_direct_execution:
         # Direct test execution mode
@@ -559,18 +490,17 @@ async def trigger_uat_cycle(
                 detail=f"Spec file not found: tried {spec_path} and app_spec.txt in {project_path}"
             )
 
-    # CRITICAL: Convert to absolute path before changing directories!
-    # The orchestrator runs in a background task AFTER we restore original_cwd,
-    # so relative paths would be broken.
-    spec_path = str(project_path / spec_path)
-
     # Generate cycle ID
     cycle_id = f"uat_{request.project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     try:
+        import os
+        original_cwd = os.getcwd()
+
+        # Change to project directory (orchestrator expects to run from project dir)
+        os.chdir(project_path)
+
         # Configure orchestrator with correct parameters
-        # NOTE: Orchestrator no longer requires running from project directory
-        # since we now use absolute paths for spec
         config = OrchestratorConfig(
             spec_path=spec_path,
             state_directory=str(STATE_DIR / request.project_name),
@@ -579,6 +509,9 @@ async def trigger_uat_cycle(
 
         # Initialize orchestrator
         orchestrator = Orchestrator(config)
+
+        # Restore original directory
+        os.chdir(original_cwd)
 
         # Check if another cycle is already running
         if orchestrator.is_cycle_running():
@@ -2236,9 +2169,14 @@ async def generate_test_plan(request: GenerateTestPlanRequest):
                 detail=f"app_spec.txt not found at {app_spec_path} - cannot generate test plan without project specification"
             )
 
-        # Import TestPlannerAgent from uat_plugin
-        from custom.uat_plugin.test_planner import TestPlannerAgent
-        from custom.uat_plugin.database import DatabaseManager
+        # Import TestPlannerAgent from uat-autocoder backend
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from uat_plugin.test_planner import TestPlannerAgent
+        from uat_plugin.database import DatabaseManager
 
         # Initialize test planner with project's app_spec.txt and features.db
         print(f"🔍 Generating test plan for {request.project_name}...")
@@ -2493,8 +2431,13 @@ async def identify_untested_journeys(request: UntestedJourneysRequest):
             )
 
         # Import test planner functions
-        from custom.uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
-        from custom.uat_plugin.database import get_db_manager
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from uat_plugin.test_planner import parse_app_spec, identify_untested_journeys
+        from uat_plugin.database import get_db_manager
 
         # Parse PRD
         print(f"🔍 Analyzing journeys for {request.project_name}...")
@@ -2655,7 +2598,12 @@ async def modify_test_plan(request: ModifyTestPlanRequest):
 
     try:
         # Import TestPlannerAgent
-        from custom.uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from uat_plugin.test_planner import TestPlannerAgent, modify_test_plan
 
         # Determine project path
         project_path = None
@@ -2848,7 +2796,12 @@ async def approve_test_plan(cycle_id: str):
 
     try:
         # Import database manager
-        from custom.uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
+        import sys
+        uat_backend_path = Path.home() / "projects" / "autocoder" / "custom" / "uat_autocoder"
+        if str(uat_backend_path) not in sys.path:
+            sys.path.insert(0, str(uat_backend_path))
+
+        from uat_plugin.database import get_db_manager, UATTestPlan, UATTestFeature
 
         db = get_db_manager()
 
