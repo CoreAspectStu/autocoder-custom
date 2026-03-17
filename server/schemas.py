@@ -90,57 +90,11 @@ class ProjectSettingsUpdate(BaseModel):
 
 class FeatureBase(BaseModel):
     """Base feature attributes."""
-    category: str = Field(..., min_length=1, max_length=100)
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(..., min_length=1)
-    steps: list[str] = Field(default_factory=list, description="Array of test/implementation steps (JSON array of strings)")
-    dependencies: list[int] = Field(default_factory=list, description="List of feature IDs this feature depends on")
-
-    @field_validator('steps', mode='before')
-    @classmethod
-    def validate_steps(cls, v: list[str] | None) -> list[str]:
-        """Validate that steps is a non-empty array of strings."""
-        # Handle NULL values from database - convert to empty list
-        if v is None:
-            return []
-
-        if not isinstance(v, list):
-            raise ValueError('steps must be a JSON array of strings')
-
-        # Allow empty steps list (some features may not have explicit steps)
-        if len(v) == 0:
-            return v
-
-        # Filter out empty/whitespace-only steps
-        valid_steps = [step for step in v if step.strip()]
-
-        # If all steps were empty, return empty list
-        if not valid_steps:
-            return valid_steps
-
-        # Validate non-empty steps
-        for i, step in enumerate(valid_steps):
-            if not isinstance(step, str):
-                raise ValueError(f'step {i+1} must be a string, got {type(step).__name__}')
-
-        return valid_steps
-
-    @field_validator('dependencies', mode='before')
-    @classmethod
-    def validate_dependencies(cls, v: list[int] | None) -> list[int]:
-        """Validate that dependencies is an array of positive integers."""
-        # Handle NULL values from database - convert to empty list
-        if v is None:
-            return []
-
-        if not isinstance(v, list):
-            raise ValueError('dependencies must be a JSON array of integers')
-
-        for dep_id in v:
-            if not isinstance(dep_id, int) or dep_id < 1:
-                raise ValueError(f'dependency ID must be a positive integer, got {dep_id}')
-
-        return v
+    category: str
+    name: str
+    description: str
+    steps: list[str]
+    dependencies: list[int] = Field(default_factory=list)  # Optional dependencies
 
 
 class FeatureCreate(FeatureBase):
@@ -166,9 +120,33 @@ class FeatureResponse(FeatureBase):
     in_progress: bool
     blocked: bool = False  # Computed: has unmet dependencies
     blocking_dependencies: list[int] = Field(default_factory=list)  # Computed
+    needs_human_input: bool = False
+    human_input_request: dict | None = None
+    human_input_response: dict | None = None
 
     class Config:
         from_attributes = True
+
+
+class HumanInputField(BaseModel):
+    """Schema for a single human input field."""
+    id: str
+    label: str
+    type: Literal["text", "textarea", "select", "boolean"] = "text"
+    required: bool = True
+    placeholder: str | None = None
+    options: list[dict] | None = None  # For select: [{value, label}]
+
+
+class HumanInputRequest(BaseModel):
+    """Schema for an agent's human input request."""
+    prompt: str
+    fields: list[HumanInputField]
+
+
+class HumanInputResponse(BaseModel):
+    """Schema for a human's response to an input request."""
+    fields: dict[str, str | bool | list[str]]
 
 
 class FeatureListResponse(BaseModel):
@@ -176,6 +154,7 @@ class FeatureListResponse(BaseModel):
     pending: list[FeatureResponse]
     in_progress: list[FeatureResponse]
     done: list[FeatureResponse]
+    needs_human_input: list[FeatureResponse] = Field(default_factory=list)
 
 
 class FeatureBulkCreate(BaseModel):
@@ -199,7 +178,7 @@ class DependencyGraphNode(BaseModel):
     id: int
     name: str
     category: str
-    status: Literal["pending", "in_progress", "done", "blocked"]
+    status: Literal["pending", "in_progress", "done", "blocked", "needs_human_input"]
     priority: int
     dependencies: list[int]
 
@@ -263,7 +242,7 @@ class AgentStartRequest(BaseModel):
 
 class AgentStatus(BaseModel):
     """Current agent status."""
-    status: Literal["stopped", "running", "paused", "crashed"]
+    status: Literal["stopped", "running", "paused", "crashed", "pausing", "paused_graceful"]
     pid: int | None = None
     started_at: datetime | None = None
     yolo_mode: bool = False
@@ -303,6 +282,7 @@ class WSProgressMessage(BaseModel):
     in_progress: int
     total: int
     percentage: float
+    needs_human_input: int = 0
 
 
 class WSFeatureUpdateMessage(BaseModel):
@@ -557,13 +537,11 @@ class DevServerConfigResponse(BaseModel):
     detected_command: str | None = None
     custom_command: str | None = None
     effective_command: str | None = None
-    assigned_port: int | None = None
 
 
 class DevServerConfigUpdate(BaseModel):
     """Request schema for updating dev server configuration."""
     custom_command: str | None = None  # None clears the custom command
-    assigned_port: int | None = None  # Change the assigned port (4000-4099)
 
 
 # ============================================================================

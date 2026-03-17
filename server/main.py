@@ -32,24 +32,17 @@ from .routers import (
     agent_router,
     analytics_router,
     assistant_chat_router,
-    autoscaler_router,
-    devlayer_router,
     devserver_router,
-    emergency_router,
     expand_project_router,
     features_router,
     filesystem_router,
     messages_router,
     projects_router,
-    quality_gate_router,
+    scaffold_router,
     schedules_router,
     settings_router,
     spec_creation_router,
-    status_router,
-    systemd_router,
     terminal_router,
-    uat_gateway_router,
-    reports_router,
 )
 from .schemas import SetupStatus
 from .services.assistant_chat_session import cleanup_all_sessions as cleanup_assistant_sessions
@@ -89,25 +82,6 @@ async def lifespan(app: FastAPI):
     # Start the scheduler service
     scheduler = get_scheduler()
     await scheduler.start()
-
-    # Initialize UAT execution router db_manager (Feature #45)
-    try:
-        import sys
-        from pathlib import Path
-        uat_project_path = Path("/home/stu/projects/autocoder-projects/UAT")
-        if str(uat_project_path) not in sys.path:
-            sys.path.insert(0, str(uat_project_path))
-
-        from api.execution import set_database_manager
-        from uat_plugin.database import get_db_manager
-
-        uat_db_manager = get_db_manager()
-        set_database_manager(uat_db_manager)
-        print("✅ UAT execution router db_manager initialized (Feature #45)")
-    except ImportError as e:
-        print(f"⚠️  Could not initialize UAT execution router db_manager: {e}")
-    except Exception as e:
-        print(f"⚠️  Error initializing UAT execution router: {e}")
 
     yield
 
@@ -190,24 +164,15 @@ if not ALLOW_REMOTE:
 app.include_router(projects_router)
 app.include_router(features_router)
 app.include_router(agent_router)
-app.include_router(analytics_router)
 app.include_router(schedules_router)
 app.include_router(devserver_router)
-app.include_router(emergency_router)
 app.include_router(spec_creation_router)
 app.include_router(expand_project_router)
 app.include_router(filesystem_router)
 app.include_router(assistant_chat_router)
 app.include_router(settings_router)
 app.include_router(terminal_router)
-app.include_router(status_router)
-app.include_router(messages_router)
-app.include_router(devlayer_router)
-app.include_router(quality_gate_router)
-app.include_router(uat_gateway_router)
-app.include_router(systemd_router)
-app.include_router(autoscaler_router)
-app.include_router(reports_router)
+app.include_router(scaffold_router)
 
 
 # ============================================================================

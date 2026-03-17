@@ -181,6 +181,61 @@ export async function createFeaturesBulk(
   })
 }
 
+export async function resolveHumanInput(
+  projectName: string,
+  featureId: number,
+  response: { fields: Record<string, string | boolean | string[]> }
+): Promise<Feature> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/features/${featureId}/resolve-human-input`, {
+    method: 'POST',
+    body: JSON.stringify(response),
+  })
+}
+
+// ============================================================================
+// Dependency Graph API
+// ============================================================================
+
+export async function getDependencyGraph(projectName: string): Promise<DependencyGraph> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/features/graph`)
+}
+
+export async function addDependency(
+  projectName: string,
+  featureId: number,
+  dependencyId: number
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
+    { method: 'POST' }
+  )
+}
+
+export async function removeDependency(
+  projectName: string,
+  featureId: number,
+  dependencyId: number
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
+    { method: 'DELETE' }
+  )
+}
+
+export async function setDependencies(
+  projectName: string,
+  featureId: number,
+  dependencyIds: number[]
+): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
+  return fetchJSON(
+    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ dependency_ids: dependencyIds }),
+    }
+  )
+}
+
 // ============================================================================
 // Dependency Graph API
 // ============================================================================
@@ -267,6 +322,18 @@ export async function pauseAgent(projectName: string): Promise<AgentActionRespon
 
 export async function resumeAgent(projectName: string): Promise<AgentActionResponse> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/agent/resume`, {
+    method: 'POST',
+  })
+}
+
+export async function gracefulPauseAgent(projectName: string): Promise<AgentActionResponse> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/agent/graceful-pause`, {
+    method: 'POST',
+  })
+}
+
+export async function gracefulResumeAgent(projectName: string): Promise<AgentActionResponse> {
+  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/agent/graceful-resume`, {
     method: 'POST',
   })
 }
@@ -544,220 +611,4 @@ export async function deleteSchedule(
 
 export async function getNextScheduledRun(projectName: string): Promise<NextRunResponse> {
   return fetchJSON(`/projects/${encodeURIComponent(projectName)}/schedules/next`)
-}
-
-// ============================================================================
-// UAT Tests API (queries uat_tests.db instead of features.db)
-// ============================================================================
-
-export async function listUATTests(project?: string): Promise<FeatureListResponse> {
-  const url = project ? `/uat/tests?project=${encodeURIComponent(project)}` : '/uat/tests'
-  return fetchJSON(url)
-}
-
-export async function getUATTest(testId: number): Promise<Feature> {
-  return fetchJSON(`/uat/tests/${testId}`)
-}
-
-export async function getUATStatsSummary(): Promise<{
-  total: number
-  passing: number
-  in_progress: number
-  percentage: number
-}> {
-  return fetchJSON('/uat/stats/summary')
-}
-
-export async function createUATTest(testData: {
-  scenario: string
-  journey: string
-  phase: 'smoke' | 'functional' | 'regression' | 'uat'
-  steps: string[]
-  expected_result: string
-  category?: string
-  priority?: number
-}): Promise<{
-  success: boolean
-  test_id: number
-  message: string
-  test: Feature
-}> {
-  const response = await fetch('/api/uat/tests', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(testData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to create UAT test')
-  }
-
-  return response.json()
-}
-
-// ============================================================================
-// Blocker Management API
-// ============================================================================
-
-export async function detectBlockers(projectName: string, projectPath: string): Promise<{
-  blockers_detected: boolean
-  blockers: Array<{
-    id: string
-    blocker_type: string
-    service: string
-    key_name?: string
-    description: string
-    affected_tests: string[]
-    suggested_actions: string[]
-    priority: string
-  }>
-  summary: string
-}> {
-  const response = await fetch('/api/blocker/detect', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project_name: projectName, project_path: projectPath })
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to detect blockers')
-  }
-
-  return response.json()
-}
-
-export async function respondToBlocker(request: {
-  blocker_id: string
-  action: string
-  value?: string
-  project_name: string
-}): Promise<{
-  blocker_id: string
-  status: string
-  message: string
-}> {
-  const response = await fetch('/api/blocker/respond', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to resolve blocker')
-  }
-
-  return response.json()
-}
-
-export async function testConnection(request: {
-  blocker_id: string
-  blocker_type: string
-  service: string
-  test_params?: Record<string, any>
-  timeout?: number
-}): Promise<{
-  blocker_id: string
-  success: boolean
-  message: string
-  details?: Record<string, any>
-}> {
-  const response = await fetch('/api/blocker/test-connection', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to test connection')
-  }
-
-  return response.json()
-}
-
-export async function getPendingBlockers(projectName: string): Promise<{
-  project_name: string
-  pending_blockers: any[]
-  resolved_count: number
-  total_count: number
-}> {
-  return fetchJSON(`/blocker/pending/${projectName}`)
-}
-
-export async function getUATProjectContext(
-  projectName: string
-): Promise<{
-  success: boolean
-  project_name: string
-  has_spec: boolean
-  spec_content: string | null
-  completed_features_count: number
-  completed_features: Array<{
-    id: number
-    priority: number
-    category: string
-    name: string
-    description: string
-    completed_at: string | null
-  }>
-  uat_cycles_count: number
-  uat_cycles: Array<{
-    id: number
-    name: string
-    phase: string
-    journey: string
-    status: string
-    result: string
-  }>
-  message: string
-}> {
-  return fetchJSON(`/uat/context/${encodeURIComponent(projectName)}`)
-}
-
-export async function triggerUATExecution(
-  projectName: string
-): Promise<{
-  success: boolean
-  message: string
-  cycle_id: string
-  agents_spawned?: number
-  tests_assigned?: number
-  execution_mode?: string
-}> {
-  return fetchJSON('/uat/trigger', {
-    method: 'POST',
-    body: JSON.stringify({
-      project_name: projectName
-    }),
-  })
-}
-
-export async function getUATProgress(cycleId: string): Promise<{
-  cycle_id: string
-  total_tests: number
-  passed: number
-  failed: number
-  running: number
-  pending: number
-  active_agents: number
-  started_at: string | null
-  updated_at: string
-  tests?: Array<{
-    id: number
-    scenario: string
-    phase: string
-    journey: string
-    test_type: string
-    status: string
-    duration?: number
-    devlayer_card_id?: number
-    error?: string
-  }>
-}> {
-  return fetchJSON(`/uat/progress/${encodeURIComponent(cycleId)}`)
 }
