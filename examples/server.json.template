@@ -1,0 +1,9 @@
+{
+  "dev_server": {
+    "command": "PORT={port} npm run dev",
+    "port": null,
+    "url": "http://localhost:{port}",
+    "health_check": "/",
+    "auto_start": false
+  }
+}

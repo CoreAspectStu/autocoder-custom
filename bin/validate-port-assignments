@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""
+Port Assignment Validator for AutoCoder/AutoForge Projects
+===========================================================
+
+Validates that all AutoCoder/AutoForge projects follow the port allocation policy:
+- AutoCoder/AutoForge apps: 4000-4999
+- Local/manual services: 3000-3999
+- System services: 8000-8999
+
+Usage:
+    ./bin/validate-port-assignments              # Check all projects
+    ./bin/validate-port-assignments --fix        # Fix out-of-range ports
+    ./bin/validate-port-assignments <project>    # Check specific project
+"""
+
+import sys
+from pathlib import Path
+
+# Add parent directory to Python path
+_root = Path(__file__).parent.parent
+sys.path.insert(0, str(_root))
+
+from registry import list_registered_projects
+from server.services.project_config import (
+    DEVSERVER_PORT_MIN,
+    DEVSERVER_PORT_MAX,
+    get_assigned_port,
+    set_assigned_port,
+    _load_config,
+    get_next_available_port,
+)
+
+
+def validate_all_projects(fix=False):
+    """Validate port assignments for all registered projects."""
+    projects = list_registered_projects()
+
+    if not projects:
+        print("No projects registered.")
+        return 0
+
+    issues = []
+    fixed = []
+
+    print(f"Validating {len(projects)} projects...")
+    print(f"Valid port range: {DEVSERVER_PORT_MIN}-{DEVSERVER_PORT_MAX}\n")
+
+    for name, info in projects.items():
+        project_path = Path(info.get("path", ""))
+
+        if not project_path.exists():
+            issues.append(f"❌ {name}: Project path does not exist: {project_path}")
+            continue
+
+        config = _load_config(project_path)
+        assigned_port = config.get("assigned_port")
+
+        if assigned_port is None:
+            print(f"⚠️  {name}: No port assigned")
+            if fix:
+                try:
+                    new_port = get_next_available_port()
+                    set_assigned_port(project_path, new_port)
+                    fixed.append(f"✅ {name}: Assigned port {new_port}")
+                    print(f"   → Fixed: Assigned port {new_port}")
+                except Exception as e:
+                    issues.append(f"❌ {name}: Failed to assign port: {e}")
+            continue
+
+        if not isinstance(assigned_port, int):
+            issues.append(f"❌ {name}: Invalid port type (not int): {assigned_port}")
+            continue
+
+        if not (DEVSERVER_PORT_MIN <= assigned_port <= DEVSERVER_PORT_MAX):
+            issues.append(
+                f"❌ {name}: Port {assigned_port} out of range "
+                f"({DEVSERVER_PORT_MIN}-{DEVSERVER_PORT_MAX})"
+            )
+            if fix:
+                try:
+                    new_port = get_next_available_port()
+                    set_assigned_port(project_path, new_port)
+                    fixed.append(
+                        f"✅ {name}: Changed port {assigned_port} → {new_port}"
+                    )
+                    print(f"   → Fixed: Changed port {assigned_port} → {new_port}")
+                except Exception as e:
+                    issues.append(f"❌ {name}: Failed to reassign port: {e}")
+        else:
+            print(f"✅ {name}: Port {assigned_port} (valid)")
+
+    # Summary
+    print("\n" + "="*60)
+    if issues:
+        print(f"\n❌ Found {len(issues)} issue(s):\n")
+        for issue in issues:
+            print(f"  {issue}")
+
+    if fixed:
+        print(f"\n✅ Fixed {len(fixed)} issue(s):\n")
+        for fix_msg in fixed:
+            print(f"  {fix_msg}")
+
+    if not issues and not fixed:
+        print("\n✅ All projects have valid port assignments!")
+
+    print("="*60)
+
+    return len(issues)
+
+
+def main():
+    """Main entry point."""
+    args = sys.argv[1:]
+
+    fix_mode = "--fix" in args
+    if fix_mode:
+        args.remove("--fix")
+
+    if args and args[0] in ["-h", "--help"]:
+        print(__doc__)
+        return 0
+
+    if args:
+        print(f"Specific project validation not yet implemented: {args[0]}")
+        return 1
+
+    exit_code = validate_all_projects(fix=fix_mode)
+    return 1 if exit_code > 0 else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

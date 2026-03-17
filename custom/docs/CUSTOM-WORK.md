@@ -44,7 +44,7 @@ This document lists ALL custom modifications to this AutoCoder instance that mus
 - Added port change endpoint (`/api/status/change-port`)
 - Added XML spec viewer endpoint (`/api/status/xml-spec`)
 - Extended from ~400 lines to 1597 lines
-- Dev server controls: Start/Stop buttons for projects on ports 4000-4099
+- Dev server controls: Start/Stop buttons for projects on ports 4000-4999
 - Port management with conflict detection
 - Health metrics and progress tracking
 - Auto-refresh every 5 seconds
@@ -192,7 +192,7 @@ cp ~/.config/systemd/user/autocoder-ui.service ~/backup/autocoder-ui.service.bac
 **Features:**
 - Starts UI in background tmux session
 - Can run from any directory via `autocoder` alias (see `~/bin/autocoder`)
-- Port management: 4000-4099 range for SSH tunnel compatibility
+- Port management: 4000-4999 range for SSH tunnel compatibility
 - Not recommended for production (use systemd service instead)
 
 **Preservation Strategy:**

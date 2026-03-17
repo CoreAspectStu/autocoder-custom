@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Inline Limit Adjustment**: Edit CPU, memory, and process limits directly (applies with restart)
   - **Emergency Stop**: Kill all processes and reset agents instantly
   - **Dev Server Controls**: One-click start/stop buttons for project servers
-  - **Port Management**: Change ports (4000-4099) with conflict detection
+  - **Port Management**: Change ports (4000-4999) with conflict detection
   - **XML Spec Viewer**: Modal UI for viewing app specifications
   - **Health Metrics**: Feature completion, progress tracking
   - **Auto-refresh**: Updates every 5 seconds
@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Log retrieval via journalctl
   - Safe limit updates with automatic backup and rollback
 - **Remote Server Management** - `remote-start.sh` (tmux-based server control)
-- **Port Assignment System** - 4000-4099 range for SSH tunnel compatibility
+- **Port Assignment System** - 4000-4999 range for AutoCoder/AutoForge projects (enforced)
 - **Custom Documentation** - `custom/` directory with guides and patches
 
 ### Updating from Upstream

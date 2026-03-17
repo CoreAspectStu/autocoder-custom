@@ -88,10 +88,10 @@ autocoder/
 │   │   ├── remote-server-setup.md    # Complete setup instructions
 │   │   ├── auth-settings-customization.md  # Auth system (deprecated)
 │   │   ├── future-improvements.md    # Feature wishlist
-│   │   └── ports-4000-4099.txt       # SSH config port mappings
+│   │   └── ports-4000-4999.txt       # SSH config port mappings
 │   ├── patches/                       # Patch system for upstream updates
 │   │   ├── apply-remote-access.sh    # Auto-apply script (all patches)
-│   │   ├── port-assignment.patch     # Port assignment system (4000-4099)
+│   │   ├── port-assignment.patch     # Port assignment system (4000-4999)
 │   │   └── README.md                  # Patch documentation
 │   └── auth_config.py                 # [DEPRECATED] Auth utilities (unused)
 │
@@ -151,10 +151,10 @@ autocoder/
 | `remote-server-setup.md` | `custom/docs/` | Detailed server setup guide | ~3000 |
 | `auth-settings-customization.md` | `custom/docs/` | [DEPRECATED] Auth settings (removed 2026-01-22) | ~3200 |
 | `future-improvements.md` | `custom/docs/` | Feature wishlist from brainstorming | ~800 |
-| `ports-4000-4099.txt` | `custom/docs/` | SSH tunnel port mappings | ~100 |
+| `ports-4000-4999.txt` | `custom/docs/` | SSH tunnel port mappings | ~100 |
 | `remote-server-setup.md` | `custom/docs/` | Full setup instructions | ~3500 |
 | `future-improvements.md` | `custom/docs/` | Strategic improvements from party-mode | ~600 |
-| `ports-4000-4099.txt` | `custom/docs/` | SSH tunnel config | - |
+| `ports-4000-4999.txt` | `custom/docs/` | SSH tunnel config | - |
 | `patches/README.md` | `custom/patches/` | Patch system docs | ~300 |
 | `docs/README.md` | `docs/` | Documentation index | ~150 |
 
@@ -176,7 +176,7 @@ autocoder/
 - `remote-start.sh` - Session management (start/stop/status/logs/attach)
 - Xvfb integration for headless Playwright browsers
 - tmux sessions that survive SSH disconnects
-- Port 8888 for Web UI, 4000-4099 for dev servers
+- Port 8888 for Web UI, 4000-4999 for dev servers
 
 **Quick Start:**
 ```bash
@@ -285,7 +285,7 @@ cd custom/mission_control_ui
   - View Spec (opens modal with formatted spec - XML tags converted to readable headings)
   - Open App (dev server URL if running)
   - View Logs (agent tmux session logs)
-- **Port Information:** Banner showing 4000-4099 port convention
+- **Port Information:** Banner showing 4000-4999 port convention
 - **Real-time Updates:** Auto-refresh every 5 seconds
 - **Project Metadata:** Project type, assigned port, spec status
 - **Authentication Settings:** Toggle between Claude Login and API Key authentication (see #4 below)
@@ -316,7 +316,7 @@ cd custom/mission_control_ui
 **Problem Solved:** Dev servers use framework defaults (3000, 5173) incompatible with SSH tunnels
 
 **How It Works:**
-- Projects automatically assigned ports in 4000-4099 range
+- Projects automatically assigned ports in 4000-4999 range
 - Port stored in `.autocoder/config.json` per project
 - Conflict detection across all projects
 - Templates use `{port}` placeholder (e.g., `npm run dev -- --port {port}`)
@@ -391,7 +391,7 @@ cd custom/mission_control_ui
   - Hierarchical formatting with proper indentation for nested XML sections
   - Removed non-functional "Open Editor" button
   - Real-time updates every 5 seconds
-- ✅ **Automatic port assignment (4000-4099 range)** - Dev servers now automatically assigned ports from SSH-friendly range
+- ✅ **Automatic port assignment (4000-4999 range)** - Dev servers now automatically assigned ports from SSH-friendly range
 - ✅ Added TL;DR section to `custom/README.md`
 - ✅ Implemented `doctor` command in `remote-start.sh` (7-step health check)
 - ✅ Improved port detection in `status.py` (lsof-based with socket fallback)
@@ -406,7 +406,7 @@ cd custom/mission_control_ui
 ### 2026-01-19
 - ✅ Created patch system in `patches/`
 - ✅ Added comprehensive remote server documentation
-- ✅ Implemented SSH tunnel port conventions (4000-4099)
+- ✅ Implemented SSH tunnel port conventions (4000-4999)
 
 ### 2026-01-18
 - ✅ Created `status.py` router with port detection
@@ -493,7 +493,7 @@ ssh -L 8888:localhost:8888 \
 
 - **Web UI:** http://localhost:8888
 - **Status Page:** http://localhost:8888/status
-- **Project Dev Servers:** http://localhost:4000-4099
+- **Project Dev Servers:** http://localhost:4000-4999
 
 ### Slash Commands (Global)
 
@@ -568,7 +568,7 @@ These are documented in the inventory above with `[CUSTOM]` tags.
 ### Port Convention Rationale
 
 - **3000-3999** - Reserved for LOCAL development (not forwarded)
-- **4000-4099** - AutoCoder dev servers (forwarded via SSH)
+- **4000-4999** - AutoCoder dev servers (forwarded via SSH)
 - **8888** - AutoCoder Web UI (fixed, not configurable)
 
 This prevents port conflicts between local and remote development.

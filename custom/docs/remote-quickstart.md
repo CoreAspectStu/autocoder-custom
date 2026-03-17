@@ -18,7 +18,7 @@ autocoder-ui
 | Range | Purpose |
 |-------|---------|
 | **3000-3999** | Reserved for LOCAL only (never forwarded) |
-| **4000-4099** | AutoCoder dev servers (via SSH tunnel) |
+| **4000-4999** | AutoCoder dev servers (via SSH tunnel) |
 
 ## Tunnel Cheat Sheet
 
@@ -28,7 +28,7 @@ autocoder-ui
 | `localhost:4000` | → | `:4000` Project 1 |
 | `localhost:4001` | → | `:4001` Project 2 |
 
-See `docs/ports-4000-4099.txt` for full SSH config port list.
+See `docs/ports-4000-4999.txt` for full SSH config port list.
 
 ## Commands
 

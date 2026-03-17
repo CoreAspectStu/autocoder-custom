@@ -69,8 +69,11 @@ class ProjectConfig(TypedDict):
 # =============================================================================
 
 # Port range for remote dev servers (SSH tunnel friendly)
+# AutoCoder/AutoForge projects: 4000-4999 (reserved range)
+# Local/manual services: 3000-3999
+# System services: 8000-8999
 DEVSERVER_PORT_MIN = 4000
-DEVSERVER_PORT_MAX = 4099
+DEVSERVER_PORT_MAX = 4999
 
 # Mapping of project types to their default dev command templates
 # {port} placeholder will be replaced with assigned port

@@ -162,3 +162,4 @@ Pipfile.lock
 .temp/
 tmpclaude-*-cwd
 ui/test-results/
+.scratch/
