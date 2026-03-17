@@ -237,50 +237,6 @@ export async function setDependencies(
 }
 
 // ============================================================================
-// Dependency Graph API
-// ============================================================================
-
-export async function getDependencyGraph(projectName: string): Promise<DependencyGraph> {
-  return fetchJSON(`/projects/${encodeURIComponent(projectName)}/features/graph`)
-}
-
-export async function addDependency(
-  projectName: string,
-  featureId: number,
-  dependencyId: number
-): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
-  return fetchJSON(
-    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
-    { method: 'POST' }
-  )
-}
-
-export async function removeDependency(
-  projectName: string,
-  featureId: number,
-  dependencyId: number
-): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
-  return fetchJSON(
-    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies/${dependencyId}`,
-    { method: 'DELETE' }
-  )
-}
-
-export async function setDependencies(
-  projectName: string,
-  featureId: number,
-  dependencyIds: number[]
-): Promise<{ success: boolean; feature_id: number; dependencies: number[] }> {
-  return fetchJSON(
-    `/projects/${encodeURIComponent(projectName)}/features/${featureId}/dependencies`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ dependency_ids: dependencyIds }),
-    }
-  )
-}
-
-// ============================================================================
 // Agent API
 // ============================================================================
 
