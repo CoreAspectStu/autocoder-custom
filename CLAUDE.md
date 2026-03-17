@@ -2,11 +2,119 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Prerequisites
+## IMPORTANT: Custom Modified Instance
 
-- Python 3.11+
-- Node.js 20+ (for UI development)
-- Claude Code CLI
+**This is NOT vanilla AutoCoder.** This instance has significant custom modifications:
+
+- **Mission Control** - `custom/mission_control/` (unified monitoring + human-in-the-loop)
+  - DevLayer integration: Agents can ask questions, report blockers, request credentials
+  - Python client library + MCP server with 6 agent tools
+  - Press `L` in UI to toggle DevLayer mode
+  - Enable: `MISSION_CONTROL_ENABLED=true` in `.env`
+- **Enhanced Status Dashboard** - `server/routers/status.py` (2542 lines)
+  - **Resource Monitoring**: Real-time CPU, memory, process tracking with psutil
+  - **Service Controls**: Start/Stop/Restart AutoCoder UI service via systemd
+  - **Inline Limit Adjustment**: Edit CPU, memory, and process limits directly (applies with restart)
+  - **Emergency Stop**: Kill all processes and reset agents instantly
+  - **Dev Server Controls**: One-click start/stop buttons for project servers
+  - **Port Management**: Change ports (4000-4999) with conflict detection
+  - **XML Spec Viewer**: Modal UI for viewing app specifications
+  - **Health Metrics**: Feature completion, progress tracking
+  - **Auto-refresh**: Updates every 5 seconds
+- **Systemd Integration** - `server/routers/systemd.py` (483 lines)
+  - Service status monitoring (active/inactive/failed)
+  - Resource limit management (CPU quota, memory, tasks)
+  - Log retrieval via journalctl
+  - Safe limit updates with automatic backup and rollback
+- **Remote Server Management** - `remote-start.sh` (tmux-based server control)
+- **Port Assignment System** - 4000-4999 range for AutoCoder/AutoForge projects (enforced)
+- **Custom Documentation** - `custom/` directory with guides and patches
+
+### Updating from Upstream
+
+**TRIGGER PHRASES - WHEN YOU SEE THESE, FOLLOW THE UPDATE GUIDE:**
+- "update autocoder"
+- "pull from upstream"
+- "get latest changes"
+- "merge upstream"
+- "update from the base repo"
+
+**MANDATORY FIRST STEP:** Read this file BEFORE doing anything:
+```
+/home/stu/projects/autocoder/custom/docs/UPDATE-GUIDE.md
+```
+
+**DO NOT:**
+- Run `git pull` without reading the guide first
+- Make any assumptions about what's safe to overwrite
+- Skip the backup branch creation
+- Forget to test after merging
+
+**DO:**
+- Read UPDATE-GUIDE.md completely
+- Create backup branch with date: `git branch backup-$(date +%Y-%m-%d)`
+- Follow the documented conflict resolution patterns
+- Test thoroughly after merge
+- Install any new dependencies from requirements.txt
+
+**Last successful update:** 2026-02-09 (merged upstream AutoForge rebrand)
+
+---
+
+## Git Workflow & Backup
+
+**IMPORTANT:** This is a CUSTOM FORK with custom work that must be preserved.
+
+### Remote Setup
+
+- `origin` → https://github.com/CoreAspectStu/autocoder-custom (YOUR fork - push custom changes here)
+- `upstream` → https://github.com/leonvanzyl/autocoder (upstream - pull updates from here)
+
+### Daily Workflow: Saving Your Changes
+
+**After making ANY changes to the codebase:**
+
+```bash
+cd ~/projects/autocoder
+
+# 1. Check what changed
+git status
+
+# 2. Stage your changes
+git add <files>
+
+# 3. Commit with descriptive message
+git commit -m "Description of changes"
+
+# 4. Push to YOUR fork (backup to GitHub)
+git push origin master
+```
+
+**IMPORTANT:** Push to `origin` (your fork) regularly to back up custom work!
+
+### Getting Upstream Updates
+
+**When you need the latest features from upstream:**
+
+```bash
+# 1. READ THE UPDATE GUIDE FIRST!
+cat custom/docs/UPDATE-GUIDE.md
+
+# 2. Create backup branch
+git branch backup-$(date +%Y-%m-%d)
+
+# 3. Pull from upstream (not origin!)
+git pull upstream master --no-rebase
+
+# 4. Resolve any conflicts (see UPDATE-GUIDE.md)
+
+# 5. Push merged changes to your fork
+git push origin master
+```
+
+**Never run `git pull origin master`** - origin is YOUR fork, not upstream!
+
+---
 
 ## Project Overview
 
@@ -17,7 +125,7 @@ This is an autonomous coding agent system with a React-based UI. It uses the Cla
 
 ## Commands
 
-### npm Global Install (Recommended)
+### npm Global Install (AutoForge - Upstream)
 
 ```bash
 npm install -g autoforge-ai
@@ -28,6 +136,26 @@ autoforge --port 9999        # Custom port
 autoforge --no-browser       # Don't auto-open browser
 autoforge --repair           # Delete and recreate ~/.autoforge/venv/
 ```
+
+### Quick Start (This Custom Instance)
+
+```bash
+# Remote server (with resource guardrails) - RECOMMENDED
+autocoder-ui      # Limits: 2 cores, 8GB RAM, 250 processes
+
+# Remote server (convenience wrapper - no guardrails)
+autocoder ui      # Works from any directory
+autocoder status  # Check running sessions
+autocoder stop    # Stop all sessions
+autocoder logs ui # View logs
+
+# Direct (requires cd to project directory)
+./remote-start.sh ui
+```
+
+**Why use `autocoder-ui`?** Starts the UI inside a systemd user scope so runaway sub-agents/Playwright/Claude can't melt the box (limits: 2 cores, 8GB RAM, 250 processes).
+
+**Convenience wrapper:** `autocoder` is a shortcut to `./remote-start.sh` that works from any directory (see `~/bin/autocoder`).
 
 ### From Source (Development)
 
@@ -85,7 +213,7 @@ python autonomous_agent_demo.py --project-dir my-app --yolo
 
 **What's different in YOLO mode:**
 - No regression testing
-- No Playwright CLI (browser automation disabled)
+- No Playwright MCP server (browser automation disabled)
 - Features marked passing after lint/type-check succeeds
 - Faster iteration for prototyping
 
@@ -163,7 +291,7 @@ Publishing: `npm publish` (triggers `prepublishOnly` which builds UI, then publi
 - `autonomous_agent_demo.py` - Entry point for running the agent (supports `--yolo`, `--parallel`, `--batch-size`, `--batch-features`)
 - `autoforge_paths.py` - Central path resolution with dual-path backward compatibility and migration
 - `agent.py` - Agent session loop using Claude Agent SDK
-- `client.py` - ClaudeSDKClient configuration with security hooks, feature MCP server, and Vertex AI support
+- `client.py` - ClaudeSDKClient configuration with security hooks, MCP servers, and Vertex AI support
 - `security.py` - Bash command allowlist validation (ALLOWED_COMMANDS whitelist)
 - `prompts.py` - Prompt template loading with project-specific fallback and batch feature prompts
 - `progress.py` - Progress tracking, database queries, webhook notifications
@@ -288,9 +416,6 @@ Projects can be stored in any directory (registered in `~/.autoforge/registry.db
 - `.autoforge/.agent.lock` - Lock file to prevent multiple agent instances
 - `.autoforge/allowed_commands.yaml` - Project-specific bash command allowlist (optional)
 - `.autoforge/.gitignore` - Ignores runtime files
-- `.claude/skills/playwright-cli/` - Playwright CLI skill for browser automation
-- `.playwright/cli.config.json` - Browser configuration (headless, viewport, etc.)
-- `.playwright-cli/` - Playwright CLI daemon artifacts (screenshots, snapshots) - gitignored
 - `CLAUDE.md` - Stays at project root (SDK convention)
 - `app_spec.txt` - Root copy for agent template compatibility
 
@@ -448,7 +573,6 @@ Alternative providers are configured via the **Settings UI** (gear icon > API Pr
 **Skills** (`.claude/skills/`):
 - `frontend-design` - Distinctive, production-grade UI design
 - `gsd-to-autoforge-spec` - Convert GSD codebase mapping to AutoForge app_spec format
-- `playwright-cli` - Browser automation via Playwright CLI (copied to each project)
 
 **Other:**
 - `.claude/templates/` - Prompt templates copied to new projects
@@ -483,7 +607,7 @@ When running with `--parallel`, the orchestrator:
 1. Spawns multiple Claude agents as subprocesses (up to `--max-concurrency`)
 2. Each agent claims features atomically via `feature_claim_and_get`
 3. Features blocked by unmet dependencies are skipped
-4. Browser sessions are isolated per agent via `PLAYWRIGHT_CLI_SESSION` environment variable
+4. Browser contexts are isolated per agent using `--isolated` flag
 5. AgentTracker parses output and emits `agent_update` messages for UI
 
 ### Process Limits (Parallel Mode)

@@ -22,6 +22,10 @@ from .settings import router as settings_router
 from .spec_creation import router as spec_creation_router
 from .terminal import router as terminal_router
 
+# Custom routers (CoreAspect)
+from .status import router as status_router
+from .systemd import router as systemd_router
+
 __all__ = [
     "projects_router",
     "features_router",
@@ -35,4 +39,6 @@ __all__ = [
     "settings_router",
     "terminal_router",
     "scaffold_router",
+    "status_router",
+    "systemd_router",
 ]

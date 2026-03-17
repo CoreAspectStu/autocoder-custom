@@ -42,6 +42,8 @@ from .routers import (
     schedules_router,
     settings_router,
     spec_creation_router,
+    status_router,
+    systemd_router,
     terminal_router,
 )
 from .schemas import SetupStatus
@@ -173,6 +175,10 @@ app.include_router(assistant_chat_router)
 app.include_router(settings_router)
 app.include_router(terminal_router)
 app.include_router(scaffold_router)
+
+# Custom routers (CoreAspect)
+app.include_router(status_router)
+app.include_router(systemd_router)
 
 
 # ============================================================================
