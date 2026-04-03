@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, AlertCircle, Check, Moon, Sun, Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { Loader2, AlertCircle, AlertTriangle, Check, Moon, Sun, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useSettings, useUpdateSettings, useAvailableModels, useAvailableProviders } from '../hooks/useProjects'
 import { useTheme, THEMES } from '../hooks/useTheme'
 import type { ProviderInfo } from '../lib/types'
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,7 @@ interface SettingsModalProps {
 }
 
 const PROVIDER_INFO_TEXT: Record<string, string> = {
-  claude: 'Default provider. Uses your Claude CLI credentials.',
+  claude: 'Default provider. Uses Claude CLI credentials. API key auth is recommended.',
   kimi: 'Get an API key at kimi.com',
   glm: 'Get an API key at open.bigmodel.cn',
   ollama: 'Run models locally. Install from ollama.com',
@@ -60,6 +61,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handleBatchSizeChange = (size: number) => {
     if (!updateSettings.isPending) {
       updateSettings.mutate({ batch_size: size })
+    }
+  }
+
+  const handleTestingBatchSizeChange = (size: number) => {
+    if (!updateSettings.isPending) {
+      updateSettings.mutate({ testing_batch_size: size })
     }
   }
 
@@ -238,6 +245,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {PROVIDER_INFO_TEXT[currentProvider] ?? ''}
               </p>
 
+              {currentProvider === 'claude' && (
+                <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 mt-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-xs text-amber-700 dark:text-amber-300">
+                    Anthropic's policy may not permit using subscription-based auth (<code className="text-xs">claude login</code>) with third-party agents. Consider using an API key provider or setting the <code className="text-xs">ANTHROPIC_API_KEY</code> environment variable to avoid potential account issues.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Auth Token Field */}
               {showAuthField && (
                 <div className="space-y-2 pt-1">
@@ -390,24 +406,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               />
             </div>
 
-            {/* Headless Browser Toggle */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="playwright-headless" className="font-medium">
-                  Headless Browser
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Run browser without visible window (saves CPU)
-                </p>
-              </div>
-              <Switch
-                id="playwright-headless"
-                checked={settings.playwright_headless}
-                onCheckedChange={() => updateSettings.mutate({ playwright_headless: !settings.playwright_headless })}
-                disabled={isSaving}
-              />
-            </div>
-
             {/* Regression Agents */}
             <div className="space-y-2">
               <Label className="font-medium">Regression Agents</Label>
@@ -432,28 +430,34 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
             </div>
 
-            {/* Features per Agent */}
+            {/* Features per Coding Agent */}
             <div className="space-y-2">
-              <Label className="font-medium">Features per Agent</Label>
+              <Label className="font-medium">Features per Coding Agent</Label>
               <p className="text-sm text-muted-foreground">
-                Number of features assigned to each coding agent
+                Number of features assigned to each coding agent session
               </p>
-              <div className="flex rounded-lg border overflow-hidden">
-                {[1, 2, 3].map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => handleBatchSizeChange(size)}
-                    disabled={isSaving}
-                    className={`flex-1 py-2 px-3 text-sm font-medium transition-colors ${
-                      (settings.batch_size ?? 1) === size
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-background text-foreground hover:bg-muted'
-                    } ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
+              <Slider
+                min={1}
+                max={15}
+                value={settings.batch_size ?? 3}
+                onChange={handleBatchSizeChange}
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Features per Testing Agent */}
+            <div className="space-y-2">
+              <Label className="font-medium">Features per Testing Agent</Label>
+              <p className="text-sm text-muted-foreground">
+                Number of features assigned to each testing agent session
+              </p>
+              <Slider
+                min={1}
+                max={15}
+                value={settings.testing_batch_size ?? 3}
+                onChange={handleTestingBatchSizeChange}
+                disabled={isSaving}
+              />
             </div>
 
             {/* Update Error */}

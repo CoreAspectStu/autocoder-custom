@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Import model constants from registry (single source of truth)
 _root = Path(__file__).parent.parent
@@ -331,35 +331,60 @@ class WSAgentUpdateMessage(BaseModel):
 
 
 # ============================================================================
-# Spec Chat Schemas
+# Chat Attachment Schemas
 # ============================================================================
 
-# Maximum image file size: 5 MB
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
+# Size limits
+MAX_IMAGE_SIZE = 5 * 1024 * 1024      # 5 MB for images
+MAX_DOCUMENT_SIZE = 20 * 1024 * 1024   # 20 MB for documents
+
+_IMAGE_MIME_TYPES = {'image/jpeg', 'image/png'}
 
 
-class ImageAttachment(BaseModel):
-    """Image attachment from client for spec creation chat."""
+class FileAttachment(BaseModel):
+    """File attachment from client for spec creation / expand project chat."""
     filename: str = Field(..., min_length=1, max_length=255)
-    mimeType: Literal['image/jpeg', 'image/png']
+    mimeType: Literal[
+        'image/jpeg', 'image/png',
+        'text/plain', 'text/markdown', 'text/csv',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ]
     base64Data: str
 
     @field_validator('base64Data')
     @classmethod
-    def validate_base64_and_size(cls, v: str) -> str:
-        """Validate that base64 data is valid and within size limit."""
+    def validate_base64(cls, v: str) -> str:
+        """Validate that base64 data is decodable."""
         try:
-            decoded = base64.b64decode(v)
-            if len(decoded) > MAX_IMAGE_SIZE:
-                raise ValueError(
-                    f'Image size ({len(decoded) / (1024 * 1024):.1f} MB) exceeds '
-                    f'maximum of {MAX_IMAGE_SIZE // (1024 * 1024)} MB'
-                )
+            base64.b64decode(v)
             return v
         except Exception as e:
-            if 'Image size' in str(e):
-                raise
             raise ValueError(f'Invalid base64 data: {e}')
+
+    @model_validator(mode='after')
+    def validate_size(self) -> 'FileAttachment':
+        """Validate file size based on MIME type."""
+        try:
+            decoded = base64.b64decode(self.base64Data)
+        except Exception:
+            return self  # Already caught by field validator
+
+        if self.mimeType in _IMAGE_MIME_TYPES:
+            max_size = MAX_IMAGE_SIZE
+            label = "Image"
+        else:
+            max_size = MAX_DOCUMENT_SIZE
+            label = "Document"
+
+        if len(decoded) > max_size:
+            raise ValueError(
+                f'{label} size ({len(decoded) / (1024 * 1024):.1f} MB) exceeds '
+                f'maximum of {max_size // (1024 * 1024)} MB'
+            )
+        return self
 
 
 # ============================================================================
@@ -444,7 +469,8 @@ class SettingsResponse(BaseModel):
     ollama_mode: bool = False  # True when api_provider is "ollama"
     testing_agent_ratio: int = 1  # Regression testing agents (0-3)
     playwright_headless: bool = True
-    batch_size: int = 3  # Features per coding agent batch (1-3)
+    batch_size: int = 3  # Features per coding agent batch (1-15)
+    testing_batch_size: int = 3  # Features per testing agent batch (1-15)
     api_provider: str = "claude"
     api_base_url: str | None = None
     api_has_auth_token: bool = False  # Never expose actual token
@@ -463,7 +489,8 @@ class SettingsUpdate(BaseModel):
     model: str | None = None
     testing_agent_ratio: int | None = None  # 0-3
     playwright_headless: bool | None = None
-    batch_size: int | None = None  # Features per agent batch (1-3)
+    batch_size: int | None = None  # Features per agent batch (1-15)
+    testing_batch_size: int | None = None  # Features per testing agent batch (1-15)
     api_provider: str | None = None
     api_base_url: str | None = Field(None, max_length=500)
     api_auth_token: str | None = Field(None, max_length=500)  # Write-only, never returned
@@ -500,8 +527,15 @@ class SettingsUpdate(BaseModel):
     @field_validator('batch_size')
     @classmethod
     def validate_batch_size(cls, v: int | None) -> int | None:
-        if v is not None and (v < 1 or v > 3):
-            raise ValueError("batch_size must be between 1 and 3")
+        if v is not None and (v < 1 or v > 15):
+            raise ValueError("batch_size must be between 1 and 15")
+        return v
+
+    @field_validator('testing_batch_size')
+    @classmethod
+    def validate_testing_batch_size(cls, v: int | None) -> int | None:
+        if v is not None and (v < 1 or v > 15):
+            raise ValueError("testing_batch_size must be between 1 and 15")
         return v
 
 

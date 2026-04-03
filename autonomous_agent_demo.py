@@ -76,8 +76,8 @@ Examples:
   python autonomous_agent_demo.py --project-dir my-app --testing-ratio 0
 
 Authentication:
-  Uses Claude CLI authentication (run 'claude login' if not logged in)
-  Authentication is handled by start.bat/start.sh before this runs
+  Uses Claude CLI authentication. API key (ANTHROPIC_API_KEY) is recommended.
+  Alternatively run 'claude login', but note Anthropic's policy may restrict subscription auth.
         """,
     )
 
@@ -176,14 +176,14 @@ Authentication:
         "--testing-batch-size",
         type=int,
         default=3,
-        help="Number of features per testing batch (1-5, default: 3)",
+        help="Number of features per testing batch (1-15, default: 3)",
     )
 
     parser.add_argument(
         "--batch-size",
         type=int,
         default=3,
-        help="Max features per coding agent batch (1-3, default: 3)",
+        help="Max features per coding agent batch (1-15, default: 3)",
     )
 
     return parser.parse_args()

@@ -266,7 +266,7 @@ export interface OrchestratorStatus {
 }
 
 // WebSocket message types
-export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update'
+export type WSMessageType = 'progress' | 'feature_update' | 'log' | 'agent_status' | 'pong' | 'dev_log' | 'dev_server_status' | 'agent_update' | 'orchestrator_update' | 'browser_screenshot'
 
 export interface WSProgressMessage {
   type: 'progress'
@@ -342,6 +342,28 @@ export interface WSOrchestratorUpdateMessage {
   featureName?: string
 }
 
+export interface WSBrowserScreenshotMessage {
+  type: 'browser_screenshot'
+  sessionName: string
+  agentIndex: number
+  agentType: AgentType
+  featureId: number
+  featureName: string
+  imageData: string  // base64 PNG
+  timestamp: string
+}
+
+// Browser screenshot stored in UI state
+export interface BrowserScreenshot {
+  sessionName: string
+  agentIndex: number
+  agentType: AgentType
+  featureId: number
+  featureName: string
+  imageDataUrl: string  // "data:image/png;base64,..."
+  timestamp: string
+}
+
 export type WSMessage =
   | WSProgressMessage
   | WSFeatureUpdateMessage
@@ -352,6 +374,7 @@ export type WSMessage =
   | WSDevLogMessage
   | WSDevServerStatusMessage
   | WSOrchestratorUpdateMessage
+  | WSBrowserScreenshotMessage
 
 // ============================================================================
 // Spec Chat Types
@@ -417,14 +440,59 @@ export type SpecChatServerMessage =
   | SpecChatPongMessage
   | SpecChatResponseDoneMessage
 
-// Image attachment for chat messages
-export interface ImageAttachment {
+// File attachment for chat messages (images and documents)
+export interface FileAttachment {
   id: string
   filename: string
-  mimeType: 'image/jpeg' | 'image/png'
+  mimeType:
+    | 'image/jpeg'
+    | 'image/png'
+    | 'text/plain'
+    | 'text/markdown'
+    | 'text/csv'
+    | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    | 'application/pdf'
+    | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
   base64Data: string    // Raw base64 (without data: prefix)
-  previewUrl: string    // data: URL for display
+  previewUrl: string    // data: URL for images, empty string for documents
   size: number          // File size in bytes
+}
+
+/** @deprecated Use FileAttachment instead */
+export type ImageAttachment = FileAttachment
+
+export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png'] as const
+export const DOCUMENT_MIME_TYPES = [
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+] as const
+export const ALL_ALLOWED_MIME_TYPES: string[] = [...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_TYPES]
+
+export function isImageAttachment(att: FileAttachment): boolean {
+  return (IMAGE_MIME_TYPES as readonly string[]).includes(att.mimeType)
+}
+
+export function resolveMimeType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase()
+  const map: Record<string, string> = {
+    md: 'text/markdown',
+    txt: 'text/plain',
+    csv: 'text/csv',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pdf: 'application/pdf',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+  }
+  return map[ext || ''] || 'application/octet-stream'
 }
 
 // UI chat message for display
@@ -432,7 +500,7 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  attachments?: ImageAttachment[]
+  attachments?: FileAttachment[]
   timestamp: Date
   questions?: SpecQuestion[]
   isStreaming?: boolean
@@ -579,7 +647,8 @@ export interface Settings {
   ollama_mode: boolean
   testing_agent_ratio: number  // Regression testing agents (0-3)
   playwright_headless: boolean
-  batch_size: number  // Features per coding agent batch (1-3)
+  batch_size: number  // Features per coding agent batch (1-15)
+  testing_batch_size: number  // Features per testing agent batch (1-15)
   api_provider: string
   api_base_url: string | null
   api_has_auth_token: boolean
@@ -590,8 +659,8 @@ export interface SettingsUpdate {
   yolo_mode?: boolean
   model?: string
   testing_agent_ratio?: number
-  playwright_headless?: boolean
   batch_size?: number
+  testing_batch_size?: number
   api_provider?: string
   api_base_url?: string
   api_auth_token?: string
