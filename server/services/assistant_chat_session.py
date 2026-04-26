@@ -274,8 +274,9 @@ class AssistantChatSession:
         system_cli = shutil.which("claude")
 
         # Build environment overrides for API configuration
-        from registry import DEFAULT_MODEL, get_effective_sdk_env
+        from registry import DEFAULT_MODEL, get_effective_sdk_env, get_effort_setting
         sdk_env = get_effective_sdk_env()
+        effort = get_effort_setting()
 
         # Determine model from SDK env (provider-aware) or fallback to env/default
         model = sdk_env.get("ANTHROPIC_DEFAULT_OPUS_MODEL") or os.getenv("ANTHROPIC_DEFAULT_OPUS_MODEL", DEFAULT_MODEL)
@@ -285,6 +286,7 @@ class AssistantChatSession:
             self.client = ClaudeSDKClient(
                 options=ClaudeAgentOptions(
                     model=model,
+                    effort=effort,  # type: ignore[arg-type]  # SDK 0.1.61 Literal omits "xhigh"
                     cli_path=system_cli,
                     # System prompt loaded from CLAUDE.md via setting_sources
                     # This avoids Windows command line length limit (~8191 chars)
